@@ -213,10 +213,25 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "ase" },
+    { name = "mpi4py" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "ase", specifier = ">=3.23.0" }]
+requires-dist = [
+    { name = "ase", specifier = ">=3.23.0" },
+    { name = "mpi4py", specifier = ">=4.0.1" },
+]
+
+[[package]]
+name = "mpi4py"
+version = "4.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/08/34/8499a92a387d24d0092c38089f8195f13c5c76f0f814126af3fe363e5636/mpi4py-4.0.1.tar.gz", hash = "sha256:f3174b245775d556f4fddb32519a2066ef0592edc810c5b5a59238f9a0a40c89", size = 466179 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/f7/6dfdee53f9806361ab75cb83ee5feab06a738f7f6a42715c79d72a783d31/mpi4py-4.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:0cb209fcdc7fee0346d12edff1cfd1c1ffca1b807c53631ba0436b9c2bcf8229", size = 1599377 },
+    { url = "https://files.pythonhosted.org/packages/35/28/7e5eae1a9940f48c41e208e9e6fdb56e497095030ab53e2d9ce702705cbb/mpi4py-4.0.1-cp312-cp312-win_amd64.whl", hash = "sha256:b704e7db92b1ac94b96802e17cf28082455daa928e8e51398ad9f5e5eb8c9b7b", size = 1727556 },
+    { url = "https://files.pythonhosted.org/packages/95/70/cc361869a2920476ecc5f29c98e0130aaf2e177a0087cb7ebbafb90414f1/mpi4py-4.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:52a7b1760b1aeb41a0ea38969314b2b170117a0ded2f689915f1cb89aaaf8a6f", size = 1726170 },
+]
 
 [[package]]
 name = "numpy"

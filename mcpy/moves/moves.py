@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from ase import Atoms
-from npl.utils import RandomNumberGenerator
+from ..utils import RandomNumberGenerator
 import numpy as np
 from ase.geometry import wrap_positions
 
