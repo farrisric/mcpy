@@ -1,7 +1,7 @@
 from mpi4py import MPI
 import numpy as np
 import logging
-from npl.utils import RandomNumberGenerator
+from ..utils import RandomNumberGenerator
 
 
 BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5
@@ -10,7 +10,7 @@ BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
-                 gcmc_properties,
+                 temperatures,
                  gcmc_steps=100,
                  exchange_interval=10,
                  seed=31):
@@ -19,7 +19,7 @@ class ReplicaExchange:
 
         Parameters:
         - gcmc_factory (function): Function to create a GCMC instance for a given temperature.
-        - gcmc_properties (list): List of gcmc_properties for each replica.
+        - temperatures (list): List of gcmc_properties for each replica.
         - n_steps (int): Total number of GCMC steps.
         - exchange_interval (int): Steps between exchange attempts.
         """
@@ -27,18 +27,18 @@ class ReplicaExchange:
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
-        assert len(gcmc_properties) == self.size, "Number of temperatures must match MPI ranks."
-        self.gcmc_properties = gcmc_properties
+        assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
+        self.temperatures = temperatures
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
 
-        self.gcmc = gcmc_factory(gcmc_properties[self.rank])
+        self.gcmc = gcmc_factory(temperatures[self.rank])
         self.rng = RandomNumberGenerator(seed=seed)
 
         logging.basicConfig(level=logging.INFO, format=f"Rank {self.rank}: %(message)s")
         self.logger = logging.getLogger()
 
-    def _acceptance_condition(self, state1, beta1, state2, beta2):
+    def _acceptance_condition(self, state1, state2):
         """
         Determines whether to accept a replica exchange between two replicas.
 
@@ -52,10 +52,16 @@ class ReplicaExchange:
             bool: True if the exchange is accepted, False otherwise.
         """
         energy1 = state1['energy']
+        beta1 = state1['beta']
+        
         energy2 = state2['energy']
+        beta2 = state2['beta']
 
         delta = (beta2 - beta1) * (energy2 - energy1)
         exchange_prob = min(1.0, np.exp(delta))
+        print(f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
+              f"E2: {energy2:.3f}, Delta {delta:.3f}, "
+              f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
     def _acceptance_criterion_(self, mu_i, mu_j, energy_i, energy_j, particle_counts, temperature):
@@ -94,16 +100,13 @@ class ReplicaExchange:
             return
 
         rank_state = self.gcmc.get_state()
-        rank_temperature = self.temperatures[self.rank]
 
-        partner_state, partner_temp = self.comm.sendrecv(
-            sendobj=(rank_state, rank_temperature),
+        partner_state = self.comm.sendrecv(
+            sendobj=(rank_state),
             dest=partner_rank,
             source=partner_rank,
         )
-        rank_beta = 1/(rank_temperature*BOLTZMANN_CONSTANT_eV_K)
-        partner_beta = 1/(partner_temp*BOLTZMANN_CONSTANT_eV_K)
-        if self._acceptance_condition(rank_state, rank_beta, partner_state, partner_beta):
+        if self._acceptance_condition(rank_state, partner_state):
             self.logger.info(f"Accepted exchange with rank {partner_rank}")
             self.gcmc.set_state(partner_state)
         else:

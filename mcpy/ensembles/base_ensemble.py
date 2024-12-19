@@ -123,7 +123,7 @@ def write_xyz(atoms, filename):
     with open(filename, 'a') as xyz_file:
         xyz_file.write(f"{len(atoms)}\n")
         energy = atoms.get_potential_energy() if atoms.calc else 0.0
-        comment = f"Energy: {energy:.6f} eV"
+        comment = f"energy={energy:.6f}"
         xyz_file.write(comment + "\n")
         for atom in atoms:
             element = atom.symbol

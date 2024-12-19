@@ -1,6 +1,6 @@
-from ..mc_moves import InsertionMove, DeletionMove, DisplacementMove
+from ..moves import InsertionMove, DeletionMove, DisplacementMove
 from .canonical_ensemble import BaseEnsemble
-from npl.utils.random_number_generator import RandomNumberGenerator
+from ..utils.random_number_generator import RandomNumberGenerator
 import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
@@ -101,6 +101,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             "energy" : self.E_old,
             "mu": self._mu,
             "temperature": self._temperature,
+            "beta": self._beta
         }
 
     def set_state(self, state):
@@ -321,7 +322,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         """
         self.do_trial_step()
 
-        if step % self._outfile_write_interval == 0:
+        if self._step % self._outfile_write_interval == 0:
             acceptance_ratios = np.array(list(self.count_acceptance.values())) / np.array(
                 list(self.count_moves.values())
             )
@@ -334,5 +335,5 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             ))
             self.write_outfile(step)
 
-        if step % self._trajectory_write_interval == 0:
+        if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms)
