@@ -53,7 +53,7 @@ class ReplicaExchange:
         """
         energy1 = state1['energy']
         beta1 = state1['beta']
-        
+
         energy2 = state2['energy']
         beta2 = state2['beta']
 
