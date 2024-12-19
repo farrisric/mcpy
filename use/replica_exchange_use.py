@@ -36,12 +36,12 @@ def gcmc_factory(T):
     return gcmc
 
 
-temperatures = [300, 400]
+temperatures = [200, 250, 300, 350, 400, 450]
 
 pt_gcmc = ReplicaExchange(
         gcmc_factory,
         temperatures,
         gcmc_steps=1000000,
-        exchange_interval=50)
+        exchange_interval=15)
 
 pt_gcmc.run()

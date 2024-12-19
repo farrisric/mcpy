@@ -11,6 +11,7 @@ class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
                  temperatures,
+                 mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
                  seed=31):
@@ -29,6 +30,11 @@ class ReplicaExchange:
 
         assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
         self.temperatures = temperatures
+
+        if mus:
+            assert len(mus) == self.size, "Number of mus must match MPI ranks."
+            self.mus = mus
+
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
 
@@ -38,7 +44,15 @@ class ReplicaExchange:
         logging.basicConfig(level=logging.INFO, format=f"Rank {self.rank}: %(message)s")
         self.logger = logging.getLogger()
 
-    def _acceptance_condition(self, state1, state2):
+    def get_partner_rank(self, global_random):
+        if global_random > 0.5:
+            if self.rank == 0 or self.rank == self.size - 1:
+                return None  # No valid partner for edge ranks in this case
+            return self.rank - 1 if self.rank % 2 == 0 else self.rank + 1
+        else:
+            return self.rank + 1 if self.rank % 2 == 0 else self.rank - 1
+
+    def _acceptance_condition_T(self, state1, state2):
         """
         Determines whether to accept a replica exchange between two replicas.
 
@@ -59,54 +73,76 @@ class ReplicaExchange:
 
         delta = (beta2 - beta1) * (energy2 - energy1)
         exchange_prob = min(1.0, np.exp(delta))
-        print(f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
-              f"E2: {energy2:.3f}, Delta {delta:.3f}, "
-              f"Rank: {self.rank}")
+        self.logger.info(
+            f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
+            f"E2: {energy2:.3f}, Delta {delta:.3f}, "
+            f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
-    def _acceptance_criterion_(self, mu_i, mu_j, energy_i, energy_j, particle_counts, temperature):
+    def _acceptance_condition_mu(self, state1, state2):
         """
-        Calculate the acceptance probability for exchanging replicas with the same temperature
-        but different chemical potentials.
+        Determines whether to accept a replica exchange between two replicas
+        with the same temperature but different chemical potentials.
 
-        Parameters:
-            mu_i (dict): Chemical potentials for replica i (e.g., {'Ag': -4.0, 'O': -2.5}).
-            mu_j (dict): Chemical potentials for replica j.
-            energy_i (float): Energy of replica i.
-            energy_j (float): Energy of replica j.
-            particle_counts (dict): Number of particles for each species in the replica
-                                    (e.g., {'Ag': 100, 'O': 25}).
-            temperature (float): Temperature of the replicas (K).
+        Args:
+            state1 (dict): State of the first replica, including its energy, mu, and beta.
+            state2 (dict): State of the second replica, including its energy, mu, and beta.
 
         Returns:
-            float: The acceptance probability.
+            bool: True if the exchange is accepted, False otherwise.
         """
-        beta = 1 / (BOLTZMANN_CONSTANT_eV_K * temperature)
-        delta_energy = energy_i - energy_j
+        energy1 = state1['energy']
+        energy2 = state2['energy']
+        beta = state1['beta'] 
+        delta_energy = energy2 - energy1
+
+        species1 = state1['atoms'].get_chemical_symbols()
+        species2 = state2['atoms'].get_chemical_symbols()
         delta_mu = 0.0
-        for species, count in particle_counts.items():
-            delta_mu += count * (mu_j[species] - mu_i[species])
+
+        for species in state1['mu']:
+            count1 = species1.count(species)  # Count occurrences of species in state1
+            count2 = species2.count(species)  # Count occurrences of species in state2
+            mu_diff = state2['mu'][species] - state1['mu'][species]
+            delta_mu += (count2 - count1) * mu_diff
+
         delta = beta * (delta_energy + delta_mu)
-        return min(1.0, np.exp(-delta))
+        exchange_prob = min(1.0, np.exp(-delta))
+
+        self.logger.info(
+            f"Energy1: {energy1:.3f}, Energy2: {energy2:.3f}, Delta Energy: {delta_energy:.3f}, "
+            f"Delta Mu: {delta_mu:.3f}, Delta: {delta:.3f}, Exchange Prob: {exchange_prob:.3f}, "
+            f"Rank: {self.rank}"
+        )
+
+        return self.rng.get_uniform() < exchange_prob
 
     def do_exchange(self):
         """Attempt an exchange with a neighboring replica."""
-        if self.rank % 2 == 0:
-            partner_rank = self.rank + 1
-        else:
-            partner_rank = self.rank - 1
+        global_random = self.comm.bcast(self.rng.get_uniform(), root=0)
+        partner_rank = self.get_partner_rank(global_random)
 
-        if partner_rank < 0 or partner_rank >= self.size:
+        if partner_rank is None:
+            self.logger.info(f"No valid partner for rank {self.rank} "
+                             f"with random {global_random:.3f}")
             return
+
+        self.logger.info(f"Global random: {global_random:.3f}, "
+                         f"Rank: {self.rank}, Partner rank: {partner_rank}")
 
         rank_state = self.gcmc.get_state()
 
-        partner_state = self.comm.sendrecv(
-            sendobj=(rank_state),
-            dest=partner_rank,
-            source=partner_rank,
-        )
-        if self._acceptance_condition(rank_state, partner_state):
+        try:
+            partner_state = self.comm.sendrecv(
+                sendobj=rank_state,
+                dest=partner_rank,
+                source=partner_rank,
+            )
+        except Exception as e:
+            self.logger.error(f"Communication error with rank {partner_rank}: {e}")
+            return
+
+        if self._acceptance_condition_mu(rank_state, partner_state):
             self.logger.info(f"Accepted exchange with rank {partner_rank}")
             self.gcmc.set_state(partner_state)
         else:
@@ -124,4 +160,6 @@ class ReplicaExchange:
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
-            self.logger.info(f"Final states: {final_states}")
+            self.logger.info("Final states from all ranks:")
+            for i, state in enumerate(final_states):
+                self.logger.info(f"Rank {i}: {state}")
