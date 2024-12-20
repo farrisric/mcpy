@@ -12,3 +12,4 @@ wheels/
 # Atoms output
 *.out
 *.xyz
+*.log

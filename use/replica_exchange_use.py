@@ -6,7 +6,7 @@ from ase import Atoms
 
 class Calculator():
     def __init__(self) -> None:
-        self.calculator = LennardJones(smooth=True)
+        self.calculator = LennardJones(sigma=3.4, epsilon=0.01, rc=10.4, smooth=True)
 
     def get_potential_energy(self, atoms):
         atoms.calc = self.calculator
@@ -23,7 +23,7 @@ def gcmc_factory(T):
                 atoms=atoms,
                 calculator=lj,
                 mu={'Ar': 0},
-                masses={'Ar': 1},
+                masses={'Ar': 39.948/6.022e26},
                 species=['Ar'],
                 temperature=T,
                 moves=[10, 10],
@@ -32,7 +32,7 @@ def gcmc_factory(T):
                 trajectory_write_interval=10,
                 outfile_write_interval=10,
                 traj_file=f'replica_T{T}.xyz',
-                min_max_insert=[1.5, 3.0])
+                min_max_insert=[0, 15])
     return gcmc
 
 

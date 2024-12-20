@@ -14,6 +14,7 @@ class ReplicaExchange:
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
+                 write_out_interval=20,
                  seed=31):
         """
         Parallel Tempering for GCMC.
@@ -39,10 +40,24 @@ class ReplicaExchange:
         self.exchange_interval = exchange_interval
 
         self.gcmc = gcmc_factory(temperatures[self.rank])
+
+        self._re_step = 0
+
+        gcmc_logger = logging.getLogger(self.gcmc.__class__.__name__)
+        gcmc_logger.setLevel(logging.WARNING)
+
         self.rng = RandomNumberGenerator(seed=seed)
 
-        logging.basicConfig(level=logging.INFO, format=f"Rank {self.rank}: %(message)s")
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format=f"%(asctime)s [Rank {self.rank}] %(levelname)s: %(message)s",
+            handlers=[
+                logging.FileHandler(f"replica_exchange_rank_{self.rank}.log"),
+                logging.StreamHandler()
+            ]
+        )
         self.logger = logging.getLogger()
+        self.write_out_interval = write_out_interval
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
@@ -73,7 +88,7 @@ class ReplicaExchange:
 
         delta = (beta2 - beta1) * (energy2 - energy1)
         exchange_prob = min(1.0, np.exp(delta))
-        self.logger.info(
+        self.logger.debug(
             f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
             f"E2: {energy2:.3f}, Delta {delta:.3f}, "
             f"Rank: {self.rank}")
@@ -93,7 +108,7 @@ class ReplicaExchange:
         """
         energy1 = state1['energy']
         energy2 = state2['energy']
-        beta = state1['beta'] 
+        beta = state1['beta']
         delta_energy = energy2 - energy1
 
         species1 = state1['atoms'].get_chemical_symbols()
@@ -109,7 +124,7 @@ class ReplicaExchange:
         delta = beta * (delta_energy + delta_mu)
         exchange_prob = min(1.0, np.exp(-delta))
 
-        self.logger.info(
+        self.logger.debug(
             f"Energy1: {energy1:.3f}, Energy2: {energy2:.3f}, Delta Energy: {delta_energy:.3f}, "
             f"Delta Mu: {delta_mu:.3f}, Delta: {delta:.3f}, Exchange Prob: {exchange_prob:.3f}, "
             f"Rank: {self.rank}"
@@ -123,12 +138,13 @@ class ReplicaExchange:
         partner_rank = self.get_partner_rank(global_random)
 
         if partner_rank is None:
-            self.logger.info(f"No valid partner for rank {self.rank} "
-                             f"with random {global_random:.3f}")
-            return
+            self.logger.debug(f"No valid partner for rank {self.rank} at step {self._re_step} "
+                              f"(Random: {global_random:.3f})")
+            return False
 
-        self.logger.info(f"Global random: {global_random:.3f}, "
-                         f"Rank: {self.rank}, Partner rank: {partner_rank}")
+        self.logger.debug(f"Step {self._re_step}: Attempting exchange "
+                          f"with partner rank {partner_rank}. "
+                          f"Random: {global_random:.3f}")
 
         rank_state = self.gcmc.get_state()
 
@@ -143,23 +159,85 @@ class ReplicaExchange:
             return
 
         if self._acceptance_condition_mu(rank_state, partner_state):
-            self.logger.info(f"Accepted exchange with rank {partner_rank}")
+            self.logger.debug(f"Accepted exchange with rank {partner_rank}")
             self.gcmc.set_state(partner_state)
+            return True
         else:
-            self.logger.info(f"Rejected exchange with rank {partner_rank}")
+            self.logger.debug(f"Rejected exchange with rank {partner_rank}")
+            return False
 
     def run(self):
         """Run the Parallel Tempering GCMC simulation."""
+        if self.rank == 0:
+            self.initialize_run()  # Log simulation details at the start
+
         for step in range(self.gcmc_steps):
-            self.gcmc.run(1)
+            self.gcmc._run(1)
 
             if step > 0 and step % self.exchange_interval == 0:
-                self.do_exchange()
+                self.gcmc.exchange_attempts += 1
+                if self.do_exchange():
+                    self.gcmc.exchange_successes += 1
+
+            if step % self.write_out_interval == 0:
+                self.summarize_states(step)
+
+            self._re_step += 1
 
         self.gcmc.finalize_run()
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
-            self.logger.info("Final states from all ranks:")
+            self.logger.info("Final states gathered from all ranks:")
             for i, state in enumerate(final_states):
-                self.logger.info(f"Rank {i}: {state}")
+                self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
+                                 f"Energy: {state['energy']:.3f}, "
+                                 f"Mu: {state['mu']}")
+
+    def initialize_run(self):
+        """
+        Initializes the Replica Exchange Monte Carlo simulation.
+        Prepares logging and prints the simulation parameters.
+        """
+        self.logger.info("+-------------------------------------------------+")
+        self.logger.info("| Replica Exchange Monte Carlo Simulation         |")
+        self.logger.info("+-------------------------------------------------+")
+        self.logger.info("Simulation Parameters:")
+        self.logger.info(f"Total GCMC steps: {self.gcmc_steps}")
+        self.logger.info(f"Exchange interval (steps): {self.exchange_interval}")
+        self.logger.info(f"Temperatures (K): {self.temperatures}")
+        if hasattr(self, 'mus') and self.mus is not None:
+            self.logger.info(f"Chemical potentials: {self.mus}")
+        else:
+            self.logger.info("Chemical potentials: Not specified (default)")
+        self.logger.info(f"Number of MPI ranks: {self.size}")
+        self.logger.info("Starting replica exchange simulation...\n")
+        self.logger.info("{:<10} {:<15} {:<20} {:<20}".format(
+            "Step", "Energy (eV)", "Exchange Attempts", "Exchange Successes"
+        ))
+        self.logger.info("-" * 70)
+
+    def summarize_states(self, step):
+        """
+        Gathers and summarizes the state of all GCMC instances across ranks.
+
+        Args:
+            step (int): Current simulation step.
+            exchange_attempts (int): Total number of exchange attempts so far.
+            exchange_successes (int): Total number of successful exchanges so far.
+        """
+        states = self.comm.gather(self.gcmc.get_state(), root=0)
+
+        if self.rank == 0:
+            for i, state in enumerate(states):
+                gcmc_step = state.get('step', 'N/A')
+                energy = state.get('energy', 'N/A')
+                exchange_attempts = state.get('exchange_attempts', 'N/A')
+                exchange_successes = state.get('exchange_successes', 'N/A')
+                mu = state.get('mu', {})
+                mu_str = ", ".join(
+                    [f"{species}: {value:.3f}" for species, value in mu.items()]
+                    ) if mu else "N/A"
+                self.logger.info(
+                    f"{i:<5} {gcmc_step:<10} {energy:<15.3f} {mu_str:<30} "
+                    f"{exchange_attempts:<20} {exchange_successes:<20}")
