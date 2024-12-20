@@ -102,23 +102,28 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
         self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
 
+        self.lambda_dbs = {}
+        for specie in species:
+            self.lambda_dbs[specie] = PLANCK_CONSTANT / np.sqrt(
+                2 * np.pi * self.masses[specie] * (1 / self._beta_J))
+
     def get_state(self):
         return {
             "atoms" : self.atoms,
+            "n_atoms" : self.n_atoms,
             "energy" : self.E_old,
             "mu": self._mu,
             "temperature": self._temperature,
             "beta": self._beta,
             "step": self._step,
             "exchange_attempts": self.exchange_attempts,
-            "exchange_successes": self.exchange_successes
+            "exchange_successes": self.exchange_successes,
         }
 
     def set_state(self, state):
         self.atoms = state["atoms"]
         self.E_old = state["energy"]
-        # self._mu = state["mu"]
-        # self._temperature = state["temperature"]
+        self.n_atoms = state["n_atoms"]
 
     def initialize_outfile(self) -> None:
         """
@@ -199,9 +204,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 p = np.exp(-potential_diff * self._beta)
                 return p > self.rng_acceptance.get_uniform()
 
-        # de Broglie wavelength in meters
-        lambda_db = PLANCK_CONSTANT / np.sqrt(2 * np.pi * self.masses[species] * (1 / self._beta_J))
-
         if delta_particles == 1:  # Insertion move
             min_distance_surf = min(atoms_new.get_distances(-1, self.surface_indices, mic=True))
             if min_distance_surf > self.max_distance:
@@ -210,21 +212,21 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             min_distace_new = min(atoms_new.get_distances(-1, added_atoms_indices, mic=True))
             if min_distace_new < self.min_distance:
                 return False
-            db_term = (self.volume / ((self.n_atoms+1)*lambda_db**3))
+            db_term = (self.volume / ((self.n_atoms+1)*self.lambda_dbs[species]**3))
             exp_term = np.exp(-self._beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {lambda_db:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
+                f"Lambda_db: {self.lambda_dbs[species]:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
 
         elif delta_particles == -1:  # Deletion move
-            db_term = (lambda_db**3*self.n_atoms / self.volume)
+            db_term = (self.lambda_dbs[species]**3*self.n_atoms / self.volume)
             exp_term = np.exp(-self._beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {lambda_db:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
+                f"Lambda_db: {self.lambda_dbs[species]:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")

@@ -7,6 +7,8 @@ from typing import Optional
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
+import numpy as np
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -114,18 +116,26 @@ class BaseEnsemble(ABC):
 
 def write_xyz(atoms, filename):
     """
-    Write an XYZ file from an ASE Atoms object.
+    Write an XYZ file from an ASE Atoms object, including the cell dimensions.
+    Optimized for faster file writing using numpy.
 
     Args:
         atoms (ase.Atoms): The ASE Atoms object to write.
         filename (str): The path of the XYZ file to write to.
     """
+    cell = atoms.get_cell()
+    positions = atoms.get_positions()
+    symbols = atoms.get_chemical_symbols()
+    energy = atoms.get_potential_energy() if atoms.calc else 0.0
+
+    comment = f"energy={energy:.6f}"
+    num_atoms = len(atoms)
+    atom_data = np.column_stack((symbols, positions))
+    header = f"{num_atoms}\n{comment} "
+    cell_str = " ".join(f"{value:.8f}" for row in cell for value in row)
+    cell_data = f'Lattice="{cell_str}"'
+
     with open(filename, 'a') as xyz_file:
-        xyz_file.write(f"{len(atoms)}\n")
-        energy = atoms.get_potential_energy() if atoms.calc else 0.0
-        comment = f"energy={energy:.6f}"
-        xyz_file.write(comment + "\n")
-        for atom in atoms:
-            element = atom.symbol
-            x, y, z = atom.position
-            xyz_file.write(f"{element} {x:.8f} {y:.8f} {z:.8f}\n")
+        xyz_file.write(header)
+        xyz_file.write(cell_data + "\n")
+        np.savetxt(xyz_file, atom_data, fmt="%s %s %s %s")

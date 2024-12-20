@@ -2,15 +2,18 @@ from mpi4py import MPI
 import numpy as np
 import logging
 from ..utils import RandomNumberGenerator
+from collections import Counter
+from scipy.special import factorial, gammaln
 
-
-BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5
+PLANCK_CONSTANT = 4.135667696e-15  #Planck's constant in m²kg/s
+BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5  # 1.38066e-23  # Boltzmann constant in J/K
+BOLTZMANN_CONSTANT_J_K = 1.38066e-23
 
 
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
-                 temperatures,
+                 temperatures=None,
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
@@ -29,17 +32,18 @@ class ReplicaExchange:
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
-        assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
-        self.temperatures = temperatures
+        if temperatures:
+            assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
+            self.temperatures = temperatures
+            self.gcmc = gcmc_factory(T=temperatures[self.rank], rank=self.rank)
 
         if mus:
             assert len(mus) == self.size, "Number of mus must match MPI ranks."
             self.mus = mus
+            self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
 
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
-
-        self.gcmc = gcmc_factory(temperatures[self.rank])
 
         self._re_step = 0
 
@@ -58,6 +62,13 @@ class ReplicaExchange:
         )
         self.logger = logging.getLogger()
         self.write_out_interval = write_out_interval
+
+        self.re_lambda_dbs = {}
+        self.re_volume = self.gcmc.volume * 1e30
+        self.re_beta = 1/(self.gcmc._temperature * BOLTZMANN_CONSTANT_eV_K)
+        for specie in self.gcmc.species:
+            self.re_lambda_dbs[specie] = PLANCK_CONSTANT / np.sqrt(
+                2 * np.pi * self.gcmc.masses[specie]*6.022e26 * (1 / self.re_beta))
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
@@ -94,39 +105,97 @@ class ReplicaExchange:
             f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
+    def _acceptance_condition_mu2(self, state1, state2):
+        state1['n_atoms_species'] = dict()
+        state2['n_atoms_species'] = dict()
+        total_factor = 1.0
+
+        for specie in self.gcmc.species:
+            for i, state in enumerate([state1, state2]):
+                state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
+
+            delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
+
+            log_pre_factor = delta_specie * (
+                np.log(self.gcmc.volume) - 3 * np.log(self.gcmc.lambda_dbs[specie])
+            )
+            pre_factor = np.exp(log_pre_factor)
+
+            if delta_specie == 0:
+                factorial_term = 1.0
+            else:
+                factorial_term = 1 / factorial(abs(delta_specie)) if delta_specie > 0 else factorial(abs(delta_specie))
+
+            total_factor *= pre_factor * factorial_term
+
+        delta_energy = state2['energy'] - state1['energy']
+        delta_mu = sum(
+            state2['mu'][specie] * state2['n_atoms_species'][specie]
+            - state1['mu'][specie] * state1['n_atoms_species'][specie]
+            for specie in self.gcmc.species
+        )
+        exponential_term = delta_mu - delta_energy
+        exponential = np.exp(-state1['beta'] * exponential_term)
+
+        exchange_prob = min(1.0, exponential * total_factor)
+
+        self.logger.info(
+            f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
+            f"Exponential Term: {exponential_term:.3f}, "
+            f"Total Factor: {total_factor:.3e}, Exponential: {exponential:.3e}, "
+            f"Exchange Prob: {exchange_prob:.3f}, "
+            f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
+            f"Rank: {self.rank}"
+        )
+
+        return self.rng.get_uniform() < exchange_prob
+
     def _acceptance_condition_mu(self, state1, state2):
-        """
-        Determines whether to accept a replica exchange between two replicas
-        with the same temperature but different chemical potentials.
+        state1['n_atoms_species'] = dict()
+        state2['n_atoms_species'] = dict()
+        total_factor = 1
+        for specie in self.gcmc.species:
+            for i, state in enumerate([state1, state2]):
+                state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
-        Args:
-            state1 (dict): State of the first replica, including its energy, mu, and beta.
-            state2 (dict): State of the second replica, including its energy, mu, and beta.
+            delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
 
-        Returns:
-            bool: True if the exchange is accepted, False otherwise.
-        """
-        energy1 = state1['energy']
-        energy2 = state2['energy']
-        beta = state1['beta']
-        delta_energy = energy2 - energy1
+            pre_factor = self.gcmc.volume**(delta_specie)/(
+                self.gcmc.lambda_dbs[specie]**(3*delta_specie)
+                )
 
-        species1 = state1['atoms'].get_chemical_symbols()
-        species2 = state2['atoms'].get_chemical_symbols()
-        delta_mu = 0.0
+            if delta_specie == 0:
+                factorial = 1
+            elif delta_specie > 0:
+                factorial_factor = state2['n_atoms_species'][specie] - delta_specie+1
+                factorial = factorial_factor
+                for i in range(1, delta_specie):
+                    factorial *= (factorial_factor+i)
+                factorial = 1/factorial
+            else:
+                factorial_factor = state1['n_atoms_species'][specie] - delta_specie+1
+                factorial = factorial_factor
+                for i in range(1, delta_specie):
+                    factorial *= (factorial_factor+i)
 
-        for species in state1['mu']:
-            count1 = species1.count(species)  # Count occurrences of species in state1
-            count2 = species2.count(species)  # Count occurrences of species in state2
-            mu_diff = state2['mu'][species] - state1['mu'][species]
-            delta_mu += (count2 - count1) * mu_diff
+            total_factor *= (pre_factor * factorial)
 
-        delta = beta * (delta_energy + delta_mu)
-        exchange_prob = min(1.0, np.exp(-delta))
+        exponential_term = 0
+        for specie in self.gcmc.species:
+            exponential_term += state2['mu'][specie]*state2['n_atoms_species'][specie]
+            exponential_term -= state1['mu'][specie]*state1['n_atoms_species'][specie]
+        exponential_term -= state2['energy']
+        exponential_term += state1['energy']
 
-        self.logger.debug(
-            f"Energy1: {energy1:.3f}, Energy2: {energy2:.3f}, Delta Energy: {delta_energy:.3f}, "
-            f"Delta Mu: {delta_mu:.3f}, Delta: {delta:.3f}, Exchange Prob: {exchange_prob:.3f}, "
+        exponential = np.exp(-state1['beta']*exponential_term)
+        exchange_prob = min(1.0, exponential * total_factor)
+
+        self.logger.info(
+            f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
+            f"Exponential Term: {exponential_term:.3f}, "
+            f"Total Factor: {total_factor:.3e}, Exponential: {exponential:.3e}, "
+            f"Exchange Prob: {exchange_prob:.3f}, "
+            f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
         )
 
@@ -205,17 +274,28 @@ class ReplicaExchange:
         self.logger.info("Simulation Parameters:")
         self.logger.info(f"Total GCMC steps: {self.gcmc_steps}")
         self.logger.info(f"Exchange interval (steps): {self.exchange_interval}")
-        self.logger.info(f"Temperatures (K): {self.temperatures}")
+
+        # Log atom count if available in GCMC state
+        atom_count = len(self.gcmc.get_state()['atoms'])
+        self.logger.info(f"Number of atoms in initial configuration: {atom_count}")
+
+        if hasattr(self, 'temperatures') and self.temperatures is not None:
+            self.logger.info(f"Temperatures (K): {self.temperatures}")
+        else:
+            self.logger.info("Temperatures: Not specified (default)")
         if hasattr(self, 'mus') and self.mus is not None:
-            self.logger.info(f"Chemical potentials: {self.mus}")
+            self.logger.info("Chemical potentials:")
+            for i, mu_dict in enumerate(self.mus):
+                for species, mu in mu_dict.items():
+                    self.logger.info(f"  {species}: {mu:.3f}")
         else:
             self.logger.info("Chemical potentials: Not specified (default)")
         self.logger.info(f"Number of MPI ranks: {self.size}")
-        self.logger.info("Starting replica exchange simulation...\n")
-        self.logger.info("{:<10} {:<15} {:<20} {:<20}".format(
-            "Step", "Energy (eV)", "Exchange Attempts", "Exchange Successes"
+        self.logger.info("{:<5} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}".format(
+            "Rank", "Step", "Atom Count (by species)", "Energy (eV)", "Chemical Potentials (eV)",
+            "Temperature (K)", "Accepted Exchange (%)"
         ))
-        self.logger.info("-" * 70)
+        self.logger.info("-" * 140)
 
     def summarize_states(self, step):
         """
@@ -223,8 +303,6 @@ class ReplicaExchange:
 
         Args:
             step (int): Current simulation step.
-            exchange_attempts (int): Total number of exchange attempts so far.
-            exchange_successes (int): Total number of successful exchanges so far.
         """
         states = self.comm.gather(self.gcmc.get_state(), root=0)
 
@@ -232,12 +310,37 @@ class ReplicaExchange:
             for i, state in enumerate(states):
                 gcmc_step = state.get('step', 'N/A')
                 energy = state.get('energy', 'N/A')
-                exchange_attempts = state.get('exchange_attempts', 'N/A')
-                exchange_successes = state.get('exchange_successes', 'N/A')
-                mu = state.get('mu', {})
-                mu_str = ", ".join(
-                    [f"{species}: {value:.3f}" for species, value in mu.items()]
-                    ) if mu else "N/A"
+                temperature = state.get('temperature', 'N/A')
+                atoms = state.get('atoms', None)  # Atoms object from ase
+                exchange_attempts = state.get('exchange_attempts', 0)
+                exchange_successes = state.get('exchange_successes', 0)
+                chemical_potential = state.get('mu', None)
+
+                if atoms is not None:
+                    symbols = atoms.get_chemical_symbols()
+                    atom_count = Counter(symbols)
+                    atom_count_by_species = ', '.join(
+                        [f"{species}: {count}" for species, count in atom_count.items()]
+                    )
+                else:
+                    atom_count_by_species = "N/A"
+
+                if exchange_attempts > 0:
+                    accepted_percentage = (exchange_successes / exchange_attempts) * 100
+                else:
+                    accepted_percentage = 0.0
+
+                # Format chemical potential
+                if chemical_potential is not None:
+                    chemical_potential_str = ', '.join(
+                        [f"{species}: {mu:.3f}" for species, mu in chemical_potential.items()]
+                    )
+                else:
+                    chemical_potential_str = "Not specified"
+
+                # Log the summarized state information
                 self.logger.info(
-                    f"{i:<5} {gcmc_step:<10} {energy:<15.3f} {mu_str:<30} "
-                    f"{exchange_attempts:<20} {exchange_successes:<20}")
+                    f"{i:<5} {gcmc_step:<10} {atom_count_by_species:<25} "
+                    f"{energy:<15.3f} {chemical_potential_str:<35} "
+                    f"{temperature:<20} {accepted_percentage:<25.1f}"
+                )
