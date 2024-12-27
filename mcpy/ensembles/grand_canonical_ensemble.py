@@ -1,23 +1,19 @@
 from ..moves import InsertionMove, DeletionMove, DisplacementMove
 from .canonical_ensemble import BaseEnsemble
 from ..utils.random_number_generator import RandomNumberGenerator
+from ..utils.set_unit_constant import SetUnits
 import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 from typing import Optional, List
 import logging
-
-PLANCK_CONSTANT = 6.62607e-34  # 4.135667696e-15  #Planck's constant in m²kg/s
-BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5  # 1.38066e-23  # Boltzmann constant in J/K
-BOLTZMANN_CONSTANT_J_K = 1.38066e-23
-
 # logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)
-
 
 class GrandCanonicalEnsemble(BaseEnsemble):
     def __init__(self,
                  atoms: Atoms,
+                 units_type: str,
                  calculator: Calculator,
                  mu : dict,
                  masses: dict,
@@ -37,6 +33,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  outfile_write_interval: int = 10) -> None:
 
         super().__init__(atoms=atoms,
+                         units_type='metal',
                          calculator=calculator,
                          random_seed=random_seed,
                          traj_file=traj_file,
@@ -48,28 +45,53 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.setLevel(logging.INFO)  # Set default level, adjust as needed
 
         self.E_old = self.compute_energy(self.atoms)
+        
+        ###  SET UNITS AND DEFINE QUANTITIES ###
+        
+        # units type and define physical constants
+        self.units_type = units_type
+        self.units_constants = SetUnits(self.units_type)
 
+        # set cell and get volume
         if operating_box:
             from ase.cell import Cell
             self.operating_box = operating_box
-            self.volume = Cell(operating_box).volume
+            self.volume = Cell(operating_box).volume ### volume in angstrom^3
             self.z_shift = z_shift
         else:
             self.operating_box = atoms.get_cell()
-            self.volume = volume or atoms.get_volume()
+            self.volume = volume or atoms.get_volume()  ### volume in angstrom^3
             self.z_shift = None
-
-        self.volume = self.volume*1e-30  # Converting the volume in meters
-        self.masses = masses
-        self.surface_indices = surface_indices or None
+        
+        # get masses and number of atoms
+        self.masses = masses # in uma
+        # get number of atoms
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
+        # get species
         self.species = species
+        # define temperature and beta
         self._temperature = temperature
+        self._beta = 1/(self._temperature*self.units_constants.BOLTZMANN_CONSTANT)
+        # define chem. pot.
         self._mu = mu
-        self._beta = 1/(self._temperature*BOLTZMANN_CONSTANT_eV_K)
-        self._beta_J = 1/(self._temperature*BOLTZMANN_CONSTANT_J_K)
+        # compute lambdas
+        self.lambda_dbs = {}
+        for specie in species:
+            if self.units_type == 'LJ': # lambda equal 1 in LJ
+                self.lambda_dbs[specie] = 1
+            else:  # lambdas in Angstrom  
+                self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
+                                       np.sqrt(
+                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self._beta)
+                                    ) )*self.units_constants.lambda_conversion_factor 
 
+
+        ########################################
+
+        ###  SET MC PARAMETERS ###
+
+        self.surface_indices = surface_indices or None
         self.n_ins_del = moves[0]
         self.n_displ = moves[1]
         self.n_moves = self.n_ins_del + self.n_displ
@@ -101,11 +123,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         # COUNTERS
         self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
         self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
-
-        self.lambda_dbs = {}
-        for specie in species:
-            self.lambda_dbs[specie] = PLANCK_CONSTANT / np.sqrt(
-                2 * np.pi * self.masses[specie] * (1 / self._beta_J))
+        
 
     def get_state(self):
         return {
