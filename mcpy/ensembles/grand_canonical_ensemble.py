@@ -156,6 +156,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
                 # Write simulation parameters
                 outfile.write("Simulation Parameters:\n")
+                outfile.write(f"  Units type: {self.units_type}\n")
                 outfile.write(f"  Temperature (K): {self._temperature}\n")
                 outfile.write(f"  Volume (Å³): {self.volume:.3f}\n")
                 outfile.write(f"  Chemical potentials: {self._mu}\n")
@@ -363,6 +364,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                              else "N/A" for ratio in acceptance_ratios)
             ))
             self.write_outfile(step)
+            # reset counters
+            self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
+            self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms)
