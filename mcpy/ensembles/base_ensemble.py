@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class BaseEnsemble(ABC):
     def __init__(self,
                  atoms: Atoms,
+                 units_type: str,
                  calculator: Calculator,
                  user_tag: Optional[str] = None,
                  random_seed: Optional[int] = None,
