@@ -1,18 +1,15 @@
 from mpi4py import MPI
 import numpy as np
 import logging
+from ..utils.set_unit_constant import SetUnits
 from ..utils import RandomNumberGenerator
 from collections import Counter
 from scipy.special import factorial, gammaln
 
-PLANCK_CONSTANT = 4.135667696e-15  #Planck's constant in m²kg/s
-BOLTZMANN_CONSTANT_eV_K = 8.617333262e-5  # 1.38066e-23  # Boltzmann constant in J/K
-BOLTZMANN_CONSTANT_J_K = 1.38066e-23
-
-
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
+                 units_type='metal',
                  temperatures=None,
                  mus=None,
                  gcmc_steps=100,
@@ -31,6 +28,10 @@ class ReplicaExchange:
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
+        
+        # SET UNIT CONSTANTS
+        self.units_type = units_type
+        self.units_constants = SetUnits(self.units_type)
 
         if temperatures:
             assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
@@ -64,11 +65,18 @@ class ReplicaExchange:
         self.write_out_interval = write_out_interval
 
         self.re_lambda_dbs = {}
-        self.re_volume = self.gcmc.volume * 1e30
-        self.re_beta = 1/(self.gcmc._temperature * BOLTZMANN_CONSTANT_eV_K)
+        self.re_volume = self.gcmc.volume # volume in Angstrom
+        self.re_beta = 1/(self.gcmc._temperature*self.units_constants.BOLTZMANN_CONSTANT)
+        self.lambda_dbs = {}
         for specie in self.gcmc.species:
-            self.re_lambda_dbs[specie] = PLANCK_CONSTANT / np.sqrt(
-                2 * np.pi * self.gcmc.masses[specie]*6.022e26 * (1 / self.re_beta))
+            if self.units_type == 'LJ': # lambda equal 1 in LJ
+                self.lambda_dbs[specie] = 1
+            else:  # lambdas in Angstrom  
+                self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
+                                       np.sqrt(
+                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self._beta)
+                                    ) )*self.units_constants.lambda_conversion_factor 
+
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
