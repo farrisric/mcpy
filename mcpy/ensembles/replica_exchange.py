@@ -113,95 +113,25 @@ class ReplicaExchange:
             f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
-    def _acceptance_condition_mu2(self, state1, state2):
-        state1['n_atoms_species'] = dict()
-        state2['n_atoms_species'] = dict()
-        total_factor = 1.0
-
-        for specie in self.gcmc.species:
-            for i, state in enumerate([state1, state2]):
-                state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
-
-            delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-
-            log_pre_factor = delta_specie * (
-                np.log(self.gcmc.volume) - 3 * np.log(self.gcmc.lambda_dbs[specie])
-            )
-            pre_factor = np.exp(log_pre_factor)
-
-            if delta_specie == 0:
-                factorial_term = 1.0
-            else:
-                factorial_term = 1 / factorial(abs(delta_specie)) if delta_specie > 0 else factorial(abs(delta_specie))
-
-            total_factor *= pre_factor * factorial_term
-
-        delta_energy = state2['energy'] - state1['energy']
-        delta_mu = sum(
-            state2['mu'][specie] * state2['n_atoms_species'][specie]
-            - state1['mu'][specie] * state1['n_atoms_species'][specie]
-            for specie in self.gcmc.species
-        )
-        exponential_term = delta_mu - delta_energy
-        exponential = np.exp(-state1['beta'] * exponential_term)
-
-        exchange_prob = min(1.0, exponential * total_factor)
-
-        self.logger.info(
-            f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
-            f"Exponential Term: {exponential_term:.3f}, "
-            f"Total Factor: {total_factor:.3e}, Exponential: {exponential:.3e}, "
-            f"Exchange Prob: {exchange_prob:.3f}, "
-            f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
-            f"Rank: {self.rank}"
-        )
-
-        return self.rng.get_uniform() < exchange_prob
 
     def _acceptance_condition_mu(self, state1, state2):
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
-        total_factor = 1
+        exponential_arg=0
         for specie in self.gcmc.species:
             for i, state in enumerate([state1, state2]):
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
+            exponential_arg+=state2['beta']*state2['mu']*delta_specie - state1['beta']*state1['mu']*delta_specie    
 
-            pre_factor = self.gcmc.volume**(delta_specie)/(
-                self.gcmc.lambda_dbs[specie]**(3*delta_specie)
-                )
-
-            if delta_specie == 0:
-                factorial = 1
-            elif delta_specie > 0:
-                factorial_factor = state2['n_atoms_species'][specie] - delta_specie+1
-                factorial = factorial_factor
-                for i in range(1, delta_specie):
-                    factorial *= (factorial_factor+i)
-                factorial = 1/factorial
-            else:
-                factorial_factor = state1['n_atoms_species'][specie] - delta_specie+1
-                factorial = factorial_factor
-                for i in range(1, delta_specie):
-                    factorial *= (factorial_factor+i)
-
-            total_factor *= (pre_factor * factorial)
-
-        exponential_term = 0
-        for specie in self.gcmc.species:
-            exponential_term += state2['mu'][specie]*state2['n_atoms_species'][specie]
-            exponential_term -= state1['mu'][specie]*state1['n_atoms_species'][specie]
-        exponential_term -= state2['energy']
-        exponential_term += state1['energy']
-
-        exponential = np.exp(-state1['beta']*exponential_term)
-        exchange_prob = min(1.0, exponential * total_factor)
+        exponential = np.exp(exponential_arg)
+        exchange_prob = min(1.0, exponential)
 
         self.logger.info(
             f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
-            f"Exponential Term: {exponential_term:.3f}, "
-            f"Total Factor: {total_factor:.3e}, Exponential: {exponential:.3e}, "
+            f"Exponential Arg: {exponential_arg:.3f}, "
+            f"Exponential: {exponential:.3f}, "
             f"Exchange Prob: {exchange_prob:.3f}, "
             f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
