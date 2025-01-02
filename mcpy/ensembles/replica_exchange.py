@@ -11,6 +11,7 @@ class ReplicaExchange:
                  gcmc_factory,
                  units_type='metal',
                  temperatures=None,
+                 masses=None,
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
@@ -63,7 +64,7 @@ class ReplicaExchange:
         )
         self.logger = logging.getLogger()
         self.write_out_interval = write_out_interval
-
+        self.masses=masses
         self.re_lambda_dbs = {}
         self.re_volume = self.gcmc.volume # volume in Angstrom
         self.re_beta = 1/(self.gcmc._temperature*self.units_constants.BOLTZMANN_CONSTANT)
@@ -74,7 +75,7 @@ class ReplicaExchange:
             else:  # lambdas in Angstrom  
                 self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
                                        np.sqrt(
-                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self._beta)
+                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self.re_beta)
                                     ) )*self.units_constants.lambda_conversion_factor 
 
 
@@ -123,7 +124,7 @@ class ReplicaExchange:
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-            exponential_arg+=state2['beta']*state2['mu']*delta_specie - state1['beta']*state1['mu']*delta_specie    
+            exponential_arg+=state2['beta']*state2['mu'][specie]*delta_specie - state1['beta']*state1['mu'][specie]*delta_specie    
 
         exponential = np.exp(exponential_arg)
         exchange_prob = min(1.0, exponential)
