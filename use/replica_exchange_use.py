@@ -31,7 +31,7 @@ def gcmc_factory(T=87.79, mu={'Ar': 0}, rank=0):
                 max_displacement=1.7,
                 outfile=f'replica_{rank}.out',
                 trajectory_write_interval=10000,
-                outfile_write_interval=1000,
+                outfile_write_interval=100,
                 traj_file=f'replica_{rank}.xyz',
                 min_max_insert=[0, 27.2])
     return gcmc
@@ -51,7 +51,7 @@ pt_gcmc = ReplicaExchange(
         mus=mus,
         masses={'Ar': 39.948},
         gcmc_steps=300000,
-        exchange_interval=1000,
-        write_out_interval=1000)
+        exchange_interval=500,
+        write_out_interval=100)
 
 pt_gcmc.run()
