@@ -118,13 +118,13 @@ class ReplicaExchange:
     def _acceptance_condition_mu(self, state1, state2):
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
-        exponential_arg=0
+        exponential_arg = 0
         for specie in self.gcmc.species:
             for i, state in enumerate([state1, state2]):
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-            exponential_arg+=state2['beta']*state2['mu'][specie]*delta_specie - state1['beta']*state1['mu'][specie]*delta_specie    
+            exponential_arg += ( state2['beta'] * state2['mu'][specie] * (-delta_specie) ) + ( state1['beta'] * state1['mu'][specie] * delta_specie )    
 
         exponential = np.exp(exponential_arg)
         exchange_prob = min(1.0, exponential)
