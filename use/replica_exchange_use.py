@@ -6,7 +6,7 @@ from ase import Atoms
 
 class Calculator():
     def __init__(self) -> None:
-        self.calculator = LennardJones(sigma=3.4, epsilon=0.01, rc=10.4, smooth=True)
+        self.calculator = LennardJones(sigma=3.4, epsilon=0.010086, rc=10.2, smooth=True)
 
     def get_potential_energy(self, atoms):
         atoms.calc = self.calculator
@@ -18,19 +18,20 @@ atoms = Atoms('Ar', cell=[27.2, 27.2, 27.2], pbc=True)
 lj.get_potential_energy(atoms)
 
 
-def gcmc_factory(T=88, mu={'Ar': 0}, rank=0):
+def gcmc_factory(T=87.79, mu={'Ar': 0}, rank=0):
     gcmc = GrandCanonicalEnsemble(
                 atoms=atoms,
+                units_type='metal',
                 calculator=lj,
                 mu=mu,
-                masses={'Ar': 39.948/6.022e26},
+                masses={'Ar': 39.948},
                 species=['Ar'],
                 temperature=T,
                 moves=[50, 50],
-                max_displacement=0.2,
+                max_displacement=1.7,
                 outfile=f'replica_{rank}.out',
-                trajectory_write_interval=10,
-                outfile_write_interval=10,
+                trajectory_write_interval=10000,
+                outfile_write_interval=100,
                 traj_file=f'replica_{rank}.xyz',
                 min_max_insert=[0, 27.2])
     return gcmc
@@ -38,18 +39,19 @@ def gcmc_factory(T=88, mu={'Ar': 0}, rank=0):
 
 temperatures = [200, 250, 300, 350, 400, 450]
 
-mus = [{'Ar': -9/100},
-       {'Ar': -8.9/100},
-    #    {'Ar': -8.8/100},
-    #    {'Ar': -8.7/100},
-       {'Ar': -8.6/100},
-       {'Ar': -8.5/100}]
+mus = [{'Ar': -8.7*0.010086},
+       {'Ar': -8.6*0.010086},
+       #{'Ar': -8.56*0.010086},
+       #{'Ar': -8.5*0.010086},
+       {'Ar': -8.5*0.010086},
+       {'Ar': -8.4*0.010086}]
 
 pt_gcmc = ReplicaExchange(
         gcmc_factory,
         mus=mus,
-        gcmc_steps=1000000,
-        exchange_interval=5,
+        masses={'Ar': 39.948},
+        gcmc_steps=300000,
+        exchange_interval=500,
         write_out_interval=100)
 
 pt_gcmc.run()
