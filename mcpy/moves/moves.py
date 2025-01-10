@@ -43,6 +43,7 @@ class InsertionMove(BaseMove):
         self.box = operating_box
         self.z_shift = z_shift
         self.min_max_insert = min_max_insert
+        
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -67,12 +68,12 @@ class InsertionMove(BaseMove):
         return atoms_new, 1, selected_species
 
     def check_distance_criteria(self, atoms_new):
-        min_distance_surf = min(atoms_new.get_distances(-1, self.surface_indices, mic=True))
-        if min_distance_surf > self.max_distance:
+        min_distance_surf = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
+        if min_distance_surf > self.min_max_insert[1]:
             return False
         added_atoms_indices = range(len(atoms_new)-1)
         min_distace_new = min(atoms_new.get_distances(-1, added_atoms_indices, mic=True))
-        if min_distace_new < self.min_distance:
+        if min_distace_new < self.min_max_insert[0]:
             return False
 
 
