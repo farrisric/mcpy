@@ -1,12 +1,14 @@
-from ..moves import InsertionMove, DeletionMove, DisplacementMove
-from .canonical_ensemble import BaseEnsemble
-from ..utils.random_number_generator import RandomNumberGenerator
-from ..utils.set_unit_constant import SetUnits
+import logging
+from typing import Optional, List
+
 import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
-from typing import Optional, List
-import logging
+
+from .canonical_ensemble import BaseEnsemble
+from ..utils.random_number_generator import RandomNumberGenerator
+from ..utils.set_unit_constant import SetUnits
+from ..moves.move_selector import MoveSelector
 
 
 class GrandCanonicalEnsemble(BaseEnsemble):
@@ -17,12 +19,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  mu : dict,
                  species : list,
                  temperature : float,
-                 moves: dict,
-                 max_displacement: float,
-                 min_max_insert: List[float],
+                 move_selector: MoveSelector,
                  volume: float = None,
-                 operating_box: List[List[float]] = None,
-                 z_shift: float = None,
                  surface_indices: List[float] = None,
                  random_seed: Optional[int] = None,
                  traj_file: str = 'traj_test.traj',
@@ -40,72 +38,32 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                          outfile_write_interval=outfile_write_interval)
 
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.INFO)  # Set default level, adjust as needed
+        self.logger.setLevel(logging.INFO)
 
         self.E_old = self.compute_energy(self.atoms)
 
-        #  SET UNITS AND DEFINE QUANTITIES ###
-        # units type and define physical constants
         self.units_type = units_type
-        self.units = SetUnits(self.units_type, temperature=temperature, species=species)
+        volume = volume or self.atoms.get_volume()
+        self.units = SetUnits(self.units_type,
+                              temperature=temperature,
+                              species=species,
+                              volume=volume)
 
-        # set cell and get volume
-        if operating_box:
-            from ase.cell import Cell
-            self.operating_box = operating_box
-            self.volume = Cell(operating_box).volume  # volume in angstrom^3
-            self.z_shift = z_shift
-        else:
-            self.operating_box = atoms.get_cell()
-            self.volume = volume or atoms.get_volume()  # volume in angstrom^3
-            self.z_shift = None
-
-        # get number of atoms
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
-        # get species
         self.species = species
-        # define temperature and beta
         self._temperature = temperature
-        # define chem. pot.
         self._mu = mu
 
-        ########################################
-
-        #  SET MC PARAMETERS #
-
         self.surface_indices = surface_indices or None
-        self.n_ins_del = moves[0]
-        self.n_displ = moves[1]
-        self.n_moves = self.n_ins_del + self.n_displ
-        self.max_displacement = max_displacement
-        self.min_distance, self.max_distance = min_max_insert
 
         self.initialize_outfile()
 
-        self.frac_ins_del = self.n_ins_del/self.n_moves
-        self.rng_move_choice = RandomNumberGenerator(seed=self._random_seed+1)
-        self.rng_acceptance = RandomNumberGenerator(seed=self._random_seed+2)
-        # Initialize GCMC moves
-        self.insert_move = InsertionMove(species=self.species,
-                                         operating_box=self.operating_box,
-                                         z_shift=self.z_shift,
-                                         seed=self._random_seed+3)
-        self.deletion_move = DeletionMove(species=self.species,
-                                          operating_box=self.operating_box,
-                                          z_shift=self.z_shift,
-                                          seed=self._random_seed+4)
-        self.displace_move = DisplacementMove(species=self.species,
-                                              seed=self._random_seed+5,
-                                              constraints=atoms.constraints,
-                                              max_displacement=self.max_displacement)
-
+        self.move_selector = move_selector
         self._step = 0
         self.exchange_attempts = 0
         self.exchange_successes = 0
-        # COUNTERS
-        self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
-        self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
+        self.rng_acceptance = RandomNumberGenerator(seed=self._random_seed+2)
 
     def get_state(self):
         return {
@@ -140,19 +98,17 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 outfile.write("Simulation Parameters:\n")
                 outfile.write(f"  Units type: {self.units_type}\n")
                 outfile.write(f"  Temperature (K): {self._temperature}\n")
-                outfile.write(f"  Volume (Å³): {self.volume:.3f}\n")
+                # outfile.write(f"  Volume (Å³): {self.volume:.3f}\n")
                 outfile.write(f"  Chemical potentials: {self._mu}\n")
-                outfile.write(f"  Number of Insertion-Deletion moves: {self.n_ins_del}\n")
-                outfile.write(f"  Interval instance to accept an Insertion Move: "
-                              f"{self.min_distance}-{self.max_distance} Å³\n")
-                outfile.write(f"  Number of Displacement moves: {self.n_displ}\n")
-                outfile.write(f"  Maximum Displacement distance: {self.max_displacement}\n\n")
+                # outfile.write(f"  Number of Insertion-Deletion moves: {self.n_ins_del}\n")
+                # outfile.write(f"  Interval instance to accept an Insertion Move: "
+                #               f"{self.min_distance}-{self.max_distance} Å³\n")
+                # outfile.write(f"  Number of Displacement moves: {self.n_displ}\n")
+                # outfile.write(f"  Maximum Displacement distance: {self.max_displacement}\n\n")
 
-                # Simulation start message
                 outfile.write("Starting simulation...\n")
                 outfile.write("-" * 60 + "\n")
 
-                # Write table header
                 outfile.write("{:<10} {:<10} {:<15} {:<20}\n".format(
                               "Step", "N_atoms", "Energy (eV)",
                               "Acceptance Ratios (Displ, Ins, Del)"))
@@ -167,9 +123,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         Args:
             step (int): The current step.
         """
-        acceptance_ratios = np.array(list(self.count_acceptance.values())) / np.array(
-                    list(self.count_moves.values())
-                )
+        acceptance_ratios = self.move_selector.get_acceptance_ration()
         try:
             with open(self._outfile, 'a') as outfile:
                 outfile.write("{:<10} {:<10} {:<15.6f} {:<20}\n".format(
@@ -206,14 +160,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 return p > self.rng_acceptance.get_uniform()
 
         if delta_particles == 1:  # Insertion move
-            min_distance_surf = min(atoms_new.get_distances(-1, self.surface_indices, mic=True))
-            if min_distance_surf > self.max_distance:
-                return False
-            added_atoms_indices = range(len(atoms_new)-1)
-            min_distace_new = min(atoms_new.get_distances(-1, added_atoms_indices, mic=True))
-            if min_distace_new < self.min_distance:
-                return False
-            db_term = (self.volume / ((self.n_atoms+1)*self.units.lambda_dbs[species]**3))
+            db_term = self.units.de_broglie_insertion(self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -224,7 +171,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Delta_particles: {delta_particles}")
 
         elif delta_particles == -1:  # Deletion move
-            db_term = (self.units.lambda_dbs[species]**3*self.n_atoms / self.volume)
+            db_term = self.units.de_broglie_deletion(self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -238,28 +185,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         else:
             return p > self.rng_acceptance.get_uniform()
 
-    def do_displ_move(self):
-        self.count_moves['Displacements'] += 1
-        return self.displace_move.do_trial_move(self.atoms)
-
-    def do_ins_del_move(self):
-        r2 = self.rng_move_choice.get_uniform()
-        if r2 <= 0.5:
-            self.count_moves['Insertions'] += 1
-            return self.insert_move.do_trial_move(self.atoms)
-        else:
-            self.count_moves['Deletions'] += 1
-            return self.deletion_move.do_trial_move(self.atoms)
-
-    def do_trial_step(self, ):
-        for move in range(self.n_moves):
-            r1 = self.rng_move_choice.get_uniform()
-            if r1 <= self.frac_ins_del:
-                atoms_new, delta_particles, species = self.do_ins_del_move()
-            else:
-                atoms_new = self.do_displ_move()
-                delta_particles = 0
-                species = 'X'
+    def do_gcmc_step(self):
+        for i in range(self.move_selector.n_moves):
+            atoms_new, delta_particles, species = self.move_selector.do_trial_move(self.atoms)
 
             if not atoms_new:  # NOTE: be carful here
                 continue
@@ -270,12 +198,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.atoms = atoms_new
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
-                if delta_particles == 0:
-                    self.count_acceptance['Displacements'] += 1
-                if delta_particles == 1:
-                    self.count_acceptance['Insertions'] += 1
-                if delta_particles == -1:
-                    self.count_acceptance['Deletions'] += 1
+                self.move_selector.acceptance_counter()
 
     def compute_energy(self, atoms):
         return self._calculator.get_potential_energy(atoms)
@@ -290,14 +213,14 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.info("+-------------------------------------------------+")
         self.logger.info("Simulation Parameters:")
         self.logger.info(f"Temperature (K): {self._temperature}")
-        self.logger.info(f"Volume (Å³): {self.volume:.3f}")
+        # self.logger.info(f"Volume (Å³): {self.volume:.3f}")
         self.logger.info(f"Chemical potentials: {self._mu}")
-        self.logger.info(f"Number of Insertion-Deletion moves: {self.n_ins_del}")
-        self.logger.info(
-            f"Interval instance to accept an Insertion Move: "
-            f"{self.min_distance}-{self.max_distance} Å³")
-        self.logger.info(f"Number of Displacement moves: {self.n_displ}")
-        self.logger.info(f"Maximum Displacement distance: {self.max_displacement}")
+        # self.logger.info(f"Number of Insertion-Deletion moves: {self.n_ins_del}")
+        # self.logger.info(
+            # f"Interval instance to accept an Insertion Move: "
+            # f"{self.min_distance}-{self.max_distance} Å³")
+        # self.logger.info(f"Number of Displacement moves: {self.n_displ}")
+        # self.logger.info(f"Maximum Displacement distance: {self.max_displacement}")
         self.logger.info("Starting simulation...\n")
         self.logger.info("{:<10} {:<10} {:<15} {:<20}".format(
             "Step", "N_atoms", "Energy (eV)", "Acceptance Ratios (Displ, Ins, Del)"
@@ -334,12 +257,10 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         """
         Performs a single Monte Carlo step and handles logging and writing.
         """
-        self.do_trial_step()
+        self.do_gcmc_step()
 
         if self._step % self._outfile_write_interval == 0:
-            acceptance_ratios = np.array(list(self.count_acceptance.values())) / np.array(
-                list(self.count_moves.values())
-            )
+            acceptance_ratios = self.move_selector.get_acceptance_ration()
             self.logger.info("{:<10} {:<10} {:<15.6f} {:<20}".format(
                 self._step,
                 self.n_atoms,
@@ -348,9 +269,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                              else "N/A" for ratio in acceptance_ratios)
             ))
             self.write_outfile(step)
-            # reset counters
-            self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
-            self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms)
