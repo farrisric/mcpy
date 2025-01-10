@@ -113,6 +113,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             step (int): The current step.
         """
         acceptance_ratios = self.move_selector.get_acceptance_ration()
+        self.move_selector.reset_counters()
         try:
             with open(self._outfile, 'a') as outfile:
                 outfile.write("{:<10} {:<10} {:<15.6f} {:<20}\n".format(

@@ -12,13 +12,12 @@ surface_indices = [a.index for a in atoms if a.tag == 1]
 box = [atoms.cell[0], atoms.cell[1], np.array([0, 0, 6])]
 z_shift = atoms[surface_indices[0]].position[2]-3
 
-
 calculator = MACECalculator('/home/riccardo/Downloads/mace-large-density-agnesi-stress.model')
 calculator.get_potential_energy(atoms)
 
 species = ['Ag', 'O']
 
-move_list = [[25, 25, 50],
+move_list = [[5, 5, 10],
              [DeletionMove(species=species,
                            seed=12,
                            operating_box=box,
@@ -26,7 +25,7 @@ move_list = [[25, 25, 50],
               InsertionMove(species=species,
                             seed=13,
                             operating_box=box,
-                            min_max_insert=[1.5, 3.5],
+                            min_max_insert=[1.5, 3.0],
                             z_shift=z_shift),
               DisplacementMove(species=species,
                                seed=14,
