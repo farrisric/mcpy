@@ -6,7 +6,7 @@ from ase.data import atomic_masses, atomic_numbers
 class SetUnits:
     """Class for setting units based on a given string."""
 
-    def __init__(self, unit_type: str, temperature: float, species: List) -> None:
+    def __init__(self, unit_type: str, temperature: float, volume: float, species: List) -> None:
         """
         Initialize the SetUnits class with a specific unit type.
 
@@ -17,6 +17,7 @@ class SetUnits:
         self.unit_type = unit_type
         self.species = species
         self.temperature = temperature
+        self.volume = volume
 
         if unit_type == "LJ":
             self._set_lj_units()
@@ -51,3 +52,10 @@ class SetUnits:
             for specie in self.species
         }
 
+    def de_broglie_insertion(self, n_atoms, specie: str) -> float:
+        """Calculate the de Broglie wavelength for insertion."""
+        return (self.volume / ((n_atoms+1)*self.lambda_dbs[specie]**3))
+
+    def de_broglie_deletion(self, n_atoms, specie: str) -> float:
+        """Calculate the de Broglie wavelength for deletion."""
+        return (self.lambda_dbs[specie]**3*n_atoms / self.volume)
