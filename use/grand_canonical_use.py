@@ -7,7 +7,7 @@ from mcpy.moves.move_selector import MoveSelector
 
 class Calculator():
     def __init__(self) -> None:
-        self.calculator = LennardJones()
+        self.calculator = LennardJones(sigma=3.4, epsilon=0.010086, rc=10.2, smooth=True)
 
     def get_potential_energy(self, atoms):
         atoms.calc = self.calculator
@@ -15,7 +15,7 @@ class Calculator():
 
 
 lj = Calculator()
-atoms = Atoms('Ar', cell=[30, 30, 30])
+atoms = Atoms('Ar', cell=[27.2, 27.2, 27.2], pbc=True)
 lj.get_potential_energy(atoms)
 
 box = atoms.get_cell()
@@ -31,7 +31,7 @@ T = 500
 gcmc = GrandCanonicalEnsemble(
             atoms=atoms,
             calculator=lj,
-            mu={'Ar': -8.7*0.010086},
+            mu={'Ar': -8.4*0.010086},
             units_type='metal',
             species=species,
             temperature=87.79,
