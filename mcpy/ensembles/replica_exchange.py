@@ -1,24 +1,21 @@
 from mpi4py import MPI
 import numpy as np
 import logging
-from ..utils.set_unit_constant import SetUnits
 from ..utils import RandomNumberGenerator
 from collections import Counter
-from scipy.special import factorial, gammaln
+
 
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
-                 units_type='metal',
                  temperatures=None,
-                 masses=None,
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
                  write_out_interval=20,
                  seed=31):
         """
-        Parallel Tempering for GCMC.
+        ReplicaExchange for GCMC.
 
         Parameters:
         - gcmc_factory (function): Function to create a GCMC instance for a given temperature.
@@ -29,10 +26,6 @@ class ReplicaExchange:
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
-        
-        # SET UNIT CONSTANTS
-        self.units_type = units_type
-        self.units_constants = SetUnits(self.units_type)
 
         if temperatures:
             assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
@@ -64,20 +57,6 @@ class ReplicaExchange:
         )
         self.logger = logging.getLogger()
         self.write_out_interval = write_out_interval
-        self.masses=masses
-        self.re_lambda_dbs = {}
-        self.re_volume = self.gcmc.volume # volume in Angstrom
-        self.re_beta = 1/(self.gcmc._temperature*self.units_constants.BOLTZMANN_CONSTANT)
-        self.lambda_dbs = {}
-        for specie in self.gcmc.species:
-            if self.units_type == 'LJ': # lambda equal 1 in LJ
-                self.lambda_dbs[specie] = 1
-            else:  # lambdas in Angstrom  
-                self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
-                                       np.sqrt(
-                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self.re_beta)
-                                    ) )*self.units_constants.lambda_conversion_factor 
-
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
@@ -114,7 +93,6 @@ class ReplicaExchange:
             f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
-
     def _acceptance_condition_mu(self, state1, state2):
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
@@ -124,7 +102,11 @@ class ReplicaExchange:
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-            exponential_arg += ( state2['beta'] * state2['mu'][specie] * (-delta_specie) ) + ( state1['beta'] * state1['mu'][specie] * delta_specie )    
+            exponential_arg += (
+                state2['beta'] * state2['mu'][specie] * (-delta_specie)
+                ) + (
+                    state1['beta'] * state1['mu'][specie] * delta_specie
+                    )
 
         exponential = np.exp(exponential_arg)
         exchange_prob = min(1.0, exponential)
@@ -137,7 +119,6 @@ class ReplicaExchange:
             f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
         )
-
         return self.rng.get_uniform() < exchange_prob
 
     def do_exchange(self):
