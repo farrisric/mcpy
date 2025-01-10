@@ -7,8 +7,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 from typing import Optional, List
 import logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
+
 
 class GrandCanonicalEnsemble(BaseEnsemble):
     def __init__(self,
@@ -16,7 +15,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  units_type: str,
                  calculator: Calculator,
                  mu : dict,
-                 masses: dict,
                  species : list,
                  temperature : float,
                  moves: dict,
@@ -45,26 +43,23 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.setLevel(logging.INFO)  # Set default level, adjust as needed
 
         self.E_old = self.compute_energy(self.atoms)
-        
-        ###  SET UNITS AND DEFINE QUANTITIES ###
-        
+
+        #  SET UNITS AND DEFINE QUANTITIES ###
         # units type and define physical constants
         self.units_type = units_type
-        self.units_constants = SetUnits(self.units_type)
+        self.units = SetUnits(self.units_type, temperature=temperature, species=species)
 
         # set cell and get volume
         if operating_box:
             from ase.cell import Cell
             self.operating_box = operating_box
-            self.volume = Cell(operating_box).volume ### volume in angstrom^3
+            self.volume = Cell(operating_box).volume  # volume in angstrom^3
             self.z_shift = z_shift
         else:
             self.operating_box = atoms.get_cell()
-            self.volume = volume or atoms.get_volume()  ### volume in angstrom^3
+            self.volume = volume or atoms.get_volume()  # volume in angstrom^3
             self.z_shift = None
-        
-        # get masses and number of atoms
-        self.masses = masses # in uma
+
         # get number of atoms
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
@@ -72,24 +67,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.species = species
         # define temperature and beta
         self._temperature = temperature
-        self._beta = 1/(self._temperature*self.units_constants.BOLTZMANN_CONSTANT)
         # define chem. pot.
         self._mu = mu
-        # compute lambdas
-        self.lambda_dbs = {}
-        for specie in species:
-            if self.units_type == 'LJ': # lambda equal 1 in LJ
-                self.lambda_dbs[specie] = 1
-            else:  # lambdas in Angstrom  
-                self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
-                                       np.sqrt(
-                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self._beta)
-                                    ) )*self.units_constants.lambda_conversion_factor 
-
 
         ########################################
 
-        ###  SET MC PARAMETERS ###
+        #  SET MC PARAMETERS #
 
         self.surface_indices = surface_indices or None
         self.n_ins_del = moves[0]
@@ -123,7 +106,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         # COUNTERS
         self.count_moves = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
         self.count_acceptance = {'Displacements' : 0, 'Insertions' : 0, 'Deletions' : 0}
-        
 
     def get_state(self):
         return {
@@ -132,7 +114,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             "energy" : self.E_old,
             "mu": self._mu,
             "temperature": self._temperature,
-            "beta": self._beta,
+            "beta": self.units.beta,
             "step": self._step,
             "exchange_attempts": self.exchange_attempts,
             "exchange_successes": self.exchange_successes,
@@ -220,7 +202,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             if potential_diff <= 0:
                 return True
             else:
-                p = np.exp(-potential_diff * self._beta)
+                p = np.exp(-potential_diff * self.units.beta)
                 return p > self.rng_acceptance.get_uniform()
 
         if delta_particles == 1:  # Insertion move
@@ -231,21 +213,23 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             min_distace_new = min(atoms_new.get_distances(-1, added_atoms_indices, mic=True))
             if min_distace_new < self.min_distance:
                 return False
-            db_term = (self.volume / ((self.n_atoms+1)*self.lambda_dbs[species]**3))
-            exp_term = np.exp(-self._beta * (potential_diff - self._mu[species]))
+            db_term = (self.volume / ((self.n_atoms+1)*self.units.lambda_dbs[species]**3))
+            exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {self.lambda_dbs[species]:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
+                f"Lambda_db: {self.units.lambda_dbs[species]:.3e}, p: {p:.3e}, "
+                f"Beta: {self.units.beta:.3e}, "
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
 
         elif delta_particles == -1:  # Deletion move
-            db_term = (self.lambda_dbs[species]**3*self.n_atoms / self.volume)
-            exp_term = np.exp(-self._beta * (potential_diff + self._mu[species]))
+            db_term = (self.units.lambda_dbs[species]**3*self.n_atoms / self.volume)
+            exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {self.lambda_dbs[species]:.3e}, p: {p:.3e}, Beta: {self._beta:.3e}, "
+                f"Lambda_db: {self.units.lambda_dbs[species]:.3e}, p: {p:.3e}, "
+                f"Beta: {self.units.beta:.3e}, "
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
