@@ -36,6 +36,7 @@ move_selector = MoveSelector(*move_list)
 
 
 def gcmc_factory(mu, rank=0):
+    print(mu['O'])
     gcmc = GrandCanonicalEnsemble(
                 atoms=atoms,
                 calculator=calculator,
@@ -49,6 +50,7 @@ def gcmc_factory(mu, rank=0):
                 outfile_write_interval=1,
                 traj_file=f'replica_{rank}.xyz')
     return gcmc
+
 
 mus = [{'Ag' : -2.8, 'O' : -4.9},
        {'Ag' : -2.8, 'O' : -5.0},

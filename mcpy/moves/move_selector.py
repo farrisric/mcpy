@@ -47,6 +47,11 @@ class MoveSelector:
         self.move_acceptance[self.to_use] += 1
 
     def get_acceptance_ration(self):
-        return [self.move_acceptance[i]/self.move_counter[i] for i in range(
+        ratio = [self.move_acceptance[i]/self.move_counter[i] for i in range(
             len(self.move_acceptance))
                 ]
+        return ratio
+
+    def reset_counters(self):
+        self.move_counter = [0 for _ in range(len(self.move_list))]
+        self.move_acceptance = [0 for _ in range(len(self.move_list))]
