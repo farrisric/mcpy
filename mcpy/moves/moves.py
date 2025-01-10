@@ -103,7 +103,7 @@ class DisplacementMove(BaseMove):
     def __init__(self,
                  species: list[str],
                  seed: int,
-                 constraints: list,
+                 constraints: list = [],
                  max_displacement: float = 0.1
                  ) -> None:
         """
