@@ -18,7 +18,7 @@ calculator.get_potential_energy(atoms)
 
 species = ['Ag', 'O']
 
-move_list = [[25, 25, 50],
+move_list = [[5, 5, 5],
              [DeletionMove(species=species,
                            seed=12,
                            operating_box=box,
@@ -36,7 +36,6 @@ move_selector = MoveSelector(*move_list)
 
 
 def gcmc_factory(mu, rank=0):
-    print(mu['O'])
     gcmc = GrandCanonicalEnsemble(
                 atoms=atoms,
                 calculator=calculator,
@@ -62,6 +61,7 @@ pt_gcmc = ReplicaExchange(
         mus=mus,
         gcmc_steps=300000,
         exchange_interval=500,
-        write_out_interval=100)
+        outfile='replica_exchange.out',
+        write_out_interval=1)
 
 pt_gcmc.run()

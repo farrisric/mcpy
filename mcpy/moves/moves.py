@@ -67,9 +67,8 @@ class InsertionMove(BaseMove):
         return atoms_new, 1, selected_species
 
     def check_distance_criteria(self, atoms_new):
-        min_distance_surf = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
-        if min_distance_surf > self.min_max_insert[1] and min_distance_surf < self.min_max_insert[0]:
-            print(min_distance_surf)
+        min_d = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
+        if min_d > self.min_max_insert[1] and min_d < self.min_max_insert[0]:
             return False
         return True
         # added_atoms_indices = range(len(atoms_new)-1)
