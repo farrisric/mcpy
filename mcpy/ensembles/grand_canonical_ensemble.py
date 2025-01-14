@@ -57,7 +57,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.initialize_outfile()
 
         self.move_selector = move_selector
-        self._step = 0
+        self._step = 1
         self.exchange_attempts = 0
         self.exchange_successes = 0
         self.rng_acceptance = RandomNumberGenerator(seed=self._random_seed + 2)

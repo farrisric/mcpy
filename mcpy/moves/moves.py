@@ -71,10 +71,6 @@ class InsertionMove(BaseMove):
         if min_d > self.min_max_insert[1] and min_d < self.min_max_insert[0]:
             return False
         return True
-        # added_atoms_indices = range(len(atoms_new)-1)
-        # min_distace_new = min(atoms_new.get_distances(-1, added_atoms_indices, mic=True))
-        # if min_distace_new < self.min_max_insert[0]:
-        #     return False
 
 
 class DeletionMove(BaseMove):
