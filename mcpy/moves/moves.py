@@ -144,9 +144,15 @@ class DisplacementMove(BaseMove):
             raise ValueError("No atoms to displace.")
         to_move = np.setdiff1d(np.arange(len(atoms_new)), self.constraints)
         atom_index = self.rng.random.choice(to_move)
-        displacement = [
-            self.rng.get_uniform(-self.max_displacement, self.max_displacement) for _ in range(3)
-            ]
+
+        rsq = 1.1
+        while rsq > 1.0:
+            rx = 2 * self.rng.get_uniform() - 1.0
+            ry = 2 * self.rng.get_uniform() - 1.0
+            rz = 2 * self.rng.get_uniform() - 1.0
+            rsq = rx * rx + ry * ry + rz * rz
+        displacement=[rx*self.max_displacement,ry*self.max_displacement,rz*self.max_displacement]
+        
         atoms_new.positions[atom_index] += displacement
         atoms_new.set_positions(wrap_positions(atoms_new.positions, atoms_new.cell))
         return atoms_new, 0, 'X'
