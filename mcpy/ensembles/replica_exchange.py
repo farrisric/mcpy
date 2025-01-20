@@ -1,24 +1,25 @@
 from mpi4py import MPI
 import numpy as np
 import logging
-from ..utils.set_unit_constant import SetUnits
 from ..utils import RandomNumberGenerator
 from collections import Counter
-from scipy.special import factorial, gammaln
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
-                 units_type='metal',
                  temperatures=None,
-                 masses=None,
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
+                 outfile="replica_exchange.log",
                  write_out_interval=20,
                  seed=31):
         """
-        Parallel Tempering for GCMC.
+        ReplicaExchange for GCMC.
 
         Parameters:
         - gcmc_factory (function): Function to create a GCMC instance for a given temperature.
@@ -29,10 +30,6 @@ class ReplicaExchange:
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
-        
-        # SET UNIT CONSTANTS
-        self.units_type = units_type
-        self.units_constants = SetUnits(self.units_type)
 
         if temperatures:
             assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
@@ -51,7 +48,6 @@ class ReplicaExchange:
 
         gcmc_logger = logging.getLogger(self.gcmc.__class__.__name__)
         gcmc_logger.setLevel(logging.WARNING)
-
         self.rng = RandomNumberGenerator(seed=seed)
 
         logging.basicConfig(
@@ -63,21 +59,9 @@ class ReplicaExchange:
             ]
         )
         self.logger = logging.getLogger()
-        self.write_out_interval = write_out_interval
-        self.masses=masses
-        self.re_lambda_dbs = {}
-        self.re_volume = self.gcmc.volume # volume in Angstrom
-        self.re_beta = 1/(self.gcmc._temperature*self.units_constants.BOLTZMANN_CONSTANT)
-        self.lambda_dbs = {}
-        for specie in self.gcmc.species:
-            if self.units_type == 'LJ': # lambda equal 1 in LJ
-                self.lambda_dbs[specie] = 1
-            else:  # lambdas in Angstrom  
-                self.lambda_dbs[specie] = ( self.units_constants.PLANCK_CONSTANT / 
-                                       np.sqrt(
-                2 * np.pi * self.masses[specie]*self.units_constants.mass_conversion_factor * (1 / self.re_beta)
-                                    ) )*self.units_constants.lambda_conversion_factor 
 
+        self._outfile = outfile
+        self.write_out_interval = write_out_interval
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
@@ -114,7 +98,6 @@ class ReplicaExchange:
             f"Rank: {self.rank}")
         return self.rng.get_uniform() < exchange_prob
 
-
     def _acceptance_condition_mu(self, state1, state2):
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
@@ -124,7 +107,11 @@ class ReplicaExchange:
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-            exponential_arg += ( state2['beta'] * state2['mu'][specie] * (-delta_specie) ) + ( state1['beta'] * state1['mu'][specie] * delta_specie )    
+            exponential_arg += (
+                state2['beta'] * state2['mu'][specie] * (-delta_specie)
+                ) + (
+                    state1['beta'] * state1['mu'][specie] * delta_specie
+                    )
 
         exponential = np.exp(exponential_arg)
         exchange_prob = min(1.0, exponential)
@@ -137,7 +124,6 @@ class ReplicaExchange:
             f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
         )
-
         return self.rng.get_uniform() < exchange_prob
 
     def do_exchange(self):
@@ -177,7 +163,8 @@ class ReplicaExchange:
     def run(self):
         """Run the Parallel Tempering GCMC simulation."""
         if self.rank == 0:
-            self.initialize_run()  # Log simulation details at the start
+            self.initialize_outfile()
+            self.initialize_run()
 
         for step in range(self.gcmc_steps):
             self.gcmc._run(1)
@@ -188,7 +175,8 @@ class ReplicaExchange:
                     self.gcmc.exchange_successes += 1
 
             if step % self.write_out_interval == 0:
-                self.summarize_states(step)
+                # self.summarize_states(step)
+                self.write_outfile(step)
 
             self._re_step += 1
 
@@ -223,10 +211,8 @@ class ReplicaExchange:
         else:
             self.logger.info("Temperatures: Not specified (default)")
         if hasattr(self, 'mus') and self.mus is not None:
-            self.logger.info("Chemical potentials:")
-            for i, mu_dict in enumerate(self.mus):
-                for species, mu in mu_dict.items():
-                    self.logger.info(f"  {species}: {mu:.3f}")
+            for i, mus in enumerate(self.mus):
+                self.logger.info(f"Chemical potentials: Rank {i} - {mus}")
         else:
             self.logger.info("Chemical potentials: Not specified (default)")
         self.logger.info(f"Number of MPI ranks: {self.size}")
@@ -242,8 +228,12 @@ class ReplicaExchange:
 
         Args:
             step (int): Current simulation step.
+
+        Returns:
+            dict: A dictionary containing summarized state information for all ranks.
         """
         states = self.comm.gather(self.gcmc.get_state(), root=0)
+        summary = {}
 
         if self.rank == 0:
             for i, state in enumerate(states):
@@ -277,9 +267,74 @@ class ReplicaExchange:
                 else:
                     chemical_potential_str = "Not specified"
 
-                # Log the summarized state information
-                self.logger.info(
-                    f"{i:<5} {gcmc_step:<10} {atom_count_by_species:<25} "
-                    f"{energy:<15.3f} {chemical_potential_str:<35} "
-                    f"{temperature:<20} {accepted_percentage:<25.1f}"
-                )
+                # Store the summarized state information in the dictionary
+                summary[i] = {
+                    "step": gcmc_step,
+                    "atom_count_by_species": atom_count_by_species,
+                    "energy": energy,
+                    "chemical_potential": chemical_potential_str,
+                    "temperature": temperature,
+                    "accepted_percentage": accepted_percentage
+                }
+                self.logger.info("{:<5} {:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}".format(
+                    i, gcmc_step, atom_count_by_species, energy, chemical_potential_str,
+                    temperature, accepted_percentage
+                ))
+        return summary
+    
+    def initialize_outfile(self):
+        """
+        Initialize the output file for writing the summarized states.
+        """
+        try:
+            with open(self._outfile, 'w') as outfile:
+                outfile.write("+-------------------------------------------------+\n")
+                outfile.write("| Replica Exchange Monte Carlo Simulation         |\n")
+                outfile.write("+-------------------------------------------------+\n")
+                outfile.write("Simulation Parameters:\n")
+                outfile.write(f"Total GCMC steps: {self.gcmc_steps}\n")
+                outfile.write(f"Exchange interval (steps): {self.exchange_interval}\n")
+
+                # Log atom count if available in GCMC state
+                atom_count = len(self.gcmc.get_state()['atoms'])
+                outfile.write(f"Number of atoms in initial configuration: {atom_count}\n")
+
+                if hasattr(self, 'temperatures') and self.temperatures is not None:
+                    outfile.write(f"Temperatures (K): {self.temperatures}\n")
+                else:
+                    outfile.write("Temperatures: Not specified (default)\n")
+                for i, mus in enumerate(self.mus):
+                    outfile.write(f"Chemical potentials: Rank {i} - {mus}\n")
+                else:
+                    outfile.write("Chemical potentials: Not specified (default)\n")
+                outfile.write(f"Number of MPI ranks: {self.size}\n")
+                outfile.write("{:<5} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}\n".format(
+                    "Rank", "Step", "Atom Count (by species)", "Energy (eV)",
+                    "Chemical Potentials (eV)", "Temperature (K)", "Accepted Exchange (%)"
+                ))
+                outfile.write("-" * 140 + "\n")
+        except IOError as e:
+            self.logger.error(f"Error opening output file: {e}")
+
+    def write_outfile(self, step: int) -> None:
+        """
+        Write the summarized states to the output file.
+
+        Args:
+            step (int): The current step.
+        """
+        summary = self.summarize_states(step)
+        try:
+            with open(self._outfile, 'a') as outfile:
+                for rank, state in summary.items():
+                    outfile.write("{:<5} {:<10} {:<25} {:<15.6f} "
+                                  "{:<35} {:<20} {:<25.2f}\n".format(
+                                            rank, state["step"],
+                                            state["atom_count_by_species"],
+                                            state["energy"],
+                                            state["chemical_potential"],
+                                            state["temperature"],
+                                            state["accepted_percentage"]
+                                            ))
+        except IOError as e:
+            self.logger.error(f"Error writing summary to file: {e}")

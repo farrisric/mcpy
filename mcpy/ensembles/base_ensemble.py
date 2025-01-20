@@ -127,7 +127,7 @@ def write_xyz(atoms, filename):
     cell = atoms.get_cell()
     positions = atoms.get_positions()
     symbols = atoms.get_chemical_symbols()
-    energy = atoms.get_potential_energy() if atoms.calc else 0.0
+    energy = atoms.info['energy']
 
     comment = f"energy={energy:.6f}"
     num_atoms = len(atoms)

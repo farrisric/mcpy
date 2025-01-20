@@ -46,4 +46,5 @@ class MACECalculator:
         atom_data = self.get_atom_data(atoms)
         with torch.no_grad():
             energy = self.model(atom_data, compute_stress=False, compute_force=False)['energy']
+        atoms.info['energy'] = energy.item()
         return energy.item()
