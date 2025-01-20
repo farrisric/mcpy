@@ -37,10 +37,12 @@ class InsertionMove(BaseMove):
                  species: list[str],
                  seed : int,
                  operating_box : list[list] = None,
-                 z_shift : float = None):
+                 z_shift : float = None,
+                 min_max_insert : list[float] = None):
         super().__init__(species, seed)
         self.box = operating_box
         self.z_shift = z_shift
+        self.min_max_insert = min_max_insert
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -57,7 +59,18 @@ class InsertionMove(BaseMove):
         if self.z_shift:
             position[2] += self.z_shift
         atoms_new += Atoms(selected_species, positions=[position])
+        if self.min_max_insert:
+            if self.check_distance_criteria(atoms_new):
+                return atoms_new, 1, selected_species
+            else:
+                return False, False, False
         return atoms_new, 1, selected_species
+
+    def check_distance_criteria(self, atoms_new):
+        min_d = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
+        if min_d > self.min_max_insert[1] and min_d < self.min_max_insert[0]:
+            return False
+        return True
 
 
 class DeletionMove(BaseMove):
@@ -136,4 +149,4 @@ class DisplacementMove(BaseMove):
             ]
         atoms_new.positions[atom_index] += displacement
         atoms_new.set_positions(wrap_positions(atoms_new.positions, atoms_new.cell))
-        return atoms_new
+        return atoms_new, 0, 'X'
