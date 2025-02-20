@@ -272,5 +272,5 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.write_outfile(step)
 
         if self._step % self._trajectory_write_interval == 0:
-            self.write_coordinates(self.atoms)
+            self.write_coordinates(self.atoms, self.E_old)
         self._step += 1
