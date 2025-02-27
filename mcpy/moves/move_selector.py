@@ -20,6 +20,7 @@ class MoveSelector:
     def __init__(self, probabilities, move_list, seed=None):
         assert len(probabilities) == len(move_list)
         self.move_list = move_list
+        self.move_list_names = [move.__class__.__name__[:3] for move in move_list]
         self.n_moves = sum(probabilities)
         self.rho = np.cumsum(probabilities)
         self.rng = RandomNumberGenerator(seed=seed)
