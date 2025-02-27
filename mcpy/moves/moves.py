@@ -175,9 +175,8 @@ class PermutationMove(BaseMove):
         Atoms: Updated ASE Atoms object after the permutation.
         """
         atoms_new = atoms.copy()
-        symbol_pair = self.rng.random.choice(self.species, 2, replace=False)
-        indices_symbol_a = [atom.index for atom in atoms_new if atom.symbol == symbol_pair[0]]
-        indices_symbol_b = [atom.index for atom in atoms_new if atom.symbol == symbol_pair[1]]
+        indices_symbol_a = [atom.index for atom in atoms_new if atom.symbol == self.species[0]]
+        indices_symbol_b = [atom.index for atom in atoms_new if atom.symbol == self.species[1]]
         if len(indices_symbol_a) == 0 or len(indices_symbol_b) == 0:
             return False, 0, 'X'
         i = self.rng.random.choice(indices_symbol_a)
