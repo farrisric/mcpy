@@ -13,3 +13,7 @@ wheels/
 *.out
 *.xyz
 *.log
+
+# my folder
+examples/
+benchmark/

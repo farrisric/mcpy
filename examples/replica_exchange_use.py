@@ -26,7 +26,7 @@ species = ['Ar']
 
 move_list = [[25, 25, 50],
              [DeletionMove(species=species, seed=12, operating_box=box),
-              InsertionMove(species=species, seed=13, operating_box=box),
+              InsertionMove(species=species, species_bias = ['Ag'], seed=13, min_max_insert = [1.5], operating_box=box),
               DisplacementMove(species=species, seed=14, max_displacement=1.7)]]
 
 move_selector = MoveSelector(*move_list)
