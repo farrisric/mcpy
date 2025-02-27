@@ -221,7 +221,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.info(f"Chemical potentials: {self._mu}")
         self.logger.info("Starting simulation...\n")
         self.logger.info("{:<10} {:<10} {:<15} {:<20}".format(
-            "Step", "N_atoms", "Energy (eV)", "Acceptance Ratios (Displ, Ins, Del)"
+            "Step", "N_atoms", "Energy (eV)",
+            f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
         ))
         self.logger.info("-" * 60)
         self._initialized = True
