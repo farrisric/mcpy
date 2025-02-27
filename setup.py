@@ -8,7 +8,6 @@ setup(
     install_requires=[
         "ase>=3.23.0",
         "mace-torch>=0.3.9",
-        "mpi4py>=4.0.1",
     ],
     python_requires='>=3.11',
 )
