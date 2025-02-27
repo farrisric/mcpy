@@ -105,7 +105,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
             raise
 
-    def write_outfile(self, step: int) -> None:
+    def write_outfile(self) -> None:
         """
         Write the step and energy to the output file.
 
@@ -127,7 +127,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.logger.error(f"Error writing to file {self._outfile}: {e}")
 
     def _acceptance_condition(self,
-                              atoms_new: Atoms,
                               potential_diff: float,
                               delta_particles: int,
                               species: str) -> bool:
@@ -270,7 +269,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
                           else "N/A" for ratio in acceptance_ratios)
             ))
-            self.write_outfile(step)
+            self.write_outfile()
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms, self.E_old)
