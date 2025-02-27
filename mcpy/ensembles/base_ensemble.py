@@ -102,7 +102,7 @@ class BaseEnsemble(ABC):
             logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
             raise
 
-    def write_coordinates(self, atoms: Atoms) -> None:
+    def write_coordinates(self, atoms: Atoms, energy: float) -> None:
         """
         Write the trajectory file.
 
@@ -110,12 +110,12 @@ class BaseEnsemble(ABC):
             atoms (Atoms): The atomic configuration.
         """
         try:
-            write_xyz(atoms, self._traj_file)
+            write_xyz(atoms, energy, self._traj_file)
         except IOError as e:
             logger.error(f"Error writing to trajectory file {self._traj_file}: {e}")
 
 
-def write_xyz(atoms, filename):
+def write_xyz(atoms, energy, filename):
     """
     Write an XYZ file from an ASE Atoms object, including the cell dimensions.
     Optimized for faster file writing using numpy.
@@ -127,7 +127,7 @@ def write_xyz(atoms, filename):
     cell = atoms.get_cell()
     positions = atoms.get_positions()
     symbols = atoms.get_chemical_symbols()
-    energy = atoms.info['energy']
+    #energy = atoms.get_potential_energy()
 
     comment = f"energy={energy:.6f}"
     num_atoms = len(atoms)
