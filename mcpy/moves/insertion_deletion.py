@@ -35,6 +35,7 @@ class InsertionMove(BaseMove):
         ### select position of the atoms from which you add the configurational bias
         elements_array = np.array(atoms_new.get_chemical_symbols())
         positions_bias = atoms_new.positions[elements_array == self.species_bias]
+        #!excluded_volume = (4/3) * np.pi * (self.min_insert**3) * len(positions_bias)
         ### iterate selection of the insertion position until the configurational bias is satisfied
         configurational_bias = False
         while configurational_bias == False:
@@ -44,8 +45,8 @@ class InsertionMove(BaseMove):
             ### if z_shift, shift the random position to be in the wanted region
             if self.z_shift:
                 insert_position[2] += self.z_shift
-            min_dist = np.min(pairwise_distances(insert_position.reshape(1,-1),positions_bias).flatten())    
-            if min_dist >= self.min_insert and min_dist <= 3:
+            min_dist = np.min(pairwise_distances(insert_position.reshape(1,-1),positions_bias).flatten())
+            if min_dist >= self.min_insert:
                 configurational_bias = True         
         ### select specie to insert
         selected_species = self.rng.random.choice(self.species)            
