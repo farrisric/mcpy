@@ -1,4 +1,5 @@
 from ase.build import fcc111
+from ase.constraints import FixAtoms
 import numpy as np
 
 from mcpy.moves import DeletionMove, InsertionMove, DisplacementMove
@@ -8,6 +9,10 @@ from mcpy.calculators import MACE_F_Calculator
 from mcpy.utils.utils import get_volume
 
 atoms = fcc111('Ag', size=(4, 4, 3), periodic=True, vacuum=8)
+bottom_layer = [a.index for a in atoms if a.tag == 3]
+constraint = FixAtoms(indices=bottom_layer)
+atoms.set_constraint(constraint)
+
 surface_indices = [a.index for a in atoms if a.tag == 1]
 box = [atoms.cell[0], atoms.cell[1], np.array([0, 0, 6])]
 z_shift = atoms[surface_indices[0]].position[2]-3
