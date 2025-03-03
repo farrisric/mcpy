@@ -27,18 +27,20 @@ move_list = [[25, 25, 50],
               DisplacementMove(species=species, seed=14, max_displacement=1.7)]]
 
 move_selector = MoveSelector(*move_list)
-T = 500
+
+Temp = 87.79
+
 gcmc = GrandCanonicalEnsemble(
             atoms=atoms,
             calculator=lj,
             mu={'Ar': -8.4*0.010086},
             units_type='metal',
             species=species,
-            temperature=87.79,
+            temperature=Temp,
             move_selector=move_selector,
-            outfile=f'replica_T{T}.out',
+            outfile=f'replica_T{Temp}.out',
             trajectory_write_interval=1,
             outfile_write_interval=1,
-            traj_file=f'replica_T{T}.xyz')
+            traj_file=f'replica_T{Temp}.xyz')
 
 gcmc.run(1000000)
