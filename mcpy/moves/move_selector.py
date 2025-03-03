@@ -53,7 +53,7 @@ class MoveSelector:
             if self.move_counter[i] > 0:
                 ratio.append(self.move_acceptance[i]/self.move_counter[i])
             else:
-                ratio.append(-1)
+                ratio.append(np.nan)
         return ratio
 
     def reset_counters(self):
