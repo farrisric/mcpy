@@ -13,3 +13,8 @@ wheels/
 *.out
 *.xyz
 *.log
+
+# Jupyter Notebook output
+.ipynb_checkpoints/
+
+testing/

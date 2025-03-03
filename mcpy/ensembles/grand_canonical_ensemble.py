@@ -120,7 +120,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                     self._step,
                     self.n_atoms,
                     self.E_old,
-                    ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
+                    ", ".join(f"{ratio:.1f}%" if not np.isnan(ratio)
                               else "N/A" for ratio in acceptance_ratios)
                 ))
         except IOError as e:
@@ -221,7 +221,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.info(f"Chemical potentials: {self._mu}")
         self.logger.info("Starting simulation...\n")
         self.logger.info("{:<10} {:<10} {:<15} {:<20}".format(
-            "Step", "N_atoms", "Energy (eV)", "Acceptance Ratios (Displ, Ins, Del)"
+            "Step", "N_atoms", "Energy (eV)",
+            f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
         ))
         self.logger.info("-" * 60)
         self._initialized = True
@@ -272,5 +273,5 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.write_outfile(step)
 
         if self._step % self._trajectory_write_interval == 0:
-            self.write_coordinates(self.atoms)
+            self.write_coordinates(self.atoms, self.E_old)
         self._step += 1

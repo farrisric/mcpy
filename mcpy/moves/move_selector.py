@@ -20,6 +20,7 @@ class MoveSelector:
     def __init__(self, probabilities, move_list, seed=None):
         assert len(probabilities) == len(move_list)
         self.move_list = move_list
+        self.move_list_names = [move.__class__.__name__[:3] for move in move_list]
         self.n_moves = sum(probabilities)
         self.rho = np.cumsum(probabilities)
         self.rng = RandomNumberGenerator(seed=seed)
@@ -47,9 +48,12 @@ class MoveSelector:
         self.move_acceptance[self.to_use] += 1
 
     def get_acceptance_ration(self):
-        ratio = [self.move_acceptance[i]/self.move_counter[i] for i in range(
-            len(self.move_acceptance))
-                ]
+        ratio = []
+        for i in range(len(self.move_acceptance)):
+            if self.move_counter[i] > 0:
+                ratio.append(self.move_acceptance[i]/self.move_counter[i])
+            else:
+                ratio.append(np.nan)
         return ratio
 
     def reset_counters(self):
