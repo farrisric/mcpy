@@ -1,6 +1,6 @@
 from .moves import BaseMove
 from ase import Atoms
-from ase.md.langevin import Langevin
+# from ase.md.langevin import Langevin
 from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
@@ -21,10 +21,10 @@ class BrownianMove(BaseMove):
         """
         Performs the shake move by randomly displacing each atom within a sphere of radius r_max.
         """
-        new_atoms = atoms.copy()
-        MaxwellBoltzmannDistribution(new_atoms, temperature_K=self.temperature)
-        new_atoms.calc = self.calculator
+        atoms_new = atoms.copy()
+        MaxwellBoltzmannDistribution(atoms_new, temperature_K=self.temperature)
+        atoms_new.calc = self.calculator
         # dyn = Langevin(new_atoms, 5 * units.fs, self.temperature * units.kB, 0.002, logfile=None)
-        dyn = VelocityVerlet(new_atoms, self.d_t * units.fs, logfile=None)
+        dyn = VelocityVerlet(atoms_new, self.d_t * units.fs, logfile=None)
         dyn.run(steps=self.steps)
-        return new_atoms
+        return atoms_new, 0, 'X'
