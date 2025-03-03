@@ -1,12 +1,17 @@
 import numpy as np
 from typing import List
-from ase.data import atomic_masses, atomic_numbers
+from ase.data import atomic_masses, atomic_numbers, covalent_radii
+from ase import Atoms
 
 
 class SetUnits:
     """Class for setting units based on a given string."""
 
-    def __init__(self, unit_type: str, temperature: float, volume: float, species: List) -> None:
+    def __init__(self,
+                 unit_type: str,
+                 temperature: float,
+                 volume: float,
+                 species: List) -> None:
         """
         Initialize the SetUnits class with a specific unit type.
 
@@ -18,6 +23,7 @@ class SetUnits:
         self.species = species
         self.temperature = temperature
         self.volume = volume
+        self._volume = volume
 
         if unit_type == "LJ":
             self._set_lj_units()
@@ -25,6 +31,22 @@ class SetUnits:
             self._set_metal_units()
         else:
             raise ValueError("Invalid unit type. Choose 'LJ' or 'metal'.")
+
+    def update_volume(self, atoms: Atoms) -> None:
+        """Update the volume of the system."""
+        self.volume = self._volume
+        for specie in self.species:
+            n_specie = len([atom for atom in atoms if atom.symbol == specie])
+            radius = covalent_radii[atomic_numbers[specie]]
+            self.volume -= 4/3 * np.pi * (radius**3) * n_specie
+
+    def update_volume_insertion(self, specie) -> None:
+        """Update the volume of the system after an insertion move."""
+        self.volume -= 4/3 * np.pi * (covalent_radii[atomic_numbers[specie]]**3)
+
+    def update_volume_deletion(self, specie) -> None:
+        """Update the volume of the system after a deletion move."""
+        self.volume += 4/3 * np.pi * (covalent_radii[atomic_numbers[specie]]**3)
 
     def _set_lj_units(self) -> None:
         """Set units for Lennard-Jones (LJ) potential."""

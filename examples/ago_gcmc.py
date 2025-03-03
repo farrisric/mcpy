@@ -4,20 +4,28 @@ import numpy as np
 from mcpy.moves import DeletionMove, InsertionMove, DisplacementMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-from mcpy.calculators import MACECalculator
-
+from mcpy.calculators import MACE_F_Calculator
+from mcpy.utils.utils import get_volume
 
 atoms = fcc111('Ag', size=(4, 4, 3), periodic=True, vacuum=8)
 surface_indices = [a.index for a in atoms if a.tag == 1]
 box = [atoms.cell[0], atoms.cell[1], np.array([0, 0, 6])]
 z_shift = atoms[surface_indices[0]].position[2]-3
 
-calculator = MACECalculator('/home/riccardo/Downloads/mace-large-density-agnesi-stress.model')
-calculator.get_potential_energy(atoms)
+r_min = 1.3
+volume = get_volume(box)
+volume -= - 4/3 * np.pi * (r_min**3) * len(atoms)
+print(volume)
+
+calculator = MACE_F_Calculator(
+                model_paths='/home/riccardo/Downloads/mace-large-density-agnesi-stress.model',
+                steps=20,
+                fmax=0.1
+                )
 
 species = ['Ag', 'O']
 
-move_list = [[5, 5, 10],
+move_list = [[1,1],
              [DeletionMove(species=species,
                            seed=12,
                            operating_box=box,
@@ -27,9 +35,10 @@ move_list = [[5, 5, 10],
                             operating_box=box,
                             min_max_insert=[1.5, 3.0],
                             z_shift=z_shift),
-              DisplacementMove(species=species,
-                               seed=14,
-                               max_displacement=0.2)]]
+            #   DisplacementMove(species=species,
+            #                    seed=14,
+            #                    max_displacement=0.2)]
+            ]]
 
 move_selector = MoveSelector(*move_list)
 T = 500
@@ -39,6 +48,8 @@ gcmc = GrandCanonicalEnsemble(
             mu={'Ag' : -2.8, 'O' : -4.9},
             units_type='metal',
             species=species,
+            species_volume=['Ag'],
+            volume=volume,
             temperature=T,
             move_selector=move_selector,
             outfile=f'GCMC_{T}K.out',
