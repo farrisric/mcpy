@@ -21,6 +21,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  temperature: float,
                  move_selector: MoveSelector,
                  volume: Optional[float] = None,
+                 species_volume: List[str] = None,
                  random_seed: Optional[int] = None,
                  traj_file: str = 'traj_test.traj',
                  trajectory_write_interval: Optional[int] = None,
@@ -51,6 +52,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
         self.species = species
+        self.species_volume = species_volume
         self._temperature = temperature
         self._mu = mu
 
@@ -162,8 +164,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
+            if p > 1:
+                if species in self.species_volume:
+                    self.units.update_volume_insertion(species)
+                return True
 
-        elif delta_particles == -1:  # Deletion move
+        if delta_particles == -1:  # Deletion move
             db_term = self.units.de_broglie_deletion(self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
@@ -173,10 +179,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
-        if p > 1:
-            return True
-        else:
-            return p > self.rng_acceptance.get_uniform()
+            if p > 1:
+                if species in self.species_volume:
+                    self.units.update_volume_deletion(species)
+                return True
+        return p > self.rng_acceptance.get_uniform()
 
     def do_gcmc_step(self) -> None:
         """
