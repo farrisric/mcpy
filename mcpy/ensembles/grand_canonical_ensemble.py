@@ -164,10 +164,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
-            if p > 1:
-                if species in self.species_volume:
-                    self.units.update_volume_insertion(species)
-                return True
 
         if delta_particles == -1:  # Deletion move
             db_term = self.units.de_broglie_deletion(self.n_atoms, species)
@@ -179,10 +175,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
                 f"Potential diff: {potential_diff:.3e}, "
                 f"Delta_particles: {delta_particles}")
-            if p > 1:
-                if species in self.species_volume:
-                    self.units.update_volume_deletion(species)
-                return True
+        if p > 1:
+            return True
         return p > self.rng_acceptance.get_uniform()
 
     def do_gcmc_step(self) -> None:
@@ -202,6 +196,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
+                if species in self.species_volume:
+                    if delta_particles == 1:
+                        self.units.update_volume_insertion(species)
+                    elif delta_particles == -1:
+                        self.units.update_volume_deletion(species)
 
     def compute_energy(self, atoms: Atoms) -> float:
         """
