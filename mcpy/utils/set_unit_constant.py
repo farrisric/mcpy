@@ -40,13 +40,13 @@ class SetUnits:
             radius = covalent_radii[atomic_numbers[specie]]
             self.volume -= 4/3 * np.pi * (radius**3) * n_specie
 
-    def update_volume_insertion(self, specie) -> None:
+    def update_volume_insertion(self, radius) -> None:
         """Update the volume of the system after an insertion move."""
-        self.volume -= 4/3 * np.pi * (covalent_radii[atomic_numbers[specie]]**3)
+        self.volume -= 4/3 * np.pi * (radius**3)
 
-    def update_volume_deletion(self, specie) -> None:
+    def update_volume_deletion(self, radius) -> None:
         """Update the volume of the system after a deletion move."""
-        self.volume += 4/3 * np.pi * (covalent_radii[atomic_numbers[specie]]**3)
+        self.volume += 4/3 * np.pi * (radius**3)
 
     def _set_lj_units(self) -> None:
         """Set units for Lennard-Jones (LJ) potential."""
