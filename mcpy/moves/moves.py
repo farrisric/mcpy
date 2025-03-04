@@ -151,8 +151,11 @@ class DisplacementMove(BaseMove):
             ry = 2 * self.rng.get_uniform() - 1.0
             rz = 2 * self.rng.get_uniform() - 1.0
             rsq = rx * rx + ry * ry + rz * rz
-        displacement=[rx*self.max_displacement,ry*self.max_displacement,rz*self.max_displacement]
-        
+
+        displacement = [rx*self.max_displacement,
+                        ry*self.max_displacement,
+                        rz*self.max_displacement]
+
         atoms_new.positions[atom_index] += displacement
         atoms_new.set_positions(wrap_positions(atoms_new.positions, atoms_new.cell))
         return atoms_new, 0, 'X'

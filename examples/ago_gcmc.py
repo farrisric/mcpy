@@ -2,7 +2,7 @@ from ase.build import fcc111
 from ase.constraints import FixAtoms
 import numpy as np
 
-from mcpy.moves import DeletionMove, InsertionMove, DisplacementMove
+from mcpy.moves import DeletionMove, InsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACE_F_Calculator
@@ -19,7 +19,7 @@ z_shift = atoms[surface_indices[0]].position[2]-3
 
 r_min = 1.3
 volume = get_volume(box)
-volume -= - 4/3 * np.pi * (r_min**3) * len(atoms)
+volume -= 4/3 * np.pi * (r_min**3) * len(atoms)
 print(volume)
 
 calculator = MACE_F_Calculator(
@@ -30,7 +30,7 @@ calculator = MACE_F_Calculator(
 
 species = ['Ag', 'O']
 
-move_list = [[1,1],
+move_list = [[1, 1],
              [DeletionMove(species=species,
                            seed=12,
                            operating_box=box,
@@ -38,22 +38,18 @@ move_list = [[1,1],
               InsertionMove(species=species,
                             seed=13,
                             operating_box=box,
-                            min_max_insert=[1.5, 3.0],
-                            z_shift=z_shift),
-            #   DisplacementMove(species=species,
-            #                    seed=14,
-            #                    max_displacement=0.2)]
-            ]]
+                            min_max_insert=[r_min, 3.0],
+                            z_shift=z_shift)]]
 
 move_selector = MoveSelector(*move_list)
 T = 500
 gcmc = GrandCanonicalEnsemble(
             atoms=atoms,
             calculator=calculator,
-            mu={'Ag' : -2.8, 'O' : -4.9},
+            mu={'Ag' : -2.8, 'O' : -5.0},
             units_type='metal',
             species=species,
-            species_volume=['Ag'],
+            species_volume={'Ag': 1.3},
             volume=volume,
             temperature=T,
             move_selector=move_selector,

@@ -21,7 +21,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  temperature: float,
                  move_selector: MoveSelector,
                  volume: Optional[float] = None,
-                 species_volume: List[str] = None,
+                 species_volume: Dict[str, float] = None,
                  random_seed: Optional[int] = None,
                  traj_file: str = 'traj_test.traj',
                  trajectory_write_interval: Optional[int] = None,
@@ -196,11 +196,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
-                if species in self.species_volume:
+                if species in self.species_volume.keys():
                     if delta_particles == 1:
-                        self.units.update_volume_insertion(species)
+                        self.units.update_volume_insertion(self.species_volume[species])
                     elif delta_particles == -1:
-                        self.units.update_volume_deletion(species)
+                        self.units.update_volume_deletion(self.species_volume[species])
 
     def compute_energy(self, atoms: Atoms) -> float:
         """
