@@ -3,7 +3,7 @@ from ase import Atoms
 from ..utils import RandomNumberGenerator
 import numpy as np
 from ase.geometry import wrap_positions
-
+from sklearn.metrics import pairwise_distances
 
 class BaseMove(ABC):
     """Abstract base class for Monte Carlo moves."""
@@ -29,6 +29,66 @@ class BaseMove(ABC):
         Atoms: Updated ASE Atoms object after the move.
         """
         pass
+
+class InsertionMove(BaseMove):
+    """Class for performing an insertion move."""
+    def __init__(self,
+                 species: list[str],
+                 species_bias: list[str],
+                 seed : int,
+                 operating_box : list[list] = None,
+                 z_shift : float = None,
+                 min_max_insert : list[float] = None):
+        super().__init__(species, seed)
+        self.box = operating_box
+        self.z_shift = z_shift
+        #!self.min_max_insert = min_max_insert
+        self.min_insert = min_max_insert[0]
+        self.species_bias = species_bias[0]
+
+    def do_trial_move(self, atoms) -> Atoms:
+        """
+        Insert a random atom of a random species at a random position.
+
+        Returns:
+        Atoms: Updated ASE Atoms object after the insertion.
+        """
+        ### copy old configuration to new configuration
+        atoms_new = atoms.copy()
+        ### select specie to insert
+        selected_species = self.rng.random.choice(self.species)
+        ### select position of the atoms from which you add the configurational bias
+        elements_array = np.array(atoms_new.get_chemical_symbols())
+        positions_bias = atoms_new.positions[elements_array == self.species_bias]
+        #!excluded_volume = (4/3) * np.pi * (self.min_insert**3) * len(positions_bias)
+        ### iterate selection of the insertion position until the configurational bias is satisfied
+        configurational_bias = False
+        while configurational_bias == False:
+            insert_position = np.array([
+                self.box[i]*self.rng.get_uniform() for i in range(3)
+                ]).sum(axis=0)
+            ### if z_shift, shift the random position to be in the wanted region
+            if self.z_shift:
+                insert_position[2] += self.z_shift
+            min_dist = np.min(pairwise_distances(insert_position.reshape(1,-1),positions_bias).flatten())
+            if min_dist >= self.min_insert:
+                configurational_bias = True                    
+        ### add the new atom in the selected position in the new configuration    
+        atoms_new += Atoms(selected_species, positions=[insert_position])
+        #!if self.min_max_insert:
+        #!    if self.check_distance_criteria(atoms_new):
+        #!        return atoms_new, 1, selected_species
+        #!    else:
+        #!        return False, False, False
+        return atoms_new, 1, selected_species
+
+    #!def check_distance_criteria(self, atoms_new):
+    #!    min_d = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
+    #!    if min_d > self.min_max_insert[1] and min_d < self.min_max_insert[0]:
+    #!        return False
+    #!    return True
+
+
 
 
 class InsertionMove(BaseMove):
