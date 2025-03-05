@@ -122,7 +122,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                     self._step,
                     self.n_atoms,
                     self.E_old,
-                    ", ".join(f"{ratio:.1f}%" if not np.isnan(ratio)
+                    ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
                               else "N/A" for ratio in acceptance_ratios)
                 ))
         except IOError as e:
