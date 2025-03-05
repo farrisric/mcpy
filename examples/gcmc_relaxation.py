@@ -18,9 +18,11 @@ surface_indices = [a.index for a in atoms if a.tag == 1]
 box = [atoms.cell[0], atoms.cell[1], np.array([0, 0, 6])]
 z_shift = atoms[surface_indices[0]].position[2]-3
 
+atoms_in_box = [a for a in atoms if a.position[2] < z_shift+3 and a.position[2] > z_shift-3]
+
 r_min = 1.3
 volume = get_volume(box)
-volume -= 4/3 * np.pi * (r_min**3) * len(atoms)
+volume -= 4/3 * np.pi * (r_min**3) * len(atoms_in_box)
 print(volume)
 
 calculator = MACE_F_Calculator(
