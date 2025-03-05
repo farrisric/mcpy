@@ -196,11 +196,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
-                if species in self.species_bias:
+                if species in self.species_bias.keys():
                     if delta_particles == 1:
-                        self.units.update_volume_insertion(species)
+                        self.units.update_volume_insertion(self.species_volume[species])
                     elif delta_particles == -1:
-                        self.units.update_volume_deletion(species)
+                        self.units.update_volume_deletion(self.species_volume[species])
 
     def compute_energy(self, atoms: Atoms) -> float:
         """

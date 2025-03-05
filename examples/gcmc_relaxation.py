@@ -32,11 +32,11 @@ species = ['Ag', 'O']
 
 move_list = [[1, 1],
              [DeletionMove(species=species,
-                           seed=12,
+                           seed=1234678764,
                            operating_box=box,
                            z_shift=z_shift),
               InsertionMove(species=species,
-                            seed=13,
+                            seed=6758763657,
                             operating_box=box,
                             min_max_insert=[r_min, 3.0],
                             z_shift=z_shift)]]
@@ -53,9 +53,9 @@ gcmc = GrandCanonicalEnsemble(
             volume=volume,
             temperature=T,
             move_selector=move_selector,
-            outfile=f'GCMC_{T}K.out',
+            outfile=f'gcmc_relax_{atoms.get_chemical_formula()}.out',
             trajectory_write_interval=1,
             outfile_write_interval=1,
-            traj_file=f'GCMC_{T}K.xyz')
+            traj_file=f'gcmc_relax_{atoms.get_chemical_formula()}.xyz')
 
 gcmc.run(1000000)
