@@ -2,7 +2,8 @@ from ase.build import fcc111
 from ase.constraints import FixAtoms
 import numpy as np
 
-from mcpy.moves import DeletionMove, InsertionMove
+from mcpy.moves import DeletionMove
+from mcpy.moves import BiasInsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACE_F_Calculator
@@ -35,11 +36,12 @@ move_list = [[1, 1],
                            seed=1234678764,
                            operating_box=box,
                            z_shift=z_shift),
-              InsertionMove(species=species,
-                            seed=6758763657,
-                            operating_box=box,
-                            min_max_insert=[r_min, 3.0],
-                            z_shift=z_shift)]]
+              BiasInsertionMove(species=species,
+                                seed=6758763657,
+                                operating_box=box,
+                                min_insert=r_min,
+                                species_bias=['Ag'],
+                                z_shift=z_shift)]]
 
 move_selector = MoveSelector(*move_list)
 T = 500
@@ -49,7 +51,7 @@ gcmc = GrandCanonicalEnsemble(
             mu={'Ag' : -2.8, 'O' : -5.0},
             units_type='metal',
             species=species,
-            species_volume={'Ag': 1.3},
+            species_bias={'Ag': 1.3},
             volume=volume,
             temperature=T,
             move_selector=move_selector,
