@@ -32,12 +32,12 @@ class BiasInsertionMove(BaseMove):
         atoms_new = atoms.copy()
         selected_species = self.rng.random.choice(self.species)
 
-        if selected_species not in self.species_bias:
-            new_position = self.get_random_position()
-            while self.get_min_dist(new_position, atoms_new.positions) >= self.min_insert:
-                new_position = self.get_random_position()
-            atoms_new += Atoms(selected_species, positions=[new_position])
-            return atoms_new, 1, selected_species
+        # if selected_species not in self.species_bias:
+        #     new_position = self.get_random_position()
+        #     while self.get_min_dist(new_position, atoms_new.positions) >= self.min_insert:
+        #         new_position = self.get_random_position()
+        #     atoms_new += Atoms(selected_species, positions=[new_position])
+        #     return atoms_new, 1, selected_species
 
         positions_bias = atoms_new.positions[atoms_new.symbols == self.species_bias]
         new_position = self.get_random_position()
