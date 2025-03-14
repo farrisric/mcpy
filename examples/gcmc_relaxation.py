@@ -6,6 +6,7 @@ from mcpy.moves import DeletionMove
 from mcpy.moves import BiasInsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.calculators import MACECalculator
 from mcpy.calculators import MACE_F_Calculator
 from mcpy.utils.utils import get_volume
 
@@ -33,7 +34,7 @@ calculator = MACE_F_Calculator(
 
 species = ['Ag', 'O']
 
-move_list = [[1, 1],
+move_list = [[0, 1],
              [DeletionMove(species=species,
                            seed=1234678764,
                            operating_box=box,

@@ -201,6 +201,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                         self.units.update_volume_insertion(self.species_bias[species])
                     elif delta_particles == -1:
                         self.units.update_volume_deletion(self.species_bias[species])
+                    self.logger.info(f"Volume: {self.units.volume:.3f}, "
+                                     f"Delta_particles: {delta_particles}, Species: {species}")
 
     def compute_energy(self, atoms: Atoms) -> float:
         """

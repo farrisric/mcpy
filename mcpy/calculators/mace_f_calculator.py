@@ -4,7 +4,7 @@ from ase.optimize import LBFGS
 
 
 class MACE_F_Calculator:
-    def __init__(self, model_paths: str, steps: int, fmax: float, device: str = 'cuda') -> None:
+    def __init__(self, model_paths: str, steps: int, fmax: float, device: str = 'cpu') -> None:
         """
         Initialize the Calculator with the given model path and device.
 
@@ -14,7 +14,7 @@ class MACE_F_Calculator:
         self.fmax = fmax
         self.steps = steps
 
-        self.calculator = MACECalculator(model_paths=model_paths, device=device, enable_cueq=True)
+        self.calculator = MACECalculator(model_paths=model_paths, device=device)
 
     def get_potential_energy(self, atoms: Atoms) -> float:
         """
