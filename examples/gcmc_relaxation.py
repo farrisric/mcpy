@@ -29,7 +29,9 @@ print(volume)
 calculator = MACE_F_Calculator(
                 model_paths='/home/riccardo/Downloads/mace-large-density-agnesi-stress.model',
                 steps=20,
-                fmax=0.1
+                fmax=0.1,
+                cueq=False,
+                device='cpu',
                 )
 
 species = ['Ag', 'O']
