@@ -6,7 +6,7 @@
 
 - Grand Canonical Monte Carlo simulations
 - Integration with ASE for atomic simulations
-- Support for Lennard-Jones potential and other calculators
+- Support for MACE calculator potential and other calculators
 - Configurable simulation parameters and logging
 
 ## Installation
@@ -21,6 +21,12 @@ Alternatively, you can install the package in editable mode:
 
 ```sh
 pip install -e .
+```
+
+Please note that `mpi4py` should be installed using conda:
+
+```sh
+conda install mpi4py
 ```
 
 ## Dependencies
