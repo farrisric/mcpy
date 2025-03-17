@@ -21,7 +21,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  temperature: float,
                  move_selector: MoveSelector,
                  volume: Optional[float] = None,
-                 species_volume: Dict[str, float] = None,
+                 species_bias: List[str] = None,
                  random_seed: Optional[int] = None,
                  traj_file: str = 'traj_test.traj',
                  trajectory_write_interval: Optional[int] = None,
@@ -52,7 +52,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
         self.species = species
-        self.species_volume = species_volume
+        self.species_bias = species_bias
         self._temperature = temperature
         self._mu = mu
 
@@ -122,7 +122,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                     self._step,
                     self.n_atoms,
                     self.E_old,
-                    ", ".join(f"{ratio:.1f}%" if not np.isnan(ratio)
+                    ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
                               else "N/A" for ratio in acceptance_ratios)
                 ))
         except IOError as e:
@@ -196,11 +196,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
-                if species in self.species_volume.keys():
+                if species in self.species_bias.keys():
                     if delta_particles == 1:
-                        self.units.update_volume_insertion(self.species_volume[species])
+                        self.units.update_volume_insertion(self.species_bias[species])
                     elif delta_particles == -1:
-                        self.units.update_volume_deletion(self.species_volume[species])
+                        self.units.update_volume_deletion(self.species_bias[species])
+                    self.logger.info(f"Volume: {self.units.volume:.3f}, "
+                                     f"Delta_particles: {delta_particles}, Species: {species}")
 
     def compute_energy(self, atoms: Atoms) -> float:
         """
