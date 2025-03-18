@@ -57,33 +57,18 @@ class InsertionMove(BaseMove):
         """
         # copy old configuration to new configuration
         atoms_new = atoms.copy()
-        # select specie to insert
         selected_species = self.rng.random.choice(self.species)
-        # select position of the atoms from which you add the configurational bias
-        elements_array = np.array(atoms_new.get_chemical_symbols())
-        positions_bias = atoms_new.positions[elements_array == self.species_bias]
-        # excluded_volume = (4/3) * np.pi * (self.min_insert**3) * len(positions_bias)
-        # iterate selection of the insertion position until the configurational bias is satisfied
-        configurational_bias = False
-        while not configurational_bias:
-            insert_position = np.array([
-                self.box[i]*self.rng.get_uniform() for i in range(3)
-                ]).sum(axis=0)
-            # if z_shift, shift the random position to be in the wanted region
-            if self.z_shift:
-                insert_position[2] += self.z_shift
-            min_dist = np.min(pairwise_distances(
-                insert_position.reshape(1, -1), positions_bias).flatten()
-                              )
-            if min_dist >= self.min_insert:
-                configurational_bias = True             
-        # add the new atom in the selected position in the new configuration
-        atoms_new += Atoms(selected_species, positions=[insert_position])
-        # if self.min_max_insert:
-        #     if self.check_distance_criteria(atoms_new):
-        #         return atoms_new, 1, selected_species
-        #     else:
-        #         return False, False, False
+        position = np.array([
+            self.box[i]*self.rng.get_uniform() for i in range(3)
+            ]).sum(axis=0)
+        if self.z_shift:
+            position[2] += self.z_shift
+        atoms_new += Atoms(selected_species, positions=[position])
+        if self.min_max_insert:
+            if self.check_distance_criteria(atoms_new):
+                return atoms_new, 1, selected_species
+            else:
+                return False, False, False
         return atoms_new, 1, selected_species
 
     # def check_distance_criteria(self, atoms_new):
