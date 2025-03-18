@@ -26,7 +26,7 @@ class PositionGenerator:
             self.center = np.array(center)
             if self.radius == None:
                 raise ValueError("if insertion_type is 'spherical', radius cannot be None")
-            if self.center == None:
+            if self.center.all() == None:
                 raise ValueError("if insertion_type is 'spherical', center cannot be None")
             self.gen = self.spherical_insertion
         elif self.insertion_type == 'box':

@@ -3,6 +3,7 @@ from ase.constraints import FixAtoms
 import numpy as np
 from mcpy.moves import DeletionMove
 from mcpy.moves import InsertionMove
+from mcpy.moves import DisplacementMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACECalculator
