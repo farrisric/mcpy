@@ -28,13 +28,13 @@ class PositionGenerator:
                 raise ValueError("if insertion_type is 'spherical', radius cannot be None")
             if self.center == None:
                 raise ValueError("if insertion_type is 'spherical', center cannot be None")
-            self.insert = self.spherical_insertion
+            self.gen = self.spherical_insertion
         elif self.insertion_type == 'box':
             self.box = operating_box
             if self.box == None:
                 raise ValueError("if insertion_type is 'box', you need to set an operating_box")
             self.z_shift = z_shift
-            self.insert = self.box_insertion
+            self.gen = self.box_insertion
         else:
             raise ValueError("insertion_type must be either 'spherical' or 'box'")
 
