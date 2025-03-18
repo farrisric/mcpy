@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from ase import Atoms
-from ..utils import RandomNumberGenerator
+from ..utils import RandomNumberGenerator, PositionGenerator
 import numpy as np
 from ase.geometry import wrap_positions
 from sklearn.metrics import pairwise_distances
@@ -46,7 +46,6 @@ class InsertionMove(BaseMove):
         self.z_shift = z_shift
         # self.min_max_insert = min_max_insert
         self.min_insert = min_max_insert[0]
-        self.species_bias = species_bias[0]
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -100,11 +99,27 @@ class InsertionMove(BaseMove):
                  seed : int,
                  operating_box : list[list] = None,
                  z_shift : float = None,
-                 min_max_insert : list[float] = None):
+                 min_max_insert : list[float] = None,
+                 insertion_mode : str = 'box',
+                 radius_spherical_insertion : float = None,
+                 center_spherical_insertion : list = None):
         super().__init__(species, seed)
         self.box = operating_box
         self.z_shift = z_shift
         self.min_max_insert = min_max_insert
+        self.insertion_mode = insertion_mode
+        if self.insertion_mode == 'box':
+            self.generate_position = PositionGenerator(seed, insertion_type=self.insertion_mode,
+                                        operating_box=self.box,
+                                        z_shift=self.z_shift)
+        elif self.insertion_mode == 'spherical':
+            self.radius = radius_spherical_insertion
+            self.center = center_spherical_insertion
+            self.generate_position = PositionGenerator(seed, insertion_type=self.insertion_mode,
+                                        radius=self.radius,
+                                        center=self.center)
+        else:
+            raise ValueError("insertion_mode must be either 'spherical' or 'box'")
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -115,11 +130,7 @@ class InsertionMove(BaseMove):
         """
         atoms_new = atoms.copy()
         selected_species = self.rng.random.choice(self.species)
-        position = np.array([
-            self.box[i]*self.rng.get_uniform() for i in range(3)
-            ]).sum(axis=0)
-        if self.z_shift:
-            position[2] += self.z_shift
+        position = self.generate_position()
         atoms_new += Atoms(selected_species, positions=[position])
         if self.min_max_insert:
             if self.check_distance_criteria(atoms_new):
@@ -133,6 +144,8 @@ class InsertionMove(BaseMove):
         if min_d > self.min_max_insert[1] and min_d < self.min_max_insert[0]:
             return False
         return True
+    
+    def random_position_box(self, atoms)
 
 
 class DeletionMove(BaseMove):

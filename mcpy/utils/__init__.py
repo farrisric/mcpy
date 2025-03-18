@@ -1,1 +1,2 @@
 from .random_number_generator import RandomNumberGenerator
+from .particle_inserter import PositionGenerator
