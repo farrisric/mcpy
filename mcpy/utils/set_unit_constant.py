@@ -43,7 +43,7 @@ class SetUnits:
     def update_volume_insertion(self, atoms, z_shift, box, species_bias) -> None:
         """Update the volume of the system after an insertion move."""
         volume = get_volume(box)
-        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.keys()]
+        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.values()]
         atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
         radii = [species_bias[atom.symbol] for atom in atoms_bias]
 
@@ -53,7 +53,7 @@ class SetUnits:
     def update_volume_deletion(self, atoms, z_shift, box, species_bias) -> None:
         """Update the volume of the system after a deletion move."""
         volume = get_volume(box)
-        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.keys()]
+        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.values()]
         atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
         radii = [species_bias[atom.symbol] for atom in atoms_bias]
 
