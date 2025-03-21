@@ -204,10 +204,10 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 if species in self.species_bias.keys():
                     if delta_particles == 1:
                         self.units.update_volume_insertion(self.atoms, self.z_shift,
-                                                           self.box, self.species_bias[species])
+                                                           self.box, self.species_bias)
                     elif delta_particles == -1:
                         self.units.update_volume_deletion(self.atoms, self.z_shift,
-                                                          self.box, self.species_bias[species])
+                                                          self.box, self.species_bias)
                     self.logger.info(f"Volume: {self.units.volume:.3f}, "
                                      f"Delta_particles: {delta_particles}, Species: {species}")
 
