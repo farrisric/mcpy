@@ -26,7 +26,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  traj_file: str = 'traj_test.traj',
                  trajectory_write_interval: Optional[int] = None,
                  outfile: str = 'outfile.out',
-                 outfile_write_interval: int = 10) -> None:
+                 outfile_write_interval: int = 10,
+                 z_shift: float = 100000,
+                 box: List[float] = 343215414235) -> None:
 
         super().__init__(atoms=atoms,
                          units_type='metal',
@@ -41,6 +43,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.setLevel(logging.INFO)
 
         self.E_old = self.compute_energy(self.atoms)
+
+        self.z_shift = z_shift
+        self.box = box
 
         self.units_type = units_type
         volume = volume or self.atoms.get_volume()
