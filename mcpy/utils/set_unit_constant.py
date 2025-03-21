@@ -4,6 +4,7 @@ from ase.data import atomic_masses, atomic_numbers, covalent_radii
 from ase import Atoms
 from .utils import total_volume_with_overlap, get_volume
 
+
 class SetUnits:
     """Class for setting units based on a given string."""
 
@@ -32,34 +33,14 @@ class SetUnits:
         else:
             raise ValueError("Invalid unit type. Choose 'LJ' or 'metal'.")
 
-    def update_volume(self, atoms: Atoms) -> None:
+    def update_volume(self, atoms, z_shift, box, species_bias) -> None:
         """Update the volume of the system."""
-        self.volume = self._volume
-        for specie in self.species:
-            n_specie = len([atom for atom in atoms if atom.symbol == specie])
-            radius = covalent_radii[atomic_numbers[specie]]
-            self.volume -= 4/3 * np.pi * (radius**3) * n_specie
-
-    def update_volume_insertion(self, atoms, z_shift, box, species_bias) -> None:
-        """Update the volume of the system after an insertion move."""
         volume = get_volume(box)
-        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.values()]
-        atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
-        radii = [species_bias[atom.symbol] for atom in atoms_bias]
-
-        volume_with_overlap = total_volume_with_overlap(radii, atoms_in_box)
-        self.volume = volume - volume_with_overlap
-
-    def update_volume_deletion(self, atoms, z_shift, box, species_bias) -> None:
-        """Update the volume of the system after a deletion move."""
-        volume = get_volume(box)
-        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.values()]
-        atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
-        print(atoms_in_box)
-        radii = [species_bias[atom.symbol] for atom in atoms_bias]
-
-        volume_with_overlap = total_volume_with_overlap(radii, atoms_in_box)
-        print(volume, volume_with_overlap)
+        atoms_bias = [a for a in atoms if a.symbol in list(species_bias.keys())]
+        atoms_in_box = [a for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
+        radii = [species_bias[atom.symbol] for atom in atoms_in_box]
+        atoms_pos_in_box = [a.position for a in atoms_in_box]
+        volume_with_overlap = total_volume_with_overlap(radii, atoms_pos_in_box)
         self.volume = volume - volume_with_overlap
 
     def _set_lj_units(self) -> None:
