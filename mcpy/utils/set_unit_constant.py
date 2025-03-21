@@ -2,7 +2,7 @@ import numpy as np
 from typing import List
 from ase.data import atomic_masses, atomic_numbers, covalent_radii
 from ase import Atoms
-
+from .utils import total_volume_with_overlap, get_volume
 
 class SetUnits:
     """Class for setting units based on a given string."""
@@ -40,13 +40,25 @@ class SetUnits:
             radius = covalent_radii[atomic_numbers[specie]]
             self.volume -= 4/3 * np.pi * (radius**3) * n_specie
 
-    def update_volume_insertion(self, radius) -> None:
+    def update_volume_insertion(self, atoms, z_shift, box, species_bias) -> None:
         """Update the volume of the system after an insertion move."""
-        self.volume -= 4/3 * np.pi * (radius**3)
+        volume = get_volume(box)
+        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.keys()]
+        atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
+        radii = [species_bias[atom.symbol] for atom in atoms_bias]
 
-    def update_volume_deletion(self, radius) -> None:
+        volume_with_overlap = total_volume_with_overlap(radii, atoms_in_box)
+        self.volume = volume - volume_with_overlap
+
+    def update_volume_deletion(self, atoms, z_shift, box, species_bias) -> None:
         """Update the volume of the system after a deletion move."""
-        self.volume += 4/3 * np.pi * (radius**3)
+        volume = get_volume(box)
+        atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.keys()]
+        atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
+        radii = [species_bias[atom.symbol] for atom in atoms_bias]
+
+        volume_with_overlap = total_volume_with_overlap(radii, atoms_in_box)
+        self.volume = volume - volume_with_overlap
 
     def _set_lj_units(self) -> None:
         """Set units for Lennard-Jones (LJ) potential."""
