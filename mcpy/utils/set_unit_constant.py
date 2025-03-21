@@ -55,9 +55,11 @@ class SetUnits:
         volume = get_volume(box)
         atoms_bias = [atom for atom in atoms if atom.symbol in species_bias.values()]
         atoms_in_box = [a.positions for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
+        print(atoms_in_box)
         radii = [species_bias[atom.symbol] for atom in atoms_bias]
 
         volume_with_overlap = total_volume_with_overlap(radii, atoms_in_box)
+        print(volume, volume_with_overlap)
         self.volume = volume - volume_with_overlap
 
     def _set_lj_units(self) -> None:
