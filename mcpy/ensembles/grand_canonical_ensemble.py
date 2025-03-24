@@ -195,6 +195,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 continue
 
             E_new = self.compute_energy(atoms_new)
+            atoms_new.wrap()
             delta_E = E_new - self.E_old
             if self._acceptance_condition(atoms_new, delta_E, delta_particles, species):
                 self.atoms = atoms_new

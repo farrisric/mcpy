@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from ase import Atoms
 from ..utils import RandomNumberGenerator
 import numpy as np
-from ase.geometry import wrap_positions
 from sklearn.metrics import pairwise_distances
 
 
@@ -219,7 +218,6 @@ class DisplacementMove(BaseMove):
                         rz*self.max_displacement]
 
         atoms_new.positions[atom_index] += displacement
-        atoms_new.set_positions(wrap_positions(atoms_new.positions, atoms_new.cell))
         return atoms_new, 0, 'X'
 
 
