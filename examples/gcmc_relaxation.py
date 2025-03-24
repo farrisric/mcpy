@@ -62,7 +62,7 @@ calculator.fmax = 0.05
 e_o2 = calculator.get_potential_energy(o2)
 e_ag = calculator.get_potential_energy(ag)
     
-mus = {'Ag': -1, 'O': e_o2/2}
+mus = {'Ag': ag, 'O': e_o2/2}
 delta_mu_O = -0.3
 mus['O'] += delta_mu_O
 T = 500
