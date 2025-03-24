@@ -188,10 +188,7 @@ class DisplacementMove(BaseMove):
         """
         super().__init__(species, seed)
         self.max_displacement = max_displacement
-        if len(constraints) > 0:
-            self.constraints = constraints[0].todict()['kwargs']['indices']
-        else:
-            self.constraints = []
+        self.constraints = constraints
 
     def do_trial_move(self, atoms) -> Atoms:
         """

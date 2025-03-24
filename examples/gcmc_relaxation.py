@@ -42,7 +42,7 @@ calculator = MACE_F_Calculator(
 
 species = ['Ag', 'O']
 
-move_list = [[5, 5],
+move_list = [[1, 1],
              [DeletionMove(species=species,
                            seed=1234678764,
                            operating_box=box,
@@ -61,8 +61,8 @@ calculator.steps = 100
 calculator.fmax = 0.05
 e_o2 = calculator.get_potential_energy(o2)
 e_ag = calculator.get_potential_energy(ag)
-    
-mus = {'Ag': ag, 'O': e_o2/2}
+
+mus = {'Ag': e_ag, 'O': e_o2/2}
 delta_mu_O = -0.3
 mus['O'] += delta_mu_O
 T = 500
