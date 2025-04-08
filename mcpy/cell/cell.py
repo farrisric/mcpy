@@ -1,0 +1,203 @@
+import numpy as np
+import math
+
+
+class Cell:
+    def __init__(self, atoms, custom_height=None, center_z=None, species_radii=None):
+        """
+        Initialize the Cell object.
+
+        :param atoms: An object containing the cell information (e.g., atoms.cell provides the cell
+        dimensions).
+        :param custom_height: Optional. The height of the custom cell (must be less than or equal
+        to the original height).
+        :param center_z: Optional. The z-coordinate of the center of the custom cell.
+        :param species_radii: Optional. A dictionary where keys are chemical species and values are
+        their radii.
+        """
+        self.original_dimensions = np.array(atoms.cell)
+        if custom_height is not None and center_z is not None:
+            self.dimensions, self.offset = self.get_custom_height_cell(custom_height, center_z)
+        else:
+            self.dimensions = self.original_dimensions
+            self.offset = 0
+        self.species_radii = species_radii if species_radii else {}
+
+    def calculate_volume(self, atoms):
+        """
+        Calculate the volume of the cell using the determinant of the dimensions matrix.
+
+        :return: Volume of the cell.
+        """
+        total_volume = abs(np.linalg.det(self.dimensions))
+        volume_occupied = self.calculate_occupied_volume(atoms)
+        self.volume = total_volume - volume_occupied
+        return self.volume
+
+    def get_volume(self):
+        """
+        Get the volume of the cell.
+
+        :return: Volume of the cell.
+        """
+        return self.volume
+
+    @staticmethod
+    def sphere_volume(radius):
+        """
+        Calculate the volume of a sphere given its radius.
+
+        :param radius: Radius of the sphere.
+        :return: Volume of the sphere.
+        """
+        return (4 / 3) * math.pi * radius**3
+
+    @staticmethod
+    def overlap_volume(r1, r2, d):
+        """
+        Calculate the volume of overlap between two spheres of radius r1, r2 and distance d.
+
+        :param r1: Radius of the first sphere.
+        :param r2: Radius of the second sphere.
+        :param d: Distance between the centers of the two spheres.
+        :return: Overlap volume.
+        """
+        if d >= r1 + r2:
+            return 0  # No overlap
+        if d <= abs(r1 - r2):
+            return (4 / 3) * math.pi * min(r1, r2)**3
+
+        part1 = (
+            math.pi * (r1 + r2 - d)**2 * (d**2 + 2 * d * (r1 + r2) - 3 * (r1 - r2)**2)
+            ) / (12 * d)
+        return part1
+
+    @staticmethod
+    def total_volume_with_overlap(spheres, positions):
+        """
+        Calculate the total volume of spheres considering overlaps.
+
+        :param spheres: List of sphere radii.
+        :param positions: List of sphere center positions as (x, y, z) tuples.
+        :return: Total volume considering overlaps.
+        """
+        total_vol = sum(Cell.sphere_volume(radius) for radius in spheres)
+        num_spheres = len(spheres)
+
+        for i in range(num_spheres):
+            for j in range(i + 1, num_spheres):
+                d = math.dist(positions[i], positions[j])  # Distance between sphere centers
+                total_vol -= Cell.overlap_volume(spheres[i], spheres[j], d)
+
+        return total_vol
+
+    def get_custom_height_cell(self, height, center_z):
+        """
+        Get a smaller cell with the same x and y plane but with a custom height and centering.
+
+        :param height: The height of the new cell (must be less than or equal to the original
+                        height).
+        :param center_z: The z-coordinate of the center of the new cell.
+        :return: (new_cell_matrix, translation_vector) where:
+                - new_cell_matrix is a 3x3 numpy array of lattice vectors
+                - translation_vector is a 3-element numpy array to shift the origin
+        """
+        original_c = self.original_dimensions[2]
+        original_height = np.linalg.norm(original_c)
+
+        if height > original_height:
+            raise ValueError("Height must be less than or equal to the original cell height.")
+        if not (0 <= center_z <= original_height):
+            raise ValueError("Center z-coordinate must be within the original cell height.")
+
+        # Get direction of c, and construct new (shorter) c vector
+        c_direction = original_c / original_height
+        new_c = height * c_direction
+
+        # New cell matrix with same a and b, new c
+        new_dimensions = self.original_dimensions.copy()
+        new_dimensions[2] = new_c
+
+        # Compute offset vector for centering
+        offset_along_c = center_z - (height / 2)
+        offset = offset_along_c * c_direction
+
+        return new_dimensions, offset
+
+    def get_random_point(self):
+        """
+        Get a random point inside the cell or the custom cell.
+
+        :return: A numpy array representing the random point (x, y, z).
+        """
+        frac_coords = np.random.rand(3)
+        cartesian_point = frac_coords @ self.dimensions + self.offset
+        return cartesian_point
+
+    def calculate_occupied_volume(self, atoms):
+        """
+        Calculate the occupied volume of the chemical species inside the cell, accounting for
+        overlaps and considering only atoms that are inside the cell.
+
+        :param atoms: ASE Atoms object containing the atomic configuration.
+        :return: The total occupied volume inside the cell.
+        """
+        if not self.species_radii:
+            raise ValueError("No species radii provided to calculate occupied volume.")
+
+        atoms_inside_cell = self.get_atoms_inside_cell(atoms)
+
+        total_volume = 0
+        for atom in atoms_inside_cell:
+            species = atom.symbol
+            if species not in self.species_radii:
+                raise ValueError(f"Radius for species '{species}' not provided.")
+            radius = self.species_radii[species]
+            total_volume += self.sphere_volume(radius)
+
+        # Subtract overlapping volumes
+        num_atoms = len(atoms_inside_cell)
+        for i in range(num_atoms):
+            for j in range(i + 1, num_atoms):
+                d = math.dist(atoms_inside_cell[i].position, atoms_inside_cell[j].position)
+                total_volume -= self.overlap_volume(
+                    self.species_radii[atoms_inside_cell[i].symbol],
+                    self.species_radii[atoms_inside_cell[j].symbol],
+                    d
+                )
+
+        return total_volume
+
+    def get_atoms_inside_cell(self, atoms):
+        """
+        Get the atoms that are inside the small cell within the supercell.
+
+        :param atoms: ASE Atoms object containing the atomic configuration.
+        :return: ASE Atoms object containing only the atoms inside the small cell.
+        """
+        inside_indices = []
+
+        atoms_species = [a for a in atoms if a.symbol in self.species_radii]
+        for a in atoms_species:
+            position = a.position
+            if self.offset[2] <= position[2] <= self.offset[2] + self.dimensions[2][2]:
+                inside_indices.append(a.index)
+
+        return atoms[inside_indices]
+
+    def get_atoms_specie_inside_cell(self, atoms, specie):
+        """
+        Get the atoms that are inside the small cell within the supercell.
+
+        :param atoms: ASE Atoms object containing the atomic configuration.
+        :return: ASE Atoms object containing only the atoms inside the small cell.
+        """
+        inside_indices = []
+
+        atoms_species = [a for a in atoms if a.symbol in specie]
+        for a in atoms_species:
+            position = a.position
+            if self.offset[2] <= position[2] <= self.offset[2] + self.dimensions[2][2]:
+                inside_indices.append(a.index)
+
+        return inside_indices
