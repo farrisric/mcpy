@@ -32,6 +32,24 @@ class BaseMove(ABC):
         """
         pass
 
+    def get_volume(self) -> float:
+        """
+        Calculate the volume of the cell.
+
+        Returns:
+        float: Volume of the cell.
+        """
+        return self.cell.get_volume()
+
+    def calculate_volume(self, atoms) -> None:
+        """
+        Update the volume of the cell.
+
+        Returns:
+        None
+        """
+        self.cell.calculate_volume(atoms)
+
 
 class InsertionMove(BaseMove):
     """Class for performing an insertion move."""

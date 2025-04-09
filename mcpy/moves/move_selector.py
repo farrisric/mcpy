@@ -26,6 +26,7 @@ class MoveSelector:
         self.rng = RandomNumberGenerator(seed=seed)
         self.move_counter = [0 for _ in range(len(probabilities))]
         self.move_acceptance = [0 for _ in range(len(probabilities))]
+        self.to_use = 0
 
     def __get_index__(self):
         v = self.rng.get_uniform() * self.rho[-1]
@@ -38,6 +39,19 @@ class MoveSelector:
         self.to_use = self.__get_index__()
         self.move_counter[self.to_use] += 1
         return self.move_list[self.to_use].do_trial_move(atoms)
+
+    def get_volume(self):
+        """Calculate the volume of the move."""
+        return self.move_list[self.to_use].get_volume()
+
+    def calculate_volume(self, atoms):
+        """Calculate the volume of the move."""
+        return self.move_list[self.to_use].calculate_volume(atoms)
+
+    def calculate_volumes(self, atoms):
+        """Calculate the volumes of all moves."""
+        for move in self.move_list:
+            move.calculate_volume(atoms)
 
     def get_operator(self):
         """Choose operator and return it."""
@@ -59,3 +73,7 @@ class MoveSelector:
     def reset_counters(self):
         self.move_counter = [0 for _ in range(len(self.move_list))]
         self.move_acceptance = [0 for _ in range(len(self.move_list))]
+
+    def get_name(self):
+        """Get the name of the move."""
+        return self.move_list_names[self.to_use]
