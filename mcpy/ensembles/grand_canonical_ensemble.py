@@ -198,7 +198,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.move_selector.acceptance_counter()
                 self.calculate_cells_volume(self.atoms)
 
-                self.logger.info(f"Volume: {volume:.3f}, "
+                self.logger.debug(f"Volume: {volume:.3f}, "
                                  f"Delta_particles: {delta_particles}, "
                                  f"Species: {species}")
 
