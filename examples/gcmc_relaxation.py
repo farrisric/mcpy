@@ -15,10 +15,10 @@ constraint = FixAtoms(indices=bottom_layer)
 atoms.set_constraint(constraint)
 
 cell_ag_ag = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
-                  species_radii={'Ag': 3.1, 'O':0})
+                  species_radii={'Ag': 3.1, 'O' : 0})
 
 cell_ag_o = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
-                 species_radii={'Ag': 2.068, 'O':0})
+                 species_radii={'Ag': 2.068, 'O' : 0})
 
 
 calculator = MACE_F_Calculator(
@@ -59,7 +59,7 @@ e_o2 = calculator.get_potential_energy(o2)
 e_ag = calculator.get_potential_energy(ag)
 
 mus = {'Ag': e_ag, 'O': e_o2/2}
-delta_mu_O = -0.3
+delta_mu_O = -0.5
 mus['O'] += delta_mu_O
 T = 500
 
@@ -68,6 +68,7 @@ calculator.fmax = 0.1
 
 gcmc = GrandCanonicalEnsemble(
             atoms=atoms,
+            cells=[cell_ag_ag, cell_ag_o],
             calculator=calculator,
             mu=mus,
             units_type='metal',
