@@ -1,36 +1,25 @@
 from ase.build import fcc111, bulk, molecule
 from ase.constraints import FixAtoms
-import numpy as np
 
 from mcpy.moves import DeletionMove
 from mcpy.moves import InsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACE_F_Calculator
-from mcpy.utils.utils import get_volume, total_volume_with_overlap
+from mcpy.cell import Cell
 
-R_RELAX = 2.068 
 
 atoms = fcc111('Ag', a=4.165, size=(4, 4, 3), periodic=True, vacuum=8)
 bottom_layer = [a.index for a in atoms if a.tag == 3]
 constraint = FixAtoms(indices=bottom_layer)
 atoms.set_constraint(constraint)
 
-surface_indices = [a.index for a in atoms if a.tag == 1]
-box = [atoms.cell[0], atoms.cell[1], np.array([0, 0, 7])]
-z_shift = atoms[surface_indices[0]].position[2]-R_RELAX
+cell_ag_ag = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
+                  species_radii={'Ag': 3.1, 'O':0})
 
-atoms_in_box = [a for a in atoms if a.position[2] > z_shift]
+cell_ag_o = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
+                 species_radii={'Ag': 2.068, 'O':0})
 
-volume = get_volume(box)
-print(volume)
-volume_with_overlap = total_volume_with_overlap(
-    [R_RELAX for _ in range(len(atoms_in_box))],
-    [a.position for a in atoms_in_box],)
-
-volume = volume - volume_with_overlap
-print(volume_with_overlap)
-print(volume)
 
 calculator = MACE_F_Calculator(
                 model_paths='/home/riccardo/Downloads/mace-small-density-agnesi-stress.model',
@@ -42,16 +31,23 @@ calculator = MACE_F_Calculator(
 
 species = ['Ag', 'O']
 
-move_list = [[1, 1],
-             [DeletionMove(species=species,
-                           seed=1234678764,
-                           operating_box=box,
-                           z_shift=z_shift),
-              InsertionMove(species=species,
-                            seed=6758763657,
-                            operating_box=box,
-                            min_max_insert=[0.5, 3],
-                            z_shift=z_shift)]]
+move_list = [[25, 25, 25, 25],
+             [DeletionMove(cell_ag_ag,
+                           species=['Ag'],
+                           seed=12346783764),
+              DeletionMove(cell_ag_o,
+                           species=['O'],
+                           seed=43215423143),
+              InsertionMove(cell_ag_ag,
+                            species=['Ag'],
+                            species_bias=['Ag'],
+                            min_insert=0.5,
+                            seed=6758763657),
+              InsertionMove(cell_ag_o,
+                            species=['O'],
+                            species_bias=['Ag'],
+                            min_insert=0.5,
+                            seed=3675437856)]]
 
 move_selector = MoveSelector(*move_list)
 
@@ -76,15 +72,11 @@ gcmc = GrandCanonicalEnsemble(
             mu=mus,
             units_type='metal',
             species=species,
-            species_bias={'Ag': R_RELAX},
-            volume=volume,
             temperature=T,
             move_selector=move_selector,
             outfile=f'gcmc_relax_{atoms.get_chemical_formula()}_dmu_{delta_mu_O}.out',
             trajectory_write_interval=1,
             outfile_write_interval=1,
-            traj_file=f'gcmc_relax_{atoms.get_chemical_formula()}_dmu_{delta_mu_O}.xyz',
-            box=box,
-            z_shift=z_shift)
+            traj_file=f'gcmc_relax_{atoms.get_chemical_formula()}_dmu_{delta_mu_O}.xyz')
 
 gcmc.run(1000000)

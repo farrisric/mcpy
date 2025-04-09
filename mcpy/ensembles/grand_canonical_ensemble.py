@@ -20,15 +20,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  species: List[str],
                  temperature: float,
                  move_selector: MoveSelector,
-                 volume: Optional[float] = None,
-                 species_bias: List[str] = None,
                  random_seed: Optional[int] = None,
                  traj_file: str = 'traj_test.traj',
                  trajectory_write_interval: Optional[int] = None,
                  outfile: str = 'outfile.out',
-                 outfile_write_interval: int = 10,
-                 z_shift: float = 100000,
-                 box: List[float] = 343215414235) -> None:
+                 outfile_write_interval: int = 10) -> None:
 
         super().__init__(atoms=atoms,
                          units_type='metal',
@@ -44,26 +40,19 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         self.E_old = self.compute_energy(self.atoms)
 
-        self.z_shift = z_shift
-        self.box = box
-
-        self.units_type = units_type
-        volume = volume or self.atoms.get_volume()
-        self.units = SetUnits(self.units_type,
+        self.units = SetUnits(units_type,
                               temperature=temperature,
-                              species=species,
-                              volume=volume)
+                              species=species)
 
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
-        self.species = species
-        self.species_bias = species_bias
         self._temperature = temperature
         self._mu = mu
 
         self.initialize_outfile()
 
         self.move_selector = move_selector
+        self.move_selector.calculate_volumes(self.atoms)
         self._step = 1
         self.exchange_attempts = 0
         self.exchange_successes = 0
@@ -99,7 +88,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
                 # Write simulation parameters
                 outfile.write("Simulation Parameters:\n")
-                outfile.write(f"  Units type: {self.units_type}\n")
+                outfile.write(f"  Units type: {self.units.unit_type}\n")
                 outfile.write(f"  Temperature (K): {self._temperature}\n")
                 outfile.write(f"  Chemical potentials: {self._mu}\n")
                 outfile.write("Starting simulation...\n")
@@ -137,6 +126,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                               atoms_new: Atoms,
                               potential_diff: float,
                               delta_particles: int,
+                              volume: float,
                               species: str) -> bool:
         """
         Determines whether to accept a trial move based on the potential energy difference and
@@ -160,7 +150,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 return p > self.rng_acceptance.get_uniform()
 
         if delta_particles == 1:  # Insertion move
-            db_term = self.units.de_broglie_insertion(self.n_atoms, species)
+            db_term = self.units.de_broglie_insertion(volume, self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -171,7 +161,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 f"Delta_particles: {delta_particles}")
 
         if delta_particles == -1:  # Deletion move
-            db_term = self.units.de_broglie_deletion(self.n_atoms, species)
+            db_term = self.units.de_broglie_deletion(volume, self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -197,20 +187,16 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             E_new = self.compute_energy(atoms_new)
             atoms_new.wrap()
             delta_E = E_new - self.E_old
-            if self._acceptance_condition(atoms_new, delta_E, delta_particles, species):
+            volume = self.move_selector.get_volume()
+            if self._acceptance_condition(atoms_new, delta_E, delta_particles, volume, species):
                 self.atoms = atoms_new
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
-                if species in self.species_bias.keys():
-                    if delta_particles == 1:
-                        self.units.update_volume(self.atoms, self.z_shift,
-                                                 self.box, self.species_bias)
-                    elif delta_particles == -1:
-                        self.units.update_volume(self.atoms, self.z_shift,
-                                                 self.box, self.species_bias)
-                    self.logger.info(f"Volume: {self.units.volume:.3f}, "
-                                     f"Delta_particles: {delta_particles}, Species: {species}")
+                self.logger.info(f"Volume: {volume:.3f}, "
+                                 f"Delta_particles: {delta_particles}, "
+                                 f"Species: {species}")
+                self.move_selector.calculate_volume(atoms_new)
 
     def compute_energy(self, atoms: Atoms) -> float:
         """

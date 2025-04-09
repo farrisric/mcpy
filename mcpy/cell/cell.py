@@ -3,7 +3,7 @@ import math
 
 
 class Cell:
-    def __init__(self, atoms, custom_height=None, center_z=None, species_radii=None):
+    def __init__(self, atoms, custom_height=None, bottom_z=None, species_radii=None):
         """
         Initialize the Cell object.
 
@@ -11,28 +11,27 @@ class Cell:
         dimensions).
         :param custom_height: Optional. The height of the custom cell (must be less than or equal
         to the original height).
-        :param center_z: Optional. The z-coordinate of the center of the custom cell.
+        :param bottom_z: Optional. The z-coordinate of the bottom of the custom cell.
         :param species_radii: Optional. A dictionary where keys are chemical species and values are
         their radii.
         """
         self.original_dimensions = np.array(atoms.cell)
-        if custom_height is not None and center_z is not None:
-            self.dimensions, self.offset = self.get_custom_height_cell(custom_height, center_z)
+        if custom_height is not None and bottom_z is not None:
+            self.dimensions, self.offset = self.get_custom_height_cell(custom_height, bottom_z)
         else:
             self.dimensions = self.original_dimensions
             self.offset = 0
         self.species_radii = species_radii if species_radii else {}
+        self.cell_volume = abs(np.linalg.det(self.dimensions))
 
     def calculate_volume(self, atoms):
         """
         Calculate the volume of the cell using the determinant of the dimensions matrix.
 
+        :param atoms: ASE Atoms object containing the atomic configuration.
         :return: Volume of the cell.
         """
-        total_volume = abs(np.linalg.det(self.dimensions))
-        volume_occupied = self.calculate_occupied_volume(atoms)
-        self.volume = total_volume - volume_occupied
-        return self.volume
+        self.volume = self.estimate_free_volume(atoms)
 
     def get_volume(self):
         """
@@ -72,55 +71,24 @@ class Cell:
             ) / (12 * d)
         return part1
 
-    @staticmethod
-    def total_volume_with_overlap(spheres, positions):
+    def get_custom_height_cell(self, custom_height, bottom_z):
         """
-        Calculate the total volume of spheres considering overlaps.
+        Calculate the dimensions and offset for a custom height cell.
 
-        :param spheres: List of sphere radii.
-        :param positions: List of sphere center positions as (x, y, z) tuples.
-        :return: Total volume considering overlaps.
+        :param custom_height: The height of the custom cell.
+        :param bottom_z: The z-coordinate of the bottom of the custom cell.
+        :return: A tuple containing the new dimensions and offset.
         """
-        total_vol = sum(Cell.sphere_volume(radius) for radius in spheres)
-        num_spheres = len(spheres)
+        if custom_height > self.original_dimensions[2][2]:
+            raise ValueError("Custom height cannot be greater than the original cell height.")
+        if bottom_z < 0 or bottom_z + custom_height > self.original_dimensions[2][2]:
+            raise ValueError("Custom cell exceeds the bounds of the original cell.")
 
-        for i in range(num_spheres):
-            for j in range(i + 1, num_spheres):
-                d = math.dist(positions[i], positions[j])  # Distance between sphere centers
-                total_vol -= Cell.overlap_volume(spheres[i], spheres[j], d)
+        new_dimensions = np.copy(self.original_dimensions)
+        new_dimensions[2][2] = custom_height
 
-        return total_vol
-
-    def get_custom_height_cell(self, height, center_z):
-        """
-        Get a smaller cell with the same x and y plane but with a custom height and centering.
-
-        :param height: The height of the new cell (must be less than or equal to the original
-                        height).
-        :param center_z: The z-coordinate of the center of the new cell.
-        :return: (new_cell_matrix, translation_vector) where:
-                - new_cell_matrix is a 3x3 numpy array of lattice vectors
-                - translation_vector is a 3-element numpy array to shift the origin
-        """
-        original_c = self.original_dimensions[2]
-        original_height = np.linalg.norm(original_c)
-
-        if height > original_height:
-            raise ValueError("Height must be less than or equal to the original cell height.")
-        if not (0 <= center_z <= original_height):
-            raise ValueError("Center z-coordinate must be within the original cell height.")
-
-        # Get direction of c, and construct new (shorter) c vector
-        c_direction = original_c / original_height
-        new_c = height * c_direction
-
-        # New cell matrix with same a and b, new c
-        new_dimensions = self.original_dimensions.copy()
-        new_dimensions[2] = new_c
-
-        # Compute offset vector for centering
-        offset_along_c = center_z - (height / 2)
-        offset = offset_along_c * c_direction
+        offset = np.zeros(3)
+        offset[2] = bottom_z
 
         return new_dimensions, offset
 
@@ -177,7 +145,7 @@ class Cell:
         """
         inside_indices = []
 
-        atoms_species = [a for a in atoms if a.symbol in self.species_radii]
+        atoms_species = [a for a in atoms if a.symbol in self.species_radii.keys()]
         for a in atoms_species:
             position = a.position
             if self.offset[2] <= position[2] <= self.offset[2] + self.dimensions[2][2]:
@@ -201,3 +169,25 @@ class Cell:
                 inside_indices.append(a.index)
 
         return inside_indices
+
+    def estimate_free_volume(self, atoms, n_points: int = 100_000) -> float:
+        frac_coords = np.random.rand(n_points, 3)
+        cart_coords = frac_coords @ self.dimensions
+
+        positions = atoms.get_positions() - self.offset
+        radii = np.array([self.species_radii[atom.symbol] for atom in atoms])
+        r_sq = radii**2  # (n_atoms,)
+
+        # Compute all squared distances: (n_points, n_atoms)
+        deltas = cart_coords[:, None, :] - positions[None, :, :]
+        dists_sq = np.einsum('ijk,ijk->ij', deltas, deltas)
+
+        # Compare each distance to the squared radius of the corresponding atom
+        is_inside_any = np.any(dists_sq <= r_sq[None, :], axis=1)
+        count_inside = np.count_nonzero(is_inside_any)
+
+        occupied_fraction = count_inside / n_points
+        occupied_volume = self.cell_volume * occupied_fraction
+        free_volume = self.cell_volume - occupied_volume
+
+        return free_volume
