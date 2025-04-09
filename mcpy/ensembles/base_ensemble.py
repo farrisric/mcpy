@@ -9,7 +9,7 @@ from ase.calculators.calculator import Calculator
 
 import numpy as np
 
-from ..cell import Cell
+from ..cell import BaseCell
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class BaseEnsemble(ABC):
     def __init__(self,
                  atoms: Atoms,
-                 cells: List[Cell],
+                 cells: List[BaseCell],
                  units_type: str,
                  calculator: Calculator,
                  user_tag: Optional[str] = None,

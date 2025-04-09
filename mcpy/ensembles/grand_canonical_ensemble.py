@@ -9,13 +9,13 @@ from .canonical_ensemble import BaseEnsemble
 from ..utils.random_number_generator import RandomNumberGenerator
 from ..utils.set_unit_constant import SetUnits
 from ..moves.move_selector import MoveSelector
-from ..cell import Cell
+from ..cell import BaseCell
 
 
 class GrandCanonicalEnsemble(BaseEnsemble):
     def __init__(self,
                  atoms: Atoms,
-                 cells: List[Cell],
+                 cells: List[BaseCell],
                  units_type: str,
                  calculator: Calculator,
                  mu: Dict[str, float],
@@ -55,7 +55,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.initialize_outfile()
 
         self.move_selector = move_selector
-        self.move_selector.calculate_volumes(self.atoms)
+        self.calculate_cells_volume(self.atoms)
         self._step = 1
         self.exchange_attempts = 0
         self.exchange_successes = 0
@@ -199,8 +199,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.calculate_cells_volume(self.atoms)
 
                 self.logger.debug(f"Volume: {volume:.3f}, "
-                                 f"Delta_particles: {delta_particles}, "
-                                 f"Species: {species}")
+                                  f"Delta_particles: {delta_particles}, "
+                                  f"Species: {species}")
 
     def compute_energy(self, atoms: Atoms) -> float:
         """

@@ -1,3 +1,3 @@
-from .cell import Cell
+from .cell import BaseCell, CustomCell, SphericalCell
 
-__all__ = ["Cell"]
+__all__ = ["BaseCell", "CustomCell", "SphericalCell"]

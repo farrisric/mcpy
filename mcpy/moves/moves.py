@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from ase import Atoms
 from ..utils import RandomNumberGenerator
-from ..cell import Cell
+from ..cell import BaseCell
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
@@ -9,7 +9,7 @@ from sklearn.metrics import pairwise_distances
 class BaseMove(ABC):
     """Abstract base class for Monte Carlo moves."""
 
-    def __init__(self, cell: Cell, species: list[str], seed: int) -> None:
+    def __init__(self, cell: BaseCell, species: list[str], seed: int) -> None:
         """
         Initializes the move with the given atomic configuration, species, and RNG.
 
@@ -54,7 +54,7 @@ class BaseMove(ABC):
 class InsertionMove(BaseMove):
     """Class for performing an insertion move."""
     def __init__(self,
-                 cell : Cell,
+                 cell : BaseCell,
                  species: list[str],
                  seed : int,
                  min_insert : float = None,
@@ -92,7 +92,7 @@ class InsertionMove(BaseMove):
 class DeletionMove(BaseMove):
     """Class for performing a deletion move."""
     def __init__(self,
-                 cell : Cell,
+                 cell : BaseCell,
                  species: list[str],
                  seed : int,):
         super().__init__(cell, species, seed)
