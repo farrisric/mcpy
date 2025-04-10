@@ -64,7 +64,7 @@ def total_volume_with_overlap(spheres, positions):
     num_spheres = len(spheres)
     for i in range(num_spheres):
         total_vol += sphere_volume(spheres[i])
-    print('Total volue: ', total_vol)
+    print('Total volue of Spheres: ', total_vol)
 
     for i in range(num_spheres):
         for j in range(i + 1, num_spheres):

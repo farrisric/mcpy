@@ -2,14 +2,15 @@ import random
 import logging
 
 from abc import ABC
-from typing import Optional
+from typing import Optional, List
 
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
 import numpy as np
 
-# Configure logging
+from ..cell import Cell
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 class BaseEnsemble(ABC):
     def __init__(self,
                  atoms: Atoms,
+                 cells: List[Cell],
                  units_type: str,
                  calculator: Calculator,
                  user_tag: Optional[str] = None,
@@ -46,6 +48,7 @@ class BaseEnsemble(ABC):
         self._step = 0
 
         self._atoms = atoms
+        self._cells = cells
         self._calculator = calculator
         self._user_tag = user_tag
 
@@ -68,6 +71,11 @@ class BaseEnsemble(ABC):
         """ Current configuration (copy). """
         return self._atoms
 
+    @property
+    def cells(self) -> Atoms:
+        """ Current configuration (copy). """
+        return self._cells
+
     @atoms.setter
     def atoms(self, atoms):
         self._atoms = atoms
@@ -76,6 +84,16 @@ class BaseEnsemble(ABC):
     def step(self) -> int:
         """ Current trial step counter. """
         return self._step
+
+    def calculate_cells_volume(self, atoms) -> None:
+        """
+        Update the volume of the cells.
+
+        Args:
+            cells (List[Cell]): List of Cell objects.
+        """
+        for cell in self.cells:
+            cell.calculate_volume(atoms)
 
     def write_outfile(self, step: int, energy: float) -> None:
         """
@@ -127,8 +145,6 @@ def write_xyz(atoms, energy, filename):
     cell = atoms.get_cell()
     positions = atoms.get_positions()
     symbols = atoms.get_chemical_symbols()
-    #energy = atoms.get_potential_energy()
-
     comment = f"energy={energy:.6f}"
     num_atoms = len(atoms)
     atom_data = np.column_stack((symbols, positions))
