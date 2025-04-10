@@ -1,8 +1,6 @@
 import numpy as np
 from typing import List
-from ase.data import atomic_masses, atomic_numbers, covalent_radii
-from ase import Atoms
-from .utils import total_volume_with_overlap, get_volume
+from ase.data import atomic_masses, atomic_numbers
 
 
 class SetUnits:
@@ -11,7 +9,6 @@ class SetUnits:
     def __init__(self,
                  unit_type: str,
                  temperature: float,
-                 volume: float,
                  species: List) -> None:
         """
         Initialize the SetUnits class with a specific unit type.
@@ -23,8 +20,6 @@ class SetUnits:
         self.unit_type = unit_type
         self.species = species
         self.temperature = temperature
-        self.volume = volume
-        self._volume = volume
 
         if unit_type == "LJ":
             self._set_lj_units()
@@ -32,16 +27,6 @@ class SetUnits:
             self._set_metal_units()
         else:
             raise ValueError("Invalid unit type. Choose 'LJ' or 'metal'.")
-
-    def update_volume(self, atoms, z_shift, box, species_bias) -> None:
-        """Update the volume of the system."""
-        volume = get_volume(box)
-        atoms_bias = [a for a in atoms if a.symbol in list(species_bias.keys())]
-        atoms_in_box = [a for a in atoms_bias if a.position[2] > z_shift and a.position[2] < z_shift + box[2][2]]
-        radii = [species_bias[atom.symbol] for atom in atoms_in_box]
-        atoms_pos_in_box = [a.position for a in atoms_in_box]
-        volume_with_overlap = total_volume_with_overlap(radii, atoms_pos_in_box)
-        self.volume = volume - volume_with_overlap
 
     def _set_lj_units(self) -> None:
         """Set units for Lennard-Jones (LJ) potential."""
@@ -69,10 +54,10 @@ class SetUnits:
             for specie in self.species
         }
 
-    def de_broglie_insertion(self, n_atoms, specie: str) -> float:
+    def de_broglie_insertion(self, volume, n_atoms, specie: str) -> float:
         """Calculate the de Broglie wavelength for insertion."""
-        return (self.volume / ((n_atoms+1)*self.lambda_dbs[specie]**3))
+        return (volume / ((n_atoms+1)*self.lambda_dbs[specie]**3))
 
-    def de_broglie_deletion(self, n_atoms, specie: str) -> float:
+    def de_broglie_deletion(self, volume, n_atoms, specie: str) -> float:
         """Calculate the de Broglie wavelength for deletion."""
-        return (self.lambda_dbs[specie]**3*n_atoms / self.volume)
+        return (self.lambda_dbs[specie]**3*n_atoms / volume)
