@@ -8,7 +8,7 @@ class SphericalCell(Cell):
     A class representing a spherical cell for nanoparticles.
     """
 
-    def __init__(self, atoms, vacuum, species_radii, mc_sample_points=10000):
+    def __init__(self, atoms, vacuum, species_radii, mc_sample_points=100_000):
         """
         Initialize the SphericalCell object.
 
@@ -19,15 +19,15 @@ class SphericalCell(Cell):
         :param species_radii: Dict mapping atom symbols to atomic radii.
         :param mc_sample_points: Number of random points.
         """
-        super().__init__()
-        self.center = atoms.get_center_of_mass()
+        super().__init__(atoms)
+        self.center = np.zeros(3)
         self.move_atoms_to_center(atoms)
         self.radius = np.linalg.norm(atoms.positions - self.center, axis=1).max() + vacuum
         self.species_radii = species_radii
         self.mc_sample_points = mc_sample_points
         self.sphere_volume = (4 / 3) * np.pi * (self.radius ** 3)
 
-    def center(self, atoms):
+    def move_atoms_to_center(self, atoms):
         """
         Translate the atoms so that their center of mass coincides with the center of the spherical
         cell. This modifies the atoms in place.
@@ -37,14 +37,6 @@ class SphericalCell(Cell):
         current_com = atoms.get_center_of_mass()
         shift = self.center - current_com
         atoms.translate(shift)
-
-    def calculate_volume(self, atoms):
-        """
-        Calculate the volume of the spherical cell.
-
-        :return: Volume of the spherical cell.
-        """
-        self.volume = self.estimate_free_volume(atoms)
 
     def is_point_inside(self, point):
         """
@@ -70,7 +62,15 @@ class SphericalCell(Cell):
     def get_atoms_specie_inside_cell(self, atoms, specie):
         return [a.index for a in atoms if a.symbol in specie and self.is_point_inside(a.position)]
 
-    def estimate_free_volume(self, atoms):
+    def get_species(self):
+        """
+        Get the species present in the custom cell.
+
+        :return: A list of species present in the custom cell.
+        """
+        return list(self.species_radii.keys())
+
+    def calculate_volume(self, atoms):
         """
         Estimate the free volume of the spherical cell using Monte Carlo sampling.
 
@@ -98,6 +98,6 @@ class SphericalCell(Cell):
 
         is_inside_any_atom = np.any(dists_sq <= r_sq[None, :], axis=1)
         count_free = np.count_nonzero(~is_inside_any_atom)
-
         free_fraction = count_free / self.mc_sample_points
-        return free_fraction * self.sphere_volume
+
+        self.volume = free_fraction * self.sphere_volume

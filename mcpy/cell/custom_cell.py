@@ -81,4 +81,31 @@ class CustomCell(Cell):
         occupied_volume = self.cell_volume * occupied_fraction
         free_volume = self.cell_volume - occupied_volume
 
-        return free_volume
+        self.volume = free_volume
+
+    def get_atoms_specie_inside_cell(self, atoms, specie):
+        """
+        Get the indices of atoms of a specific species inside the custom cell.
+
+        :param atoms: ASE Atoms object containing the atomic configuration.
+        :param specie: List of species to filter.
+        :return: Indices of atoms of the specified species inside the custom cell.
+        """
+        return [a.index for a in atoms if a.symbol in specie and self.is_point_inside(a.position)]
+
+    def is_point_inside(self, point):
+        """
+        Check if a given point is inside the custom cell.
+        :param point: A numpy array representing the point (x, y, z).
+        :return: True if the point is inside the custom cell, False otherwise.
+        """
+        point = point - self.offset
+        return np.all(point >= 0) and np.all(point <= self.dimensions.diagonal())
+
+    def get_species(self):
+        """
+        Get the species present in the custom cell.
+
+        :return: A list of species present in the custom cell.
+        """
+        return list(self.species_radii.keys())

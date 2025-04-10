@@ -6,7 +6,7 @@ from mcpy.moves import InsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACE_F_Calculator
-from mcpy.cell import Cell
+from mcpy.cell import CustomCell
 
 
 atoms = fcc111('Ag', a=4.165, size=(4, 4, 3), periodic=True, vacuum=8)
@@ -14,11 +14,11 @@ bottom_layer = [a.index for a in atoms if a.tag == 3]
 constraint = FixAtoms(indices=bottom_layer)
 atoms.set_constraint(constraint)
 
-cell_ag_ag = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
-                  species_radii={'Ag': 2.945, 'O' : 0})
+cell_ag_ag = CustomCell(atoms, custom_height=7, bottom_z=12.8-2.068,
+                        species_radii={'Ag': 2.947, 'O' : 0})
 
-cell_ag_o = Cell(atoms, custom_height=7, bottom_z=12.8-2.068,
-                 species_radii={'Ag': 2.068, 'O' : 0})
+cell_ag_o = CustomCell(atoms, custom_height=7, bottom_z=12.8-2.068,
+                       species_radii={'Ag': 2.068, 'O' : 0})
 
 
 calculator = MACE_F_Calculator(
