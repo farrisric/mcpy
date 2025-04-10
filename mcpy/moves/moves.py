@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from ase import Atoms
 from ..utils import RandomNumberGenerator
-from ..cell import BaseCell
+from ..cell import Cell
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
@@ -9,7 +9,7 @@ from sklearn.metrics import pairwise_distances
 class BaseMove(ABC):
     """Abstract base class for Monte Carlo moves."""
 
-    def __init__(self, cell: BaseCell, species: list[str], seed: int) -> None:
+    def __init__(self, cell: Cell, species: list[str], seed: int) -> None:
         """
         Initializes the move with the given atomic configuration, species, and RNG.
 
@@ -54,16 +54,12 @@ class BaseMove(ABC):
 class InsertionMove(BaseMove):
     """Class for performing an insertion move."""
     def __init__(self,
-                 cell : BaseCell,
+                 cell : Cell,
                  species: list[str],
                  seed : int,
-                 min_insert : float = None,
-                 max_insert : float = None,
-                 species_bias : list[str] = None) -> None:
+                 min_insert : float = None) -> None:
         super().__init__(cell, species, seed)
         self.min_insert = min_insert
-        self.max_insert = max_insert
-        self.species_bias = species_bias
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -75,7 +71,7 @@ class InsertionMove(BaseMove):
         atoms_new = atoms.copy()
         selected_species = self.rng.random.choice(self.species)
         positions_bias = atoms_new[self.cell.get_atoms_specie_inside_cell(
-            atoms_new, self.species_bias)].positions
+            atoms_new, self.cell.get_species())].positions
 
         insert_position = self.cell.get_random_point()
         min_dist = np.min(pairwise_distances(
@@ -92,7 +88,7 @@ class InsertionMove(BaseMove):
 class DeletionMove(BaseMove):
     """Class for performing a deletion move."""
     def __init__(self,
-                 cell : BaseCell,
+                 cell : Cell,
                  species: list[str],
                  seed : int,):
         super().__init__(cell, species, seed)

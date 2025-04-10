@@ -9,13 +9,13 @@ from .canonical_ensemble import BaseEnsemble
 from ..utils.random_number_generator import RandomNumberGenerator
 from ..utils.set_unit_constant import SetUnits
 from ..moves.move_selector import MoveSelector
-from ..cell import BaseCell
+from ..cell import Cell
 
 
 class GrandCanonicalEnsemble(BaseEnsemble):
     def __init__(self,
                  atoms: Atoms,
-                 cells: List[BaseCell],
+                 cells: List[Cell],
                  units_type: str,
                  calculator: Calculator,
                  mu: Dict[str, float],

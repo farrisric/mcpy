@@ -39,3 +39,13 @@ class Cell(BaseCell):
         :return: Volume of the cell.
         """
         return self.volume
+
+    def get_atoms_specie_inside_cell(self, atoms, species):
+        """
+        Get the indices of atoms of a specific species inside the cell.
+
+        :param atoms: ASE Atoms object containing the atomic configuration.
+        :param species: List of species to filter.
+        :return: Indices of atoms of the specified species inside the cell.
+        """
+        return np.where(np.isin(atoms.get_chemical_symbols(), species))[0]
