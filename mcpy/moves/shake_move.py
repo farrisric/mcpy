@@ -1,4 +1,4 @@
-from .moves import BaseMove
+from .base_move import BaseMove
 from ase import Atoms
 import numpy as np
 

@@ -52,14 +52,14 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self._temperature = temperature
         self._mu = mu
 
-        self.initialize_outfile()
-
         self.move_selector = move_selector
         self.calculate_cells_volume(self.atoms)
         self._step = 1
         self.exchange_attempts = 0
         self.exchange_successes = 0
         self.rng_acceptance = RandomNumberGenerator(seed=self._random_seed + 2)
+
+        self.initialize_outfile()
 
     def get_state(self) -> Dict[str, any]:
         return {
@@ -95,16 +95,15 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 outfile.write(f"  Temperature (K): {self._temperature}\n")
                 outfile.write(f"  Chemical potentials: {self._mu}\n")
                 outfile.write("Starting simulation...\n")
-                outfile.write("-" * 60 + "\n")
-
-                outfile.write("{:<10} {:<10} {:<15} {:<20}\n".format(
+                outfile.write("{:<10} {:<10} {:<15} {:<20}".format(
                     "Step", "N_atoms", "Energy (eV)",
-                    "Acceptance Ratios (Displ, Ins, Del)"))
+                    f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"))
+                outfile.write("-" * 60 + "\n")
         except IOError as e:
             self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
             raise
 
-    def write_outfile(self, step: int) -> None:
+    def write_outfile(self) -> None:
         """
         Write the step and energy to the output file.
 
@@ -126,7 +125,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.logger.error(f"Error writing to file {self._outfile}: {e}")
 
     def _acceptance_condition(self,
-                              atoms_new: Atoms,
                               potential_diff: float,
                               delta_particles: int,
                               volume: float,
@@ -191,7 +189,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             atoms_new.wrap()
             delta_E = E_new - self.E_old
             volume = self.move_selector.get_volume()
-            if self._acceptance_condition(atoms_new, delta_E, delta_particles, volume, species):
+            if self._acceptance_condition(delta_E, delta_particles, volume, species):
                 self.atoms = atoms_new
                 self.n_atoms = len(self.atoms)
                 self.E_old = E_new
@@ -201,18 +199,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.logger.debug(f"Volume: {volume:.3f}, "
                                   f"Delta_particles: {delta_particles}, "
                                   f"Species: {species}")
-
-    def compute_energy(self, atoms: Atoms) -> float:
-        """
-        Computes the potential energy of the given atoms.
-
-        Args:
-            atoms (Atoms): The configuration of atoms.
-
-        Returns:
-            float: The potential energy.
-        """
-        return self._calculator.get_potential_energy(atoms)
 
     def initialize_run(self) -> None:
         """
@@ -244,7 +230,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.initialize_run()
 
         for step in range(1, steps + 1):
-            self._run(step)
+            self._run()
 
     def finalize_run(self) -> None:
         """
@@ -258,7 +244,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
         self._initialized = False  # Reset the initialization flag
 
-    def _run(self, step: int) -> None:
+    def _run(self) -> None:
         """
         Performs a single Monte Carlo step and handles logging and writing.
 
@@ -276,7 +262,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
                           else "N/A" for ratio in acceptance_ratios)
             ))
-            self.write_outfile(step)
+            self.write_outfile()
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms, self.E_old)

@@ -2,25 +2,19 @@ from ase import Atoms
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
-from .moves import BaseMove
+from .base_move import BaseMove
+from ..cell import Cell
 
 
-class BiasInsertionMove(BaseMove):
+class InsertionMove(BaseMove):
     """Class for performing an insertion move."""
     def __init__(self,
+                 cell : Cell,
                  species: list[str],
-                 species_bias: list[str],
                  seed : int,
-                 operating_box : list[list] = None,
-                 z_shift : float = None,
-                 min_insert : float = None,
-                 max_insert : float = None):
-        super().__init__(species, seed)
-        self.box = operating_box
-        self.z_shift = z_shift
+                 min_insert : float = None) -> None:
+        super().__init__(cell, species, seed)
         self.min_insert = min_insert
-        self.max_insert = max_insert
-        self.species_bias = species_bias
 
     def do_trial_move(self, atoms) -> Atoms:
         """
@@ -31,38 +25,16 @@ class BiasInsertionMove(BaseMove):
         """
         atoms_new = atoms.copy()
         selected_species = self.rng.random.choice(self.species)
+        positions_bias = atoms_new[self.cell.get_atoms_specie_inside_cell(
+            atoms_new, self.cell.get_species())].positions
 
-        # if selected_species not in self.species_bias:
-        #     new_position = self.get_random_position()
-        #     while self.get_min_dist(new_position, atoms_new.positions) >= self.min_insert:
-        #         new_position = self.get_random_position()
-        #     atoms_new += Atoms(selected_species, positions=[new_position])
-        #     return atoms_new, 1, selected_species
-
-        positions_bias = atoms_new.positions[atoms_new.symbols == self.species_bias]
-        new_position = self.get_random_position()
-        while self.get_min_dist(new_position, positions_bias) >= self.min_insert:
-            new_position = self.get_random_position()
-
-        atoms_new += Atoms(selected_species, positions=[new_position])
-        return atoms_new, 1, selected_species
-
-    def check_distance_criteria(self, atoms_new):
-        min_dist = min(atoms_new.get_distances(-1, range(len(atoms_new)-1), mic=True))
-        if min_dist > self.max_insert or min_dist < self.min_insert:
-            return False
-        return True
-
-    def get_random_position(self):
-        p = np.array([
-            self.box[i]*self.rng.get_uniform() for i in range(3)
-            ]).sum(axis=0)
-        if self.z_shift:
-            p[2] += self.z_shift
-        return p
-
-    def get_min_dist(self, p, positions):
+        insert_position = self.cell.get_random_point()
         min_dist = np.min(pairwise_distances(
-                p.reshape(1, -1), positions
-                ).flatten())
-        return min_dist
+            insert_position.reshape(1, -1), positions_bias).flatten())
+
+        while min_dist < self.min_insert:
+            insert_position = self.cell.get_random_point()
+            min_dist = np.min(pairwise_distances(
+                insert_position.reshape(1, -1), positions_bias).flatten())
+        atoms_new += Atoms(selected_species, positions=[insert_position])
+        return atoms_new, 1, selected_species

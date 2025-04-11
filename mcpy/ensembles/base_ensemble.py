@@ -132,6 +132,18 @@ class BaseEnsemble(ABC):
         except IOError as e:
             logger.error(f"Error writing to trajectory file {self._traj_file}: {e}")
 
+    def compute_energy(self, atoms: Atoms) -> float:
+        """
+        Computes the potential energy of the given atoms.
+
+        Args:
+            atoms (Atoms): The configuration of atoms.
+
+        Returns:
+            float: The potential energy.
+        """
+        return self._calculator.get_potential_energy(atoms)
+
 
 def write_xyz(atoms, energy, filename):
     """
