@@ -72,7 +72,7 @@ class BaseEnsemble(ABC):
         return self._atoms
 
     @property
-    def cells(self) -> Atoms:
+    def cells(self) -> Cell:
         """ Current configuration (copy). """
         return self._cells
 
