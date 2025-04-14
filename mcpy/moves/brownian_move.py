@@ -1,4 +1,4 @@
-from .moves import BaseMove
+from .base_move import BaseMove
 from ase import Atoms
 # from ase.md.langevin import Langevin
 from ase.md.verlet import VelocityVerlet
