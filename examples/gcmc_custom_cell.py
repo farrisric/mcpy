@@ -40,12 +40,10 @@ move_list = [[25, 25, 25, 25],
                            seed=43215423143),
               InsertionMove(cell_ag_ag,
                             species=['Ag'],
-                            species_bias=['Ag'],
                             min_insert=0.5,
                             seed=6758763657),
               InsertionMove(cell_ag_o,
                             species=['O'],
-                            species_bias=['Ag'],
                             min_insert=0.5,
                             seed=3675437856)]]
 
