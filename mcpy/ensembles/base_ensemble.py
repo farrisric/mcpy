@@ -23,10 +23,10 @@ class BaseEnsemble(ABC):
                  calculator: Calculator,
                  user_tag: Optional[str] = None,
                  random_seed: Optional[int] = None,
-                 traj_file: str = 'traj_test.traj',
-                 trajectory_write_interval: Optional[int] = None,
+                 traj_file: str = 'trajectory.xyz',
+                 trajectory_write_interval: int = 1,
                  outfile: str = 'outfile.out',
-                 outfile_write_interval: int = 10) -> None:
+                 outfile_write_interval: int = 1) -> None:
         """
         Base class for ensembles in Monte Carlo simulations.
 
@@ -44,6 +44,9 @@ class BaseEnsemble(ABC):
             outfile_write_interval (int, optional): The interval at which to write output files.
             Defaults to 10.
         """
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.INFO)
+
         self._accepted_trials = 0
         self._step = 0
 
@@ -109,17 +112,6 @@ class BaseEnsemble(ABC):
         except IOError as e:
             logger.error(f"Error writing to file {self._outfile}: {e}")
 
-    def initialize_outfile(self) -> None:
-        """
-        Initializes the output file by overwriting any existing content and writing a header.
-        """
-        try:
-            with open(self._outfile, 'w') as outfile:
-                outfile.write("STEP ENERGY\n")
-        except IOError as e:
-            logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
-            raise
-
     def write_coordinates(self, atoms: Atoms, energy: float) -> None:
         """
         Write the trajectory file.
@@ -143,6 +135,38 @@ class BaseEnsemble(ABC):
             float: The potential energy.
         """
         return self._calculator.get_potential_energy(atoms)
+
+    def initialize_outfile(self) -> None:
+        try:
+            with open(self._outfile, 'w') as outfile:
+                outfile.write(self.get_outfile_header())
+                outfile.write(self.get_outfile_metadata())
+        except IOError as e:
+            self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
+            raise
+
+    def initialize_run(self) -> None:
+        self.logger.info(self.get_outfile_header())
+        self.logger.info(self.get_outfile_metadata())
+        self._initialized = True
+
+    def finalize_run(self) -> None:
+        self.logger.info("\nSimulation Complete.")
+        self.logger.info("Final Statistics:")
+        self.logger.info(f"Total Moves Attempted: {self.n_moves}")
+        self.logger.info(f"Acceptance Ratios: {self.count_acceptance}")
+        self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
+        self._initialized = False
+
+    def get_outfile_header(self) -> str:
+        return "STEP ENERGY\n"
+
+    def get_outfile_metadata(self) -> str:
+        return ""
+
+    def format_step_output(self) -> str:
+        """Format one step of output. Override in subclasses."""
+        return f"STEP: {self._step} ENERGY: {self.compute_energy(self._atoms):.6f}\n"
 
 
 def write_xyz(atoms, energy, filename):
