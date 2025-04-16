@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, List, Dict
 
 import numpy as np
@@ -23,10 +22,10 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  temperature: float,
                  move_selector: MoveSelector,
                  random_seed: Optional[int] = None,
-                 traj_file: str = 'traj_test.traj',
-                 trajectory_write_interval: Optional[int] = None,
+                 traj_file: str = 'trajectory.xyz',
+                 trajectory_write_interval: Optional[int] = 1,
                  outfile: str = 'outfile.out',
-                 outfile_write_interval: int = 10) -> None:
+                 outfile_write_interval: Optional[int] = 1) -> None:
 
         super().__init__(atoms=atoms,
                          cells=cells,
@@ -37,9 +36,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                          trajectory_write_interval=trajectory_write_interval,
                          outfile=outfile,
                          outfile_write_interval=outfile_write_interval)
-
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.INFO)
 
         self.E_old = self.compute_energy(self.atoms)
 
@@ -79,29 +75,30 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.E_old = state["energy"]
         self.n_atoms = state["n_atoms"]
 
-    def initialize_outfile(self) -> None:
-        """
-        Initializes the output file by overwriting any existing content and writing a header.
-        """
-        try:
-            with open(self._outfile, 'w') as outfile:
-                outfile.write("+-------------------------------------------------+\n")
-                outfile.write("| Grand Canonical Ensemble Monte Carlo Simulation |\n")
-                outfile.write("+-------------------------------------------------+\n\n")
+    def get_outfile_header(self) -> str:
+        return (
+            "+-------------------------------------------------+\n"
+            "| Grand Canonical Ensemble Monte Carlo Simulation |\n"
+            "+-------------------------------------------------+\n\n"
+        )
 
-                # Write simulation parameters
-                outfile.write("Simulation Parameters:\n")
-                outfile.write(f"  Units type: {self.units.unit_type}\n")
-                outfile.write(f"  Temperature (K): {self._temperature}\n")
-                outfile.write(f"  Chemical potentials: {self._mu}\n")
-                outfile.write("Starting simulation...\n")
-                outfile.write("{:<10} {:<10} {:<15} {:<20}".format(
-                    "Step", "N_atoms", "Energy (eV)",
-                    f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"))
-                outfile.write("-" * 60 + "\n")
-        except IOError as e:
-            self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
-            raise
+    def get_outfile_metadata(self) -> str:
+        return (
+            "Simulation Parameters:\n"
+            f"  Units type: {self.units.unit_type}\n"
+            f"  Temperature (K): {self._temperature}\n"
+            f"  Chemical potentials: {self._mu}\n"
+            "Starting simulation...\n"
+            + "{:<10} {:<10} {:<15} {:<20}".format(
+                "Step", "N_atoms", "Energy (eV)",
+                f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
+            )
+            + "\n" + "-" * 60 + "\n"
+        )
+
+    def format_step_output(self) -> str:
+        ratios = self.count_acceptance  # or however you calculate it
+        return f"{self._step:<10} {len(self._atoms):<10} {self.E_old:<15.6f} {ratios}\n"
 
     def write_outfile(self) -> None:
         """

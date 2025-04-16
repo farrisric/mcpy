@@ -47,10 +47,6 @@ gcmc = GrandCanonicalEnsemble(
             units_type='metal',
             species=species,
             temperature=T,
-            move_selector=move_selector,
-            outfile=f'gcmc_relax_{atoms.get_chemical_formula()}_dmu_{delta_mu_O}.out',
-            trajectory_write_interval=1,
-            outfile_write_interval=1,
-            traj_file=f'gcmc_relax_{atoms.get_chemical_formula()}_dmu_{delta_mu_O}.xyz')
+            move_selector=move_selector)
 
 gcmc.run(1000000)
