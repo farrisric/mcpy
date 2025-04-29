@@ -1,6 +1,7 @@
 from ase import Atoms
 
 from .base_move import BaseMove
+from ..cell import Cell
 
 
 class PermutationMove(BaseMove):
@@ -16,7 +17,7 @@ class PermutationMove(BaseMove):
         Initializes the permutation move.
 
         """
-        cell = None
+        cell = Cell(Atoms(cell=[1, 1, 1]))
         super().__init__(cell, species, seed)
 
     def do_trial_move(self, atoms) -> Atoms:
