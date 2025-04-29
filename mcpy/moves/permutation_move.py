@@ -16,7 +16,8 @@ class PermutationMove(BaseMove):
         Initializes the permutation move.
 
         """
-        super().__init__(species, seed)
+        cell = None
+        super().__init__(cell, species, seed)
 
     def do_trial_move(self, atoms) -> Atoms:
         """
