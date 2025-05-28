@@ -1,3 +1,5 @@
+[![DOI](https://sandbox.zenodo.org/badge/905704471.svg)](https://handle.stage.datacite.org/10.5072/zenodo.262130)
+
 # mcpy
 
 `mcpy` is a Python package designed to run atomistic Monte Carlo simulations. It provides tools for performing Grand Canonical Monte Carlo (GCMC) simulations using the Atomic Simulation Environment (ASE) and other dependencies.
