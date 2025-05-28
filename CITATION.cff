@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "mcpy"
+authors:
+  - family-names: "Farris, Telari"
+    given-names: "Riccardo, Emanuele"
+    affiliation: "Universitat de Barcelona"
+date-released: "2025-05-01"
+version: "1.0.0"
+doi: "10.1234/mcpy.2025"
+url: "https://github.com/riccardo/mcpy"
+license: "MIT"
