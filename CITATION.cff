@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "mcpy"
+title: "mcpy: a python package designed to run atomistic Monte Carlo simulations"
 authors:
   - family-names: "Farris R., Telari E."
     affiliation: "Universitat de Barcelona"
