@@ -7,6 +7,6 @@ authors:
     affiliation: "Universitat de Barcelona"
 date-released: "2025-05-01"
 version: "1.0.0"
-doi: "10.1234/mcpy.2025"
-url: "https://github.com/riccardo/mcpy"
+doi: "10.5072/zenodo.262131"
+url: "https://github.com/farrisric/mcpy"
 license: "MIT"
