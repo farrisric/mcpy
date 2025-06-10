@@ -36,7 +36,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                          trajectory_write_interval=trajectory_write_interval,
                          outfile=outfile,
                          outfile_write_interval=outfile_write_interval)
-
+        
         self.E_old = self.compute_energy(self.atoms)
 
         self.units = SetUnits(units_type,
@@ -47,7 +47,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.n_atoms = len(self.atoms)
         self._temperature = temperature
         self._mu = mu
-
         self.move_selector = move_selector
         self.calculate_cells_volume(self.atoms)
         self._step = 1
@@ -249,7 +248,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             step (int): The current step.
         """
         self.do_gcmc_step()
-
         if self._step % self._outfile_write_interval == 0:
             acceptance_ratios = self.move_selector.get_acceptance_ration()
             self.logger.info("{:<10} {:<10} {:<15.6f} {:<20}".format(
@@ -260,7 +258,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                           else "N/A" for ratio in acceptance_ratios)
             ))
             self.write_outfile()
-
         if self._step % self._trajectory_write_interval == 0:
-            self.write_coordinates(self.atoms, self.E_old)
+               self.write_coordinates(self.atoms, self.E_old)
         self._step += 1
+
+        
