@@ -4,13 +4,17 @@ from ase import Atoms
 from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+from ..cell import NullCell
 
 
 class BrownianMove(BaseMove):
-    def __init__(self, temperature: float, calculator , steps: int, d_t: float) -> None:
+    def __init__(self, temperature: float, calculator , steps: int, d_t: float,
+                 seed: int) -> None:
         """
         Initializes the Shake move with the given maximum displacement distance and RNG.
         """
+        cell = NullCell()
+        super().__init__(cell, species=['X'], seed=seed)
         self.temperature = temperature
         self.calculator = calculator
         self.steps = steps

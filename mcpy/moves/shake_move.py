@@ -1,6 +1,7 @@
 from .base_move import BaseMove
 from ase import Atoms
 import numpy as np
+from ..cell import NullCell
 
 
 class ShakeMove(BaseMove):
@@ -8,7 +9,8 @@ class ShakeMove(BaseMove):
         """
         Initializes the Shake move with the given maximum displacement distance and RNG.
         """
-        super().__init__(species=['X'], seed=seed)
+        cell = NullCell()
+        super().__init__(cell, species=['X'], seed=seed)
         self.r_max = r_max
         self.name = 'Shake'
         self.rng = np.random.default_rng(seed)
