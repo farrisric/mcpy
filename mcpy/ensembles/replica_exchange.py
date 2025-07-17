@@ -1,9 +1,14 @@
-from mpi4py import MPI
-import numpy as np
-import logging
-from ..utils import RandomNumberGenerator
 from collections import Counter
+import numpy as np
 import warnings
+import logging
+
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
+
+from ..utils import RandomNumberGenerator
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -27,6 +32,9 @@ class ReplicaExchange:
         - n_steps (int): Total number of GCMC steps.
         - exchange_interval (int): Steps between exchange attempts.
         """
+        if MPI is None:
+            raise ImportError("mpi4py is required for ReplicaExchange. Please install it.")
+        
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
