@@ -34,7 +34,7 @@ class ReplicaExchange:
         """
         if MPI is None:
             raise ImportError("mpi4py is required for ReplicaExchange. Please install it.")
-        
+
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()

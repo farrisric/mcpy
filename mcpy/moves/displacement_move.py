@@ -2,6 +2,7 @@ from ase import Atoms
 import numpy as np
 
 from .base_move import BaseMove
+from ..cell import NullCell
 
 
 class DisplacementMove(BaseMove):
@@ -19,7 +20,8 @@ class DisplacementMove(BaseMove):
         Parameters:
         max_displacement (float): Maximum displacement distance.
         """
-        super().__init__(species, seed)
+        cell = NullCell()
+        super().__init__(cell, species, seed)
         self.max_displacement = max_displacement
         self.constraints = constraints
 
