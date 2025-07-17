@@ -4,7 +4,7 @@ from .base_cell import BaseCell
 
 
 class Cell(BaseCell):
-    def __init__(self, atoms):
+    def __init__(self, atoms, species_radii=None):
         """
         Initialize the Cell object.
 
@@ -13,8 +13,9 @@ class Cell(BaseCell):
         super().__init__()
         self.original_dimensions = np.array(atoms.cell)
         self.dimensions = self.original_dimensions
+        self.species_radii = species_radii if species_radii else {}
 
-    def calculate_volume(self):
+    def calculate_volume(self, atoms):
         """
         Calculate the volume of the cell.
 
@@ -49,3 +50,11 @@ class Cell(BaseCell):
         :return: Indices of atoms of the specified species inside the cell.
         """
         return np.where(np.isin(atoms.get_chemical_symbols(), species))[0]
+    
+    def get_species(self):
+        """
+        Get the species present in the custom cell.
+
+        :return: A list of species present in the custom cell.
+        """
+        return list(self.species_radii.keys())
