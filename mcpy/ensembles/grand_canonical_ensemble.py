@@ -226,6 +226,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         if not getattr(self, '_initialized', False):
             self.initialize_run()
 
+        self.write_coordinates(self.atoms, self.E_old)
+
         for step in range(1, steps + 1):
             self._run()
 
