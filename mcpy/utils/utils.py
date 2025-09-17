@@ -1,6 +1,8 @@
 from ase import Atoms
 from ase.neighborlist import NeighborList, natural_cutoffs
 from ase.cell import Cell
+
+import numpy as np
 import math
 
 
@@ -71,3 +73,58 @@ def total_volume_with_overlap(spheres, positions):
             d = math.dist(positions[i], positions[j])  # Distance between sphere centers
             total_vol -= overlap_volume(spheres[i], spheres[j], d)
     return total_vol
+
+def get_p_at_support(support: Atoms, particle: Atoms,
+                     contact_surface: str = '100', gap: float = 2.0) -> Atoms:
+    """
+    Place an Ag truncated octahedron on top of a support.
+    
+    Parameters
+    ----------
+    support : Atoms
+        The slab/support (its cell a,b are reused; z-PBC disabled).
+    layers : int
+        Octahedron size parameter for ASE Octahedron.
+    cutoff : float
+        Cutoff for ASE Octahedron (Å).
+    contact_surface : {'100','111'}
+        Which facet should contact the support.
+    gap : float
+        Vertical clearance between support top z and particle bottom z (Å).
+        
+    Returns
+    -------
+    Atoms
+        Combined system with tags: 0 = support, 1 = particle.
+    """
+    com_xy = support.get_center_of_mass()[:2]
+    surface_z = float(np.max(support.positions[:, 2]))
+
+    particle.cell = None
+    particle.translate(-particle.get_center_of_mass())
+
+    # Optional orientation: make a (111) facet face down
+    if contact_surface == '111':
+        # Simple deterministic orientation; tweak if you need a specific in-plane rotation
+        particle.rotate('x', 45, rotate_cell=False)
+        particle.rotate('y', 35, rotate_cell=False)
+        particle.rotate('z', 90, rotate_cell=False)
+
+    # Move particle over the support in XY
+    particle.translate([com_xy[0], com_xy[1], 0.0])
+
+    # Lift particle so its lowest atom sits just above the support top, leaving a gap
+    min_z = float(np.min(particle.positions[:, 2]))
+    dz = (surface_z + gap) - min_z
+    particle.translate([0.0, 0.0, dz])
+
+    sup = support.copy()
+    sup.set_tags(0)
+    particle.set_tags(1)
+
+    atoms = sup + particle
+    atoms.set_cell(support.cell, scale_atoms=False)
+    atoms.set_pbc((True, True, False))
+    atoms.center(vacuum=10.0, axis=2)  # add 10 Å vacuum along z
+
+    return atoms
