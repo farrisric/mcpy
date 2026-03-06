@@ -22,7 +22,7 @@ From source
 .. code-block:: bash
 
 
-git clone https://github.com/your-org/mcpy.git
+git clone https://github.com/farrisric/mcpy.git
 cd mcpy
 pip install -e .[dev]
 
@@ -46,4 +46,4 @@ Install MLIP backends you intend to use. For example, for MACE:
 pip install mace-torch
 
 
-GPU support depends on each backend’s installation instructions.
+GPU support depends on each backend's installation instructions.
