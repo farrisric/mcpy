@@ -75,7 +75,8 @@ def total_volume_with_overlap(spheres, positions):
     return total_vol
 
 def get_p_at_support(support: Atoms, particle: Atoms,
-                     contact_surface: str = '100', gap: float = 2.0) -> Atoms:
+                     contact_surface: str = '100', gap: float = 2.0,
+                     vacuum_z: float = 10.0) -> Atoms:
     """
     Place an Ag truncated octahedron on top of a support.
     
@@ -125,6 +126,6 @@ def get_p_at_support(support: Atoms, particle: Atoms,
     atoms = sup + particle
     atoms.set_cell(support.cell, scale_atoms=False)
     atoms.set_pbc((True, True, False))
-    atoms.center(vacuum=10.0, axis=2)  # add 10 Å vacuum along z
+    atoms.center(vacuum=vacuum_z, axis=2)  # add 10 Å vacuum along z
 
     return atoms
