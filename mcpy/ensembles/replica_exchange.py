@@ -48,6 +48,7 @@ class ReplicaExchange:
             assert len(mus) == self.size, "Number of mus must match MPI ranks."
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
+        
 
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
@@ -160,7 +161,7 @@ class ReplicaExchange:
             self.logger.error(f"Communication error with rank {partner_rank}: {e}")
             return
 
-        if self._acceptance_condition_mu(rank_state, partner_state):
+        if self._acceptance_condition_T(rank_state, partner_state):
             self.logger.debug(f"Accepted exchange with rank {partner_rank}")
             self.gcmc.set_state(partner_state)
             return True
@@ -175,7 +176,7 @@ class ReplicaExchange:
             self.initialize_run()
 
         for step in range(self.gcmc_steps):
-            self.gcmc._run(1)
+            self.gcmc._run()
 
             if step > 0 and step % self.exchange_interval == 0:
                 self.gcmc.exchange_attempts += 1
@@ -311,8 +312,9 @@ class ReplicaExchange:
                     outfile.write(f"Temperatures (K): {self.temperatures}\n")
                 else:
                     outfile.write("Temperatures: Not specified (default)\n")
-                for i, mus in enumerate(self.mus):
-                    outfile.write(f"Chemical potentials: Rank {i} - {mus}\n")
+                if hasattr(self, 'mus') and self.mus is not None:
+                    for i, mus in enumerate(self.mus):
+                        outfile.write(f"Chemical potentials: Rank {i} - {mus}\n")
                 else:
                     outfile.write("Chemical potentials: Not specified (default)\n")
                 outfile.write(f"Number of MPI ranks: {self.size}\n")
