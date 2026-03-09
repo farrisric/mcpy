@@ -1,22 +1,31 @@
 from mace.calculators import MACECalculator
 from ase import Atoms
 from ase.optimize import LBFGS
+from typing import Union
 
 
 class MACE_F_Calculator:
-    def __init__(self, model_paths: str,
+    def __init__(self, model_paths: Union[str, MACECalculator],
                  steps: int, fmax: float,
                  device: str = 'cpu', cueq : bool = False) -> None:
         """
         Initialize the Calculator with the given model path and device.
 
-        :param model_paths: Path to the model file.
+        :param model_paths: Path to the model file, or an initialized
+                            MACECalculator instance to reuse directly.
         :param device: Device to load the model on ('cpu' or 'cuda').
         """
         self.fmax = fmax
         self.steps = steps
 
-        self.calculator = MACECalculator(model_paths=model_paths, device=device, enable_cueq=cueq)
+        if isinstance(model_paths, MACECalculator):
+            self.calculator = model_paths
+        else:
+            self.calculator = MACECalculator(
+                model_paths=model_paths,
+                device=device,
+                enable_cueq=cueq,
+            )
 
     def get_potential_energy(self, atoms: Atoms) -> float:
         """
