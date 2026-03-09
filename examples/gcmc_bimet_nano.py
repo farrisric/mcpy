@@ -1,6 +1,7 @@
 from ase.cluster import Octahedron
 from ase.build import molecule
 from ase.io import read
+from mace.calculators import mace_mp
 
 from mcpy.moves import DeletionMove, InsertionMove, PermutationMove
 from mcpy.moves.move_selector import MoveSelector
@@ -12,21 +13,12 @@ from mcpy.cell import SphericalCell
 atoms = Octahedron('Pt', 7, 2)
 symbols = ['Pt' for _ in range(int(len(atoms)/2))] + ['Au' for _ in range(int(len(atoms)/2))]
 atoms.symbols = symbols + ['Pt']
-
-atoms = read('/home/riccardo/nano.xyz')
-print(atoms.pbc)
 atoms.set_pbc = False
 
 scell = SphericalCell(atoms, vacuum=3, species_radii={'Pt': 2, 'Au': 2.5, 'H' : 0},
                       mc_sample_points=100_000)
 
-calculator = MACE_F_Calculator(
-                model_paths='/home/riccardo/Downloads/mace-small-density-agnesi-stress.model',
-                steps=20,
-                fmax=0.1,
-                cueq=False,
-                device='cpu',
-                )
+calculator = mace_mp(device='cuda')
 
 species = ['H']
 

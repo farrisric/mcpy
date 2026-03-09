@@ -1,4 +1,5 @@
 from ase.cluster import Octahedron
+from mace.calculators import mace_mp
 
 from mcpy.moves import DeletionMove
 from mcpy.moves import InsertionMove
@@ -13,13 +14,7 @@ atoms = Octahedron('Ag', 6, 1)
 scell = SphericalCell(atoms, vacuum=3, species_radii={'Ag': 2.947, 'O' : 0},
                       mc_sample_points=100_000)
 
-calculator = MACE_F_Calculator(
-                model_paths='/home/riccardo/Downloads/mace-small-density-agnesi-stress.model',
-                steps=20,
-                fmax=0.1,
-                cueq=False,
-                device='cpu',
-                )
+calculator = mace_mp(device='cuda')
 
 species = ['O']
 

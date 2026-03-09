@@ -1,5 +1,6 @@
 from ase.build import fcc111, bulk, molecule
 from ase.constraints import FixAtoms
+from mace.calculators import mace_mp
 
 from mcpy.moves import DeletionMove
 from mcpy.moves import InsertionMove
@@ -21,13 +22,7 @@ cell_ag_o = CustomCell(atoms, custom_height=7, bottom_z=12.8-2.068,
                        species_radii={'Ag': 2.068, 'O' : 0})
 
 
-calculator = MACE_F_Calculator(
-                model_paths='/home/riccardo/Downloads/mace-small-density-agnesi-stress.model',
-                steps=20,
-                fmax=0.1,
-                cueq=False,
-                device='cpu',
-                )
+calculator = mace_mp(device='cuda')
 
 species = ['Ag', 'O']
 

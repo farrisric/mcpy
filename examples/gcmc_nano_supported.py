@@ -1,6 +1,7 @@
 from ase.cluster import Octahedron
 from ase.io import read 
 from ase.constraints import FixAtoms
+from mace.calculators import mace_mp
 
 from mcpy.moves import DeletionMove
 from mcpy.moves import InsertionMove
@@ -27,13 +28,7 @@ atoms = get_p_at_support(support, particle, contact_surface='100', gap=2.0)
 scell = CustomCell(atoms, custom_height=20, bottom_z=surface_z,
                        species_radii={'Ag': 2.068, 'O' : 0, 'Al': 3})
 
-calculator = MACE_F_Calculator(
-                model_paths='/home/riccardo/Downloads/mace-small-density-agnesi-stress.model',
-                steps=20,
-                fmax=0.1,
-                cueq=False,
-                device='cpu',
-                )
+calculator = mace_mp(device='cuda')
 
 species = ['O']
 
