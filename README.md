@@ -61,50 +61,51 @@ The package requires the following dependencies:
 Here is an example of how to use the `mcpy` package to run a GCMC simulation:
 
 ```python
-from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-from ase.calculators.lj import LennardJones
-from ase import Atoms
-from mcpy.moves import DeletionMove, InsertionMove, DisplacementMove
+from ase.cluster import Octahedron
+from mace.calculators import mace_mp
+
+from mcpy.moves import DeletionMove
+from mcpy.moves import InsertionMove
 from mcpy.moves.move_selector import MoveSelector
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.calculators import MACE_F_Calculator
+from mcpy.cell import SphericalCell
 
 
-class Calculator():
-    def __init__(self) -> None:
-        self.calculator = LennardJones(sigma=3.4, epsilon=0.010086, rc=10.2, smooth=True)
+atoms = Octahedron('Ag', 6, 1)
 
-    def get_potential_energy(self, atoms):
-        atoms.calc = self.calculator
-        return atoms.get_potential_energy()
+scell = SphericalCell(atoms, vacuum=3, species_radii={'Ag': 2.947, 'O' : 0},
+                      mc_sample_points=100_000)
 
+calculator = mace_mp(device='cuda')
 
-lj = Calculator()
-atoms = Atoms('Ar', cell=[27.2, 27.2, 27.2], pbc=True)
-lj.get_potential_energy(atoms)
+species = ['O']
 
-box = atoms.get_cell()
-species = ['Ar']
-
-move_list = [[25, 25, 50],
-             [DeletionMove(species=species, seed=12, operating_box=box),
-              InsertionMove(species=species, seed=13, operating_box=box),
-              DisplacementMove(species=species, seed=14, max_displacement=1.7)]]
+move_list = [[1, 1],
+             [DeletionMove(scell,
+                           species=['O'],
+                           seed=43215423143),
+              InsertionMove(scell,
+                            species=['O'],
+                            min_insert=0.5,
+                            seed=3675437856)]]
 
 move_selector = MoveSelector(*move_list)
 
-Temp = 87.79
+mus = {'Ag': -2.99, 'O': -4.91}
+delta_mu_O = -0.5
+mus['O'] += delta_mu_O
+T = 500
 
 gcmc = GrandCanonicalEnsemble(
             atoms=atoms,
-            calculator=lj,
-            mu={'Ar': -8.4*0.010086},
+            cells=[scell],
+            calculator=calculator,
+            mu=mus,
             units_type='metal',
             species=species,
-            temperature=Temp,
-            move_selector=move_selector,
-            outfile=f'T{Temp}.out',
-            trajectory_write_interval=1,
-            outfile_write_interval=1,
-            traj_file=f'T{Temp}.xyz')
+            temperature=T,
+            move_selector=move_selector)
 
 gcmc.run(1000000)
 ```
