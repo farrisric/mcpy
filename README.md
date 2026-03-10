@@ -1,6 +1,23 @@
-[![DOI](https://sandbox.zenodo.org/badge/905704471.svg)](https://handle.stage.datacite.org/10.5072/zenodo.262130)
+<!-- [![GitHub release](https://img.shields.io/github/release/yourusername/npl.svg)](https://GitHub.com/yourusername/npl/releases/) -->
 
-# mcpy
+[![License](https://img.shields.io/badge/License-MIT%202.0-blue.svg)](https://opensource.org/licenses/mit)
+[![GitHub issues](https://img.shields.io/github/issues/farrisric/npl.svg)](https://GitHub.com/farrisric/mcpy/issues)
+[![Documentation Status](https://readthedocs.org/projects/nplib/badge/)](https://mc_py.readthedocs.io/en/latest/index.html)
+
+# <span style="font-size:larger;">mcpy</span>
+
+## Table of contents
+
+- [mcpy](#mcpy)
+- [About mcpy](#about-mcpy)
+- [Features](#features)
+- [Installation](#installation)
+- [Dependencies](#dependencies)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
+
+## About mcpy
 
 `mcpy` is a Python package designed to run atomistic Monte Carlo simulations. It provides tools for performing Grand Canonical Monte Carlo (GCMC) simulations using the Atomic Simulation Environment (ASE) and other dependencies.
 
