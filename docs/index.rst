@@ -8,7 +8,7 @@ Overview
 It provides a flexible and modular framework to explore the **thermodynamic stability and compositional phase space** of nanoparticles and surfaces under realistic reaction conditions.
 
 Developed for computational materials science and catalysis research, `mcpy` enables users to efficiently sample atomic configurations and construct phase diagrams based on chemical potential, temperature, and pressure conditions.  
-The library integrates seamlessly with existing tools in the **Atomic Simulation Environment (ASE)** ecosystem and supports potentials from modern frameworks such as **MACE**, **NequIP**, and **ACE**.
+The library integrates seamlessly with existing tools in the **Atomic Simulation Environment (ASE)** ecosystem and supports potentials from modern frameworks such as **MACE**.
 
 Features
 --------
@@ -22,17 +22,12 @@ Features
 - Built-in tools for **phase diagram generation**, **thermodynamic analysis**, and **logging**.  
 - Modular architecture for easy extension and reproducible workflows.  
 
----
-
 .. toctree::
    :caption: Contents:
    :maxdepth: 2
 
    installation
    examples
-   api
-   contributing
-   license
 
 
    
