@@ -27,6 +27,7 @@ Features
    :maxdepth: 2
 
    installation
+   cells
    examples
 
 
