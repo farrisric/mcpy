@@ -13,26 +13,23 @@ From PyPI (recommended)
 -----------------------
 .. code-block:: bash
 
-
-pip install mcpy
+   pip install mcpy
 
 
 From source
 -----------
 .. code-block:: bash
 
-
-git clone https://github.com/farrisric/mcpy.git
-cd mcpy
-pip install -e .[dev]
+   git clone https://github.com/farrisric/mcpy.git
+   cd mcpy
+   pip install -e .[dev]
 
 
 Verify installation
 -------------------
 .. code-block:: bash
 
-
-python -c "import mcpy, ase; print('mcpy', mcpy.__version__)"
+   python -c "import mcpy, ase; print('mcpy', mcpy.__version__)"
 
 
 Optional backends
@@ -42,8 +39,7 @@ Install MLIP backends you intend to use. For example, for MACE:
 
 .. code-block:: bash
 
-
-pip install mace-torch
+   pip install mace-torch
 
 
 GPU support depends on each backend's installation instructions.
