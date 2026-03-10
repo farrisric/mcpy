@@ -28,6 +28,8 @@ Features
 
    installation
    cells
+   ensembles
+   moves
    examples
 
 
