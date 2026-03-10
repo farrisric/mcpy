@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT%202.0-blue.svg)](https://opensource.org/licenses/mit)
 [![GitHub issues](https://img.shields.io/github/issues/farrisric/npl.svg)](https://GitHub.com/farrisric/mcpy/issues)
-[![Documentation Status](https://readthedocs.org/projects/nplib/badge/)](https://mc_py.readthedocs.io/en/latest/index.html)
+[![Documentation Status](https://readthedocs.org/projects/nplib/badge/)](https://mc-py.readthedocs.io/en/latest/index.html)
 
 # <span style="font-size:larger;">mcpy</span>
 
