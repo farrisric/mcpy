@@ -28,6 +28,7 @@ Features
 
    installation
    cells
+   species_radii
    ensembles
    moves
    examples
