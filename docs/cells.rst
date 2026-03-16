@@ -29,6 +29,7 @@ During relaxation phases of a grand-canonical run, a good free-volume estimate h
 In practice, this usually speeds up convergence toward the equilibrium composition/structure.
 
 For this reason, always provide physically meaningful radii for the species involved in your GCMC moves.
+See :doc:`species_radii` for a practical workflow to compute these values from relaxed structures (for example, O on Ag surfaces).
 
 Importance of `mc_sample_points` for free-volume accuracy
 ---------------------------------------------------------
