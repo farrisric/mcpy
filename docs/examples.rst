@@ -2,11 +2,11 @@ Examples
 ========
 
 
-This section presents minimal, self-contained examples for three workflows:
+This section provides minimal, self-contained examples for three common workflows:
 
-Equations at a glance
------------------------
-The examples rely on a shared set of theoretical ingredients (acceptance criteria, grand-canonical moves, and phase-diagram thermodynamics). In this thesis, the key move acceptance rules are written as follows.
+Why this page exists
+----------------------
+The examples below use a shared set of acceptance rules (canonical and grand-canonical Monte Carlo) and a thermodynamic definition of the phase-diagram potential.
 
 Monte Carlo acceptance (Basin Hopping and Metropolis)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

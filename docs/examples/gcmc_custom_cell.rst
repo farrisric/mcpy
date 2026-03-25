@@ -7,21 +7,25 @@ adsorbate insertion/deletion is restricted to a prescribed volume above the surf
 Chemical potentials are referenced to bulk Ag and ½O₂, then shifted by Δμ\ :sub:`O` to explore
 oxidizing conditions at fixed temperature.
 
+This tutorial sets up a constrained grand-canonical Monte Carlo run (variable atom counts),
+so you sample equilibrium adsorption configurations for specified ``mu`` and ``T``.
+
 Concept of the custom cell
 --------------------------
 A custom simulation cell restricts trial insertions and deletions to a region directly above the
-surface, improving efficiency and avoiding spurious attempts deep in the slab. The lower boundary
-(``bottom_z``) anchors the cell a small distance above the topmost Ag layer; ``custom_height`` defines
-the accessible vertical extent. Different effective radii can be used in each cell to encode distinct
-overlap/clearance rules for Ag versus O manipulations.
+surface. This avoids wasting proposals in excluded (physically irrelevant) space.
+
+The lower boundary (``bottom_z``) anchors the cell above the topmost Ag layer, and ``custom_height``
+sets the accessible vertical extent. Different ``species_radii`` can be used in each cell to apply
+different overlap/clearance rules for Ag vs O.
 
 Relaxation-style GCMC acceptance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In dense metal systems, direct trial insertions can have low acceptance because the surrounding local
-geometry is initially unfavorable. A common remedy is to evaluate the acceptance criterion using a
-shortly relaxed version of the trial configuration (energy relaxation step; Senftle et al., 2013).
-This strategy is especially relevant when insertion/deletion is restricted to a physically constrained
-region above the surface (Wexler et al., 2019).
+In dense metals, raw insertions often clash with nearby atoms, producing very low acceptance.
+To reduce this effect, evaluate acceptance using a briefly relaxed trial configuration
+(``energy relaxation step``; Senftle et al., 2013).
+This is especially important when insertions/deletions are restricted to a constrained region
+above the surface (Wexler et al., 2019).
 
 System construction
 -------------------
@@ -82,9 +86,9 @@ trained MACE model. Keep units consistent with the ensemble (energies in eV).
 
 Move selection
 --------------
-We combine four moves: deletion and insertion for Ag within the Ag-targeting cell, and
-deletion and insertion for O within the O-targeting cell. Probabilities are chosen to balance
-the four operations; ``min_insert`` controls the minimal clearance on insertion.
+This tutorial combines four moves: Ag insertion/deletion in the Ag-targeting cell and
+O insertion/deletion in the O-targeting cell. The move weights balance these proposals, and
+``min_insert`` controls the minimum clearance required for an insertion.
 
 .. code-block:: python
 
@@ -104,10 +108,10 @@ the four operations; ``min_insert`` controls the minimal clearance on insertion.
 
 Thermodynamic references
 ------------------------
-We set μ\ :sub:`Ag` from bulk Ag and μ\ :sub:`O` from ½O₂ computed with the chosen calculator.
-To reduce bias from local relaxation settings during reference calculations, the calculator is
-temporarily made stricter, then restored for GCMC. Finally, Δμ\ :sub:`O` is applied to explore
-more oxidizing conditions.
+We define reference chemical potentials from bulk Ag and from ½O₂ computed using the chosen calculator.
+To avoid bias from different relaxation tolerances, the calculator is temporarily made stricter for
+reference energies and then restored for production GCMC. Finally, ``Δμ_O`` shifts the oxygen
+chemical potential to generate more oxidizing conditions.
 
 .. code-block:: python
 
@@ -164,11 +168,11 @@ user-defined intervals; adjust these for your system size and performance goals.
 
 Interpretation
 --------------
-Scan several values of Δμ\ :sub:`O` to construct coverage–μ curves at fixed temperature.
-Inspect acceptance ratios per move type and adjust ``min_insert``, cell height,
-and move probabilities if insertions are systematically rejected or deletions dominate.
-Validate that the chosen ``bottom_z`` and ``custom_height`` span the physically relevant
-adsorption region without intersecting the slab interior.
+Scan ``Δμ_O`` to build coverage vs chemical-potential curves at fixed temperature.
+If acceptance is poor, check acceptance ratios by move type and tune ``min_insert``, cell height,
+and move weights.
+Finally, verify that ``bottom_z``/``custom_height`` cover the adsorption region without overlapping
+the slab interior.
 
 Common pitfalls
 ---------------

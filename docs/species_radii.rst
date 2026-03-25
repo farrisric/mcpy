@@ -3,6 +3,10 @@ Calculating `species_radii`
 
 This page describes a practical way to choose `species_radii` for GCMC free-volume estimation in `mcpy`.
 
+The exclusion radii defined by `species_radii` determine how Monte Carlo sample points are
+classified as occupied vs free, which directly sets the accessible insertion volume
+``V_free`` used by GCMC acceptance terms.
+
 Idea
 ----
 
@@ -11,9 +15,13 @@ For each relevant element pair, sample multiple starting geometries, relax, and 
 
 Free-volume estimation in the custom insertion cell
 -----------------------------------------------------
-In `mcpy`, the accessible/free volume used inside Grand Canonical Monte Carlo (GCMC) acceptance criteria is estimated in a *custom insertion cell* (see `mcpy.cell.CustomCell`).
+In `mcpy`, the accessible/free volume used inside Grand Canonical Monte Carlo (GCMC) acceptance criteria
+is estimated in a *custom insertion cell* (see `mcpy.cell.CustomCell`).
 
-The idea is to Monte Carlo sample random points uniformly in the cell and mark a point as *occupied* if it falls within the exclusion sphere of any atom. Exclusion spheres are controlled by `species_radii`, i.e. an element-wise mapping from chemical species to an exclusion radius.
+Monte Carlo sampling draws random points uniformly in the insertion cell. A sampled point is
+classified as *occupied* if it lies inside the exclusion sphere of at least one atom. The
+exclusion spheres are defined by `species_radii` (an element-wise mapping from chemical
+species to an exclusion radius).
 
 Let :math:`V_cell` be the cell volume and :math:`N_MC` the number of Monte Carlo sample points. For each random point :math:`\mathbf{x}_k`, define an indicator
 
@@ -81,6 +89,18 @@ Using `utils/compute_radii.py`
 - relaxes each trial structure with your MACE model,
 - stores insertion and relaxed nearest-neighbor distances in `*.npy`,
 - and writes a histogram/KDE figure (`dist_hist.png`) to identify representative relaxed distances.
+
+Inputs / Outputs
+~~~~~~~~~~~~~~~~~
+Input:
+
+- A path to your trained MACE model (passed as the single command-line argument).
+
+Outputs (for each inserted species):
+
+- `<species>_distances.npy`: pairs of ``(d_insertion, d_relaxed)`` nearest-neighbor distances.
+- `dist_hist.png`: histogram/KDE plot used to pick a conservative exclusion distance.
+- `insertion.log`: logging of insertion/relaxation progress.
 
 Configure the script
 ~~~~~~~~~~~~~~~~~~~~

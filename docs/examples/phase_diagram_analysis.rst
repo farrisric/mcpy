@@ -4,6 +4,9 @@ Phase diagram analysis from relaxed trajectories
 This example shows how to analyze relaxed structures and construct a phase-diagram plot
 using the utility function in `utils/phase_diagram.py`.
 
+The script evaluates the phase stability of each relaxed frame as a function of the oxygen
+chemical potential ``\\Delta\\mu_O`` and selects the lowest-energy structure across the sweep.
+
 Thermodynamic model (from the thesis)
 --------------------------------------
 For an oxidized configuration at given oxygen chemical potential, the thesis uses the oxygen-dependent formation Gibbs energy.
@@ -67,6 +70,24 @@ Import from `utils`
    print("Transition points (delta mu_O):", result["transitions_delta_mu_o"])
    print("Stable configuration indices:", result["stable_conf_idx"])
    print("Saved plot:", result["plot_path"])
+
+Inputs and outputs
+~~~~~~~~~~~~~~~~~~~
+Inputs:
+
+- `trajectory_path`: path to an ASE-readable trajectory (e.g. ``.xyz``) containing the
+  relaxed structures you want to classify.
+- `idx_ref`: reference frame index used to define ``\\gamma_{\\mathrm{ref}}`` (a constant energy
+  offset that shifts the whole phase diagram line).
+- `output_plot_path`: where to save the generated phase-diagram plot.
+- `show_plot`: whether to display the plot interactively.
+
+Outputs:
+
+- `transitions_delta_mu_o`: oxygen chemical-potential offsets where the stable phase changes.
+- `stable_conf_idx`: the index of the lowest-energy configuration at each ``\\Delta\\mu_O`` bin.
+- `phase_oxide_ratios`: a per-phase oxide ratio used for coloring.
+- `plot_path`: path to the saved figure.
 
 What this function does
 -----------------------
