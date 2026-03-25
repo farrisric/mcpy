@@ -28,6 +28,26 @@ Canonical Monte Carlo ensemble (fixed composition, fixed temperature).
 It performs trial mutations and accepts/rejects them with a Metropolis criterion based on energy
 change and temperature.
 
+Canonical ensemble equations (NVT)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For a configuration ``i`` with energy ``E_i``, the canonical Boltzmann probability is
+
+.. math::
+
+   P_i = \\frac{e^{-\\beta E_i}}{Z},
+
+with inverse temperature ``\\beta = 1/(k_B T)`` and partition function
+
+.. math::
+
+   Z = \\sum_j e^{-\\beta E_j}.
+
+When generating a trial move from state ``i`` to ``j``, the Metropolis acceptance probability is
+
+.. math::
+
+   P_{ij}^{\\mathrm{acc}} = \\min\\left(1, e^{-\\beta (E_j - E_i)}\\right).
+
 Typical use case: structural optimization/sampling at fixed stoichiometry.
 
 
@@ -43,6 +63,36 @@ This is the core class for insertion/deletion sampling controlled by:
 - and a `MoveSelector` with trial moves.
 
 Typical use case: adsorption/desorption equilibria and composition changes under given `mu, T`.
+
+Grand canonical ensemble equations (GCMC)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In GCMC, the number of atoms can fluctuate while sampling a reservoir with fixed chemical potentials
+``\\mu``. Number-changing moves are accepted with different probabilities for deletion and insertion.
+
+Deletion ``(N \\rightarrow N-1)``:
+
+.. math::
+
+   P_{ij}^{N \\rightarrow N-1} =
+   \\min\\left(1, \\frac{N\\Lambda^3}{zV}
+   e^{-\\beta (E_j - E_i)}\\right).
+
+Insertion ``(N \\rightarrow N+1)``:
+
+.. math::
+
+   P_{ij}^{N \\rightarrow N+1} =
+   \\min\\left(1, \\frac{zV}{(N+1)\\Lambda^3}
+   e^{-\\beta (E_j - E_i)}\\right).
+
+Here ``\\beta = 1/(k_B T)``, ``z = e^{\\beta \\mu}``, and ``\\Lambda`` is the thermal de Broglie wavelength:
+
+.. math::
+
+   \\Lambda = \\frac{h}{\\sqrt{2\\pi m k_B T}}.
+
+In ``mcpy``, the geometric ``V`` is replaced by the accessible/free volume estimated from the
+configured insertion cell (via `species_radii` and Monte Carlo sampling in the cell object).
 
 .. code-block:: python
 
@@ -111,6 +161,34 @@ Two parameters are especially important:
 
 In relaxation-heavy runs, accurate free-volume estimates are especially useful because they reduce
 wasted trial attempts and help the simulation reach stable acceptance behavior faster.
+
+Free-volume Monte Carlo estimate (using `species_radii`)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For GCMC insertion/deletion, the accessible/free volume ``V_free`` used in acceptance criteria is
+estimated by Monte Carlo sampling inside the configured insertion cell.
+
+Let ``V_cell`` be the geometric volume of the insertion cell and ``N_MC`` the number of random
+sample points ``\\mathbf{x}_k``. For each sample point, define an occupancy indicator based on the
+exclusion sphere radii ``r_{\\mathrm{species}(a)}``:
+
+.. math::
+
+   I_k =
+   \\begin{cases}
+   1, & \\exists\\, a\\ \\text{such that}\\ \\|\\mathbf{x}_k-\\mathbf{r}_a\\|^2 \\le r_{\\mathrm{species}(a)}^2,\\\\
+   0, & \\text{otherwise.}
+   \\end{cases}
+
+The occupied fraction and free volume are then
+
+.. math::
+
+   f_{\\mathrm{occ}} = \\frac{1}{N_{\\mathrm{MC}}}\\sum_{k=1}^{N_{\\mathrm{MC}}} I_k,
+   \\qquad
+   V_{\\mathrm{free}} = V_{\\mathrm{cell}}\\,(1 - f_{\\mathrm{occ}}).
+
+In practice, this ``V_free`` replaces the geometric ``V`` in the GCMC insertion/deletion
+acceptance equations.
 
 
 Quick selection guide
