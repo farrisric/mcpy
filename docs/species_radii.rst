@@ -9,6 +9,40 @@ Idea
 Choose radii from relaxed atomistic configurations so that insertion exclusion distances reflect your interaction model.
 For each relevant element pair, sample multiple starting geometries, relax, and measure the minimum stable interatomic distance.
 
+Free-volume estimation in the custom insertion cell
+-----------------------------------------------------
+In `mcpy`, the accessible/free volume used inside Grand Canonical Monte Carlo (GCMC) acceptance criteria is estimated in a *custom insertion cell* (see `mcpy.cell.CustomCell`).
+
+The idea is to Monte Carlo sample random points uniformly in the cell and mark a point as *occupied* if it falls within the exclusion sphere of any atom. Exclusion spheres are controlled by `species_radii`, i.e. an element-wise mapping from chemical species to an exclusion radius.
+
+Let ``V_cell`` be the cell volume and ``N_MC`` be the number of Monte Carlo sample points. For each random point ``\\mathbf{x}_k``, define an indicator
+
+.. math::
+
+   I_k =
+   \\begin{cases}
+   1, & \\exists\\, a\\ \\text{such that}\\ \\|\\mathbf{x}_k-\\mathbf{r}_a\\|^2 \\le r_{\\mathrm{species}(a)}^2,\\\\
+   0, & \\text{otherwise.}
+   \\end{cases}
+
+Then the occupied fraction and free volume are
+
+.. math::
+
+   f_{\\mathrm{occ}} = \\frac{1}{N_{\\mathrm{MC}}}\\sum_{k=1}^{N_{\\mathrm{MC}}} I_k,
+   \\qquad
+   V_{\\mathrm{free}} = V_{\\mathrm{cell}}\\,(1 - f_{\\mathrm{occ}}).
+
+Finally, this ``V_free`` is used in the place of the geometric ``V`` when computing the GCMC insertion/deletion acceptance probabilities (see the equations in :doc:`examples`).
+
+Insertion region geometry (how the “cell” is chosen)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In the thesis, the insertion region is selected to restrict sampling to chemically relevant spatial regions:
+
+Surface slabs: the insertion region is a sub-volume that spans the full ``x`` and ``y`` dimensions of the simulation cell and a finite thickness along ``z`` (e.g. a top slab subregion of height ``\\sim 5.5\\ \\AA``).
+
+Nanoparticles: each nanoparticle is centered in a spherical insertion region chosen to enforce a vacuum gap (e.g. ``\\sim 3\\ \\AA``) between the outermost particle atom and the insertion boundary.
+
 Example: O on Ag surface
 ------------------------
 
@@ -37,32 +71,46 @@ Common choices are:
 
 In all cases, validate acceptance behavior and free-volume stability on short pilot runs before long production sampling.
 
-Reference implementation sketch
--------------------------------
+Using `utils/compute_radii.py`
+------------------------------
+
+`mcpy` already includes a ready-to-use script at `utils/compute_radii.py` that automates this workflow:
+
+- builds an FCC(111) metal slab,
+- inserts trial atoms many times in a custom insertion cell,
+- relaxes each trial structure with your MACE model,
+- stores insertion and relaxed nearest-neighbor distances in `*.npy`,
+- and writes a histogram/KDE figure (`dist_hist.png`) to identify representative relaxed distances.
+
+Configure the script
+~~~~~~~~~~~~~~~~~~~~
+
+In `utils/compute_radii.py`, set the key parameters:
+
+- `metal_species` (for example `Ag`),
+- `gas_species` (for example `O`),
+- `lattice_param`,
+- `cell_bottom` and `cell_height`,
+- `n_trials`,
+- and relaxation settings (`relax_max_steps`, `relax_fmax`).
+
+Run the script
+~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   python utils/compute_radii.py /path/to/your_mace_model.model
+
+Interpretation for `species_radii`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For O on Ag, inspect the relaxed O-Ag distance distribution (`O_distances.npy` and `dist_hist.png`) and select a conservative minimum stable O-Ag distance from your relaxed trials.
+
+Then define `species_radii` with your chosen convention, for example:
 
 .. code-block:: python
 
-   import numpy as np
+   species_radii = {"Ag": d_min_O_Ag, "O": 0.0}
 
-   def min_pair_distance(atoms, a_symbol, b_symbol):
-       idx_a = [i for i, s in enumerate(atoms.get_chemical_symbols()) if s == a_symbol]
-       idx_b = [i for i, s in enumerate(atoms.get_chemical_symbols()) if s == b_symbol]
-       if not idx_a or not idx_b:
-           raise ValueError(f"Missing species: {a_symbol} or {b_symbol}")
-
-       dmin = np.inf
-       for i in idx_a:
-           for j in idx_b:
-               if i == j:
-                   continue
-               d = atoms.get_distance(i, j, mic=True)
-               if d < dmin:
-                   dmin = d
-       return float(dmin)
-
-
-   # After generating and relaxing many O-on-Ag configurations:
-   # d_values = [min_pair_distance(relaxed_atoms_k, "O", "Ag") for k in configs]
-   # d_omin_ag = min(d_values)
-   # species_radii = {"Ag": d_omin_ag, "O": 0.0}
+This keeps the same physical calibration method used by the script while matching the element-wise format expected by `mcpy`.
 
