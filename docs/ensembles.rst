@@ -69,7 +69,7 @@ Grand canonical ensemble equations (GCMC)
 In GCMC, the number of atoms can fluctuate while sampling a reservoir with fixed chemical potentials
 ``\mu``. Number-changing moves are accepted with different probabilities for deletion and insertion.
 
-Deletion ``(N \rightarrow N-1)``:
+Deletion :math:`(N \rightarrow N-1)`:
 
 .. math::
 
@@ -77,7 +77,7 @@ Deletion ``(N \rightarrow N-1)``:
    \min\left(1, \frac{N\Lambda^3}{zV}
    e^{-\beta (E_j - E_i)}\right).
 
-Insertion ``(N \rightarrow N+1)``:
+Insertion :math:`(N \rightarrow N+1)`:
 
 .. math::
 
