@@ -10,7 +10,7 @@ Implemented ensembles
 `BaseEnsemble`
 ~~~~~~~~~~~~~~
 
-Abstract parent class used by concrete ensembles.
+Provides shared Monte Carlo infrastructure used by all concrete ensembles.
 It provides shared infrastructure such as:
 
 - atom/cell/calculator storage,
@@ -24,7 +24,7 @@ You usually do not instantiate this class directly.
 `CanonicalEnsemble`
 ~~~~~~~~~~~~~~~~~~~
 
-Canonical Monte Carlo ensemble (fixed composition, fixed temperature).
+Samples the canonical (NVT) distribution at fixed composition and fixed physical temperature.
 It performs trial mutations and accepts/rejects them with a Metropolis criterion based on energy
 change and temperature.
 
@@ -54,7 +54,7 @@ Typical use case: structural optimization/sampling at fixed stoichiometry.
 `GrandCanonicalEnsemble`
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Grand Canonical Monte Carlo (GCMC) ensemble (variable composition).
+Samples adsorption/desorption equilibria where the number of selected species fluctuates under reservoir chemical potentials.
 This is the core class for insertion/deletion sampling controlled by:
 
 - chemical potentials `mu`,
@@ -111,11 +111,32 @@ configured insertion cell (via `species_radii` and Monte Carlo sampling in the c
    )
    gcmc.run(steps=10000)
 
+Inputs / Outputs (statistical meaning)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Inputs:
+
+- `mu`: chemical potentials for each species. They bias insertion vs deletion so the
+  selected species number fluctuates in equilibrium.
+- `temperature`: physical temperature. It sets :math:`\\beta = 1/(k_B T)` in the
+  Metropolis factors.
+- `cells`: cell objects that define the insertion/deletion region and provide the accessible
+  free volume estimate ``V_free`` used in the acceptance rules.
+- `species`: which chemical symbols are allowed to change via the move set.
+- `move_selector`: collection of trial moves (insertion, deletion, lateral moves, …) and their
+  relative proposal weights.
+
+Outputs:
+
+- The ensemble evolves the internal configuration through accept/reject decisions.
+- A trajectory file is written to `traj_file` on `trajectory_write_interval` steps.
+- A text output file is written to `outfile` on `outfile_write_interval` steps (including
+  energy and acceptance ratios per move type).
+
 
 `ReplicaExchange`
 ~~~~~~~~~~~~~~~~~
 
-Replica-exchange driver for GCMC simulations across MPI ranks.
+Improves sampling by exchanging GCMC states between replicas across MPI ranks.
 It manages multiple replicas (typically at different temperatures or chemical potentials) and
 attempts periodic exchanges between neighboring replicas to improve sampling.
 
@@ -132,35 +153,36 @@ In practice, GCMC workflows are often run in two styles:
 
 **Without relaxation (pure MC acceptance on trial structures)**
 
-- You attempt moves (for example insertion/deletion/displacement),
-- evaluate the trial energy directly,
-- and accept/reject from the ensemble criterion.
+- Propose a trial configuration (insertion/deletion/displacement, …).
+- Evaluate the trial energy and accept/reject using the ensemble criterion.
 
 This is the fastest per-step workflow and is often used for broad screening.
-For insertion/deletion moves, free volume is still important because it enters acceptance terms.
+For insertion/deletion moves, free volume still matters because it enters the acceptance terms.
 
 **With relaxation (MC + local structural equilibration)**
 
-- After a trial move (or after selected intervals), you perform a short relaxation step
-  (for example a local optimizer run or short MD-like perturbation),
-- then use the relaxed trial structure for acceptance/rejection.
+- After proposing a trial configuration, relax it briefly
+  (for example with a local optimizer or a short MD-like perturbation),
+- then accept/reject using the relaxed energy.
 
-This usually gives more physically equilibrated configurations and can improve convergence quality,
-but each step is more expensive.
+Relaxation reduces sensitivity to unphysical trial overlaps, but each step costs extra compute.
 
 Free volume, `species_radii`, and `mc_sample_points`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For GCMC insertion/deletion, cell objects estimate accessible free volume using Monte Carlo sampling.
-Two parameters are especially important:
+Insertion/deletion acceptance needs an estimate of how much of the insertion region is
+actually available (not excluded by nearby atoms).
+
+In `mcpy`, cell objects compute that free volume with a Monte Carlo estimator. Two parameters
+are especially important:
 
 - `species_radii`: defines atomic exclusion spheres used to classify sampled points as occupied/free.
   Realistic radii improve free-volume estimates and reduce unphysical insertion statistics.
 - `mc_sample_points`: number of random points used in the free-volume Monte Carlo estimate.
-  More points increase accuracy (lower statistical noise), but increase computational cost.
+  More points reduce statistical noise, but increase computational cost.
 
-In relaxation-heavy runs, accurate free-volume estimates are especially useful because they reduce
-wasted trial attempts and help the simulation reach stable acceptance behavior faster.
+With relaxation-heavy move sets, better free-volume estimates reduce wasted insertions and help
+the simulation reach stable acceptance behavior faster.
 
 Free-volume Monte Carlo estimate (using `species_radii`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
