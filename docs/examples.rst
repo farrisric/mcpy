@@ -11,13 +11,13 @@ The examples rely on a shared set of theoretical ingredients (acceptance criteri
 Monte Carlo acceptance (Basin Hopping and Metropolis)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For a generic move from state ``i`` to ``j``, the Basin Hopping (BH) acceptance probability is
+For a generic move from state :math:`i` to :math:`j`, the Basin Hopping (BH) acceptance probability is
 
 .. math::
 
    P_{ij}^{\\text{acc}} = \\min\\left(1, e^{-\\beta (E_j - E_i)}\\right),
 
-with ``\\beta = 1/(k_B T)`` where ``T`` is an *effective* optimization temperature (not a physical thermodynamic temperature).
+with :math:`\beta = 1/(k_B T)` where :math:`T` is an *effective* optimization temperature (not a physical thermodynamic temperature).
 
 The Metropolis Monte Carlo (MC) acceptance rule has the same functional form:
 
@@ -25,14 +25,14 @@ The Metropolis Monte Carlo (MC) acceptance rule has the same functional form:
 
    P_{ij}^{\\text{acc}} = \\min\\left(1, e^{-\\beta (E_j - E_i)}\\right),
 
-but now ``T`` is a physical temperature that controls sampling of the canonical ensemble.
+but now :math:`T` is a physical temperature that controls sampling of the canonical ensemble.
 
 Grand Canonical Monte Carlo (GCMC) insertion and deletion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In a grand-canonical ensemble, number-changing moves are accepted with different acceptance probabilities for deletion and insertion:
 
-Deletion ``(N \\rightarrow N-1)``:
+Deletion :math:`(N \rightarrow N-1)`:
 
 .. math::
 
@@ -40,7 +40,7 @@ Deletion ``(N \\rightarrow N-1)``:
    \\min\\left(1, \\frac{N \\Lambda^3}{z V}
    \\exp\\left[-\\beta (E_j - E_i)\\right]\\right),
 
-Insertion ``(N \\rightarrow N+1)``:
+Insertion :math:`(N \rightarrow N+1)`:
 
 .. math::
 
@@ -48,7 +48,7 @@ Insertion ``(N \\rightarrow N+1)``:
    \\min\\left(1, \\frac{z V}{(N+1) \\Lambda^3}
    \\exp\\left[-\\beta (E_j - E_i)\\right]\\right),
 
-where ``z = exp(\\beta \\mu)``, ``\\Lambda = h / \\sqrt{2\\pi m k_B T}`` is the thermal de Broglie wavelength, and ``V`` is replaced by the computed accessible/free volume for insertion (see :doc:`species_radii`).
+where :math:`z = \exp(\beta \mu)`, :math:`\Lambda = h / \sqrt{2\pi m k_B T}` is the thermal de Broglie wavelength, and :math:`V` is replaced by the computed accessible/free volume for insertion (see :doc:`species_radii`).
 
 Phase-diagram thermodynamics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -60,7 +60,7 @@ For oxygen-dependent surface phase stability, the surface Gibbs free energy is w
    \\gamma = \\frac{E - n_{\\mathrm{Ag}}\\mu_{\\mathrm{Ag}} - n_{\\mathrm{O}}\\mu_{\\mathrm{O}}}{A}
    - \\gamma_{\\mathrm{ref}},
 
-with chemical potential ``\\mu_{\\mathrm{O}}(T,p)`` expressed as
+with chemical potential :math:`\mu_{\mathrm{O}}(T,p)` expressed as
 
 .. math::
 
