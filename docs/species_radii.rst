@@ -15,7 +15,7 @@ In `mcpy`, the accessible/free volume used inside Grand Canonical Monte Carlo (G
 
 The idea is to Monte Carlo sample random points uniformly in the cell and mark a point as *occupied* if it falls within the exclusion sphere of any atom. Exclusion spheres are controlled by `species_radii`, i.e. an element-wise mapping from chemical species to an exclusion radius.
 
-Let ``V_cell`` be the cell volume and ``N_MC`` be the number of Monte Carlo sample points. For each random point ``\\mathbf{x}_k``, define an indicator
+Let :math:`V_cell` be the cell volume and :math:`N_MC` the number of Monte Carlo sample points. For each random point :math:`\mathbf{x}_k`, define an indicator
 
 .. math::
 
@@ -33,15 +33,15 @@ Then the occupied fraction and free volume are
    \\qquad
    V_{\\mathrm{free}} = V_{\\mathrm{cell}}\\,(1 - f_{\\mathrm{occ}}).
 
-Finally, this ``V_free`` is used in the place of the geometric ``V`` when computing the GCMC insertion/deletion acceptance probabilities (see the equations in :doc:`examples`).
+Finally, this :math:`V_free` is used in the place of the geometric :math:`V` when computing the GCMC insertion/deletion acceptance probabilities (see the equations in :doc:`examples`).
 
 Insertion region geometry (how the “cell” is chosen)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 In the thesis, the insertion region is selected to restrict sampling to chemically relevant spatial regions:
 
-Surface slabs: the insertion region is a sub-volume that spans the full ``x`` and ``y`` dimensions of the simulation cell and a finite thickness along ``z`` (e.g. a top slab subregion of height ``\\sim 5.5\\ \\AA``).
+Surface slabs: the insertion region is a sub-volume that spans the full :math:`x` and :math:`y` dimensions of the simulation cell and a finite thickness along :math:`z` (e.g. a top slab subregion of height :math:`\sim 5.5\ \AA`).
 
-Nanoparticles: each nanoparticle is centered in a spherical insertion region chosen to enforce a vacuum gap (e.g. ``\\sim 3\\ \\AA``) between the outermost particle atom and the insertion boundary.
+Nanoparticles: each nanoparticle is centered in a spherical insertion region chosen to enforce a vacuum gap (e.g. :math:`\sim 3\ \AA`) between the outermost particle atom and the insertion boundary.
 
 Example: O on Ag surface
 ------------------------

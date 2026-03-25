@@ -7,7 +7,7 @@ using the utility function in `utils/phase_diagram.py`.
 Thermodynamic model (from the thesis)
 --------------------------------------
 For an oxidized configuration at given oxygen chemical potential, the thesis uses the oxygen-dependent formation Gibbs energy.
-For surfaces, this is written in terms of the surface Gibbs energy ``\\gamma``:
+For surfaces, this is written in terms of the surface Gibbs energy :math:`\gamma`:
 
 .. math::
 
@@ -15,10 +15,10 @@ For surfaces, this is written in terms of the surface Gibbs energy ``\\gamma``:
    \\frac{E - n_{\\mathrm{Ag}}\\mu_{\\mathrm{Ag}} - n_{\\mathrm{O}}\\mu_{\\mathrm{O}}}{A}
    - \\gamma_{\\mathrm{ref}},
 
-where ``E`` is the DFT energy of the relaxed configuration, ``n_{\\mathrm{Ag}}`` and ``n_{\\mathrm{O}}`` are atom counts,
-and ``A`` is the surface area.
+where :math:`E` is the DFT energy of the relaxed configuration, :math:`n_{\mathrm{Ag}}` and
+:math:`n_{\mathrm{O}}` are atom counts, and :math:`A` is the surface area.
 
-The oxygen chemical potential ``\\mu_{\\mathrm{O}}(T,p)`` is expressed as
+The oxygen chemical potential :math:`\mu_{\mathrm{O}}(T,p)` is expressed as
 
 .. math::
 
@@ -27,7 +27,7 @@ The oxygen chemical potential ``\\mu_{\\mathrm{O}}(T,p)`` is expressed as
    + \\Delta \\mu_{\\mathrm{O}}(T,p)
    + \\frac{1}{2} \\ln\\left(\\frac{p}{p_0}\\right).
 
-To correct DFT overbinding of O$_2$, the thesis replaces ``\\tfrac{1}{2}E^{\\mathrm{DFT}}_{\\mathrm{O}_2}`` using the experimental formation enthalpy of the corresponding oxide:
+To correct DFT overbinding of O$_2$, the thesis replaces :math:`\tfrac{1}{2}E^{\mathrm{DFT}}_{\mathrm{O}_2}` using the experimental formation enthalpy of the corresponding oxide:
 
 .. math::
 
@@ -40,14 +40,14 @@ In the code, this correction is embedded in ``e_o2`` (see ``mcpy/utils/phase_dia
 
 How `utils/phase_diagram.py` finds stable phases
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-The function computes ``\\gamma(\\Delta\\mu_O)`` for each relaxed structure and selects the minimum at each chemical potential value.
+The function computes :math:`\gamma(\Delta\mu_O)` for each relaxed structure and selects the minimum at each chemical potential value.
 Concretely, it performs the following loop:
 
 1. Load all frames from ``relaxed_structures.xyz``.
-2. Define a grid of oxygen chemical-potential offsets ``\\Delta\\mu_O`` (``delta_mu_o`` in the code).
-3. For each structure ``conf`` and each ``\\Delta\\mu_O``, compute the surface Gibbs energy density ``\\gamma`` using the DFT energy, atom counts, the corrected oxygen reference energy ``e_o2``, and the surface area ``A``.
-   In the implementation, this is done by ``free_en(...)`` and then shifted so that the reference structure at ``idx_ref`` defines ``\\gamma_{\\mathrm{ref}}``.
-4. For each ``\\Delta\\mu_O`` bin, select the index of the stable phase as ``argmin`` of ``\\gamma`` over all configurations.
+2. Define a grid of oxygen chemical-potential offsets :math:`\Delta\mu_O` (``delta_mu_o`` in the code).
+3. For each structure ``conf`` and each :math:`\Delta\mu_O`, compute the surface Gibbs energy density :math:`\gamma` using the DFT energy, atom counts, the corrected oxygen reference energy ``e_o2``, and the surface area :math:`A`.
+   In the implementation, this is done by ``free_en(...)`` and then shifted so that the reference structure at ``idx_ref`` defines :math:`\gamma_{\mathrm{ref}}`.
+4. For each :math:`\Delta\mu_O` bin, select the index of the stable phase as ``argmin`` of :math:`\gamma` over all configurations.
 5. Detect transition points when the stable phase index changes between neighboring bins; these are returned as ``transitions_delta_mu_o``.
 
 Import from `utils`
