@@ -30,19 +30,19 @@ change and temperature.
 
 Canonical ensemble equations (NVT)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For a configuration ``i`` with energy ``E_i``, the canonical Boltzmann probability is
+For a configuration :math:`i` with energy :math:`E_i`, the canonical Boltzmann probability is
 
 .. math::
 
    P_i = \frac{e^{-\beta E_i}}{Z},
 
-with inverse temperature ``\beta = 1/(k_B T)`` and partition function
+with inverse temperature :math:`\beta = 1/(k_B T)` and partition function
 
 .. math::
 
    Z = \sum_j e^{-\beta E_j}.
 
-When generating a trial move from state ``i`` to ``j``, the Metropolis acceptance probability is
+When generating a trial move from state :math:`i` to :math:`j`, the Metropolis acceptance probability is
 
 .. math::
 
@@ -67,7 +67,7 @@ Typical use case: adsorption/desorption equilibria and composition changes under
 Grand canonical ensemble equations (GCMC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 In GCMC, the number of atoms can fluctuate while sampling a reservoir with fixed chemical potentials
-``\mu``. Number-changing moves are accepted with different probabilities for deletion and insertion.
+:math:`\mu`. Number-changing moves are accepted with different probabilities for deletion and insertion.
 
 Deletion :math:`(N \rightarrow N-1)`:
 
@@ -85,13 +85,13 @@ Insertion :math:`(N \rightarrow N+1)`:
    \min\left(1, \frac{zV}{(N+1)\Lambda^3}
    e^{-\beta (E_j - E_i)}\right).
 
-Here ``\beta = 1/(k_B T)``, ``z = e^{\beta \mu}``, and ``\Lambda`` is the thermal de Broglie wavelength:
+Here :math:`\beta = 1/(k_B T)`, :math:`z = e^{\beta \mu}`, and :math:`\Lambda` is the thermal de Broglie wavelength:
 
 .. math::
 
    \Lambda = \frac{h}{\sqrt{2\pi m k_B T}}.
 
-In ``mcpy``, the geometric ``V`` is replaced by the accessible/free volume estimated from the
+In ``mcpy``, the geometric :math:`V` is replaced by the accessible/free volume estimated from the
 configured insertion cell (via `species_radii` and Monte Carlo sampling in the cell object).
 
 .. code-block:: python
@@ -164,12 +164,13 @@ wasted trial attempts and help the simulation reach stable acceptance behavior f
 
 Free-volume Monte Carlo estimate (using `species_radii`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For GCMC insertion/deletion, the accessible/free volume ``V_free`` used in acceptance criteria is
+For GCMC insertion/deletion, the accessible/free volume :math:`V_{\mathrm{free}}` used in acceptance criteria is
 estimated by Monte Carlo sampling inside the configured insertion cell.
 
-Let ``V_cell`` be the geometric volume of the insertion cell and ``N_MC`` the number of random
-sample points ``\mathbf{x}_k``. For each sample point, define an occupancy indicator based on the
-exclusion sphere radii ``r_{\mathrm{species}(a)}``:
+Let :math:`V_{\mathrm{cell}}` be the geometric volume of the insertion cell and
+:math:`N_{\mathrm{MC}}` the number of random sample points :math:`\mathbf{x}_k`.
+For each sample point, define an occupancy indicator based on the exclusion sphere radii
+:math:`r_{\mathrm{species}(a)}`:
 
 .. math::
 
@@ -187,7 +188,7 @@ The occupied fraction and free volume are then
    \qquad
    V_{\mathrm{free}} = V_{\mathrm{cell}}\,(1 - f_{\mathrm{occ}}).
 
-In practice, this ``V_free`` replaces the geometric ``V`` in the GCMC insertion/deletion
+In practice, this :math:`V_{\mathrm{free}}` replaces the geometric :math:`V` in the GCMC insertion/deletion
 acceptance equations.
 
 
