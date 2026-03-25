@@ -15,7 +15,7 @@ For a generic move from state :math:`i` to :math:`j`, the Basin Hopping (BH) acc
 
 .. math::
 
-   P_{ij}^{\\text{acc}} = \\min\\left(1, e^{-\\beta (E_j - E_i)}\\right),
+   P_{ij}^{\mathrm{acc}} = \min\left(1, e^{-\beta (E_j - E_i)}\right),
 
 with :math:`\beta = 1/(k_B T)` where :math:`T` is an *effective* optimization temperature (not a physical thermodynamic temperature).
 
@@ -23,7 +23,7 @@ The Metropolis Monte Carlo (MC) acceptance rule has the same functional form:
 
 .. math::
 
-   P_{ij}^{\\text{acc}} = \\min\\left(1, e^{-\\beta (E_j - E_i)}\\right),
+   P_{ij}^{\mathrm{acc}} = \min\left(1, e^{-\beta (E_j - E_i)}\right),
 
 but now :math:`T` is a physical temperature that controls sampling of the canonical ensemble.
 
@@ -36,17 +36,17 @@ Deletion :math:`(N \rightarrow N-1)`:
 
 .. math::
 
-   P_{ij}^{N \\rightarrow N-1} =
-   \\min\\left(1, \\frac{N \\Lambda^3}{z V}
-   \\exp\\left[-\\beta (E_j - E_i)\\right]\\right),
+   P_{ij}^{N \rightarrow N-1} =
+   \min\left(1, \frac{N \Lambda^3}{z V}
+   \exp\left[-\beta (E_j - E_i)\right]\right),
 
 Insertion :math:`(N \rightarrow N+1)`:
 
 .. math::
 
-   P_{ij}^{N \\rightarrow N+1} =
-   \\min\\left(1, \\frac{z V}{(N+1) \\Lambda^3}
-   \\exp\\left[-\\beta (E_j - E_i)\\right]\\right),
+   P_{ij}^{N \rightarrow N+1} =
+   \min\left(1, \frac{z V}{(N+1) \Lambda^3}
+   \exp\left[-\beta (E_j - E_i)\right]\right),
 
 where :math:`z = \exp(\beta \mu)`, :math:`\Lambda = h / \sqrt{2\pi m k_B T}` is the thermal de Broglie wavelength, and :math:`V` is replaced by the computed accessible/free volume for insertion (see :doc:`species_radii`).
 
@@ -57,17 +57,17 @@ For oxygen-dependent surface phase stability, the surface Gibbs free energy is w
 
 .. math::
 
-   \\gamma = \\frac{E - n_{\\mathrm{Ag}}\\mu_{\\mathrm{Ag}} - n_{\\mathrm{O}}\\mu_{\\mathrm{O}}}{A}
-   - \\gamma_{\\mathrm{ref}},
+   \gamma = \frac{E - n_{\mathrm{Ag}}\mu_{\mathrm{Ag}} - n_{\mathrm{O}}\mu_{\mathrm{O}}}{A}
+   - \gamma_{\mathrm{ref}},
 
 with chemical potential :math:`\mu_{\mathrm{O}}(T,p)` expressed as
 
 .. math::
 
-   \\mu_{\\mathrm{O}}(T,p) =
-   \\frac{1}{2} E^{\\mathrm{DFT}}_{\\mathrm{O}_2}
-   + \\Delta \\mu_{\\mathrm{O}}(T,p)
-   + \\frac{1}{2} \\ln\\left(\\frac{p}{p_0}\\right).
+   \mu_{\mathrm{O}}(T,p) =
+   \frac{1}{2} E^{\mathrm{DFT}}_{\mathrm{O}_2}
+   + \Delta \mu_{\mathrm{O}}(T,p)
+   + \frac{1}{2} \ln\left(\frac{p}{p_0}\right).
 
 
 Canonical Monte Carlo (MC)

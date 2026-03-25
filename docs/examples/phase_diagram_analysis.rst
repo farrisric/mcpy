@@ -11,9 +11,9 @@ For surfaces, this is written in terms of the surface Gibbs energy :math:`\gamma
 
 .. math::
 
-   \\gamma =
-   \\frac{E - n_{\\mathrm{Ag}}\\mu_{\\mathrm{Ag}} - n_{\\mathrm{O}}\\mu_{\\mathrm{O}}}{A}
-   - \\gamma_{\\mathrm{ref}},
+   \gamma =
+   \frac{E - n_{\mathrm{Ag}}\mu_{\mathrm{Ag}} - n_{\mathrm{O}}\mu_{\mathrm{O}}}{A}
+   - \gamma_{\mathrm{ref}},
 
 where :math:`E` is the DFT energy of the relaxed configuration, :math:`n_{\mathrm{Ag}}` and
 :math:`n_{\mathrm{O}}` are atom counts, and :math:`A` is the surface area.
@@ -22,19 +22,19 @@ The oxygen chemical potential :math:`\mu_{\mathrm{O}}(T,p)` is expressed as
 
 .. math::
 
-   \\mu_{\\mathrm{O}}(T,p) =
-   \\frac{1}{2} E^{\\mathrm{DFT}}_{\\mathrm{O}_2}
-   + \\Delta \\mu_{\\mathrm{O}}(T,p)
-   + \\frac{1}{2} \\ln\\left(\\frac{p}{p_0}\\right).
+   \mu_{\mathrm{O}}(T,p) =
+   \frac{1}{2} E^{\mathrm{DFT}}_{\mathrm{O}_2}
+   + \Delta \mu_{\mathrm{O}}(T,p)
+   + \frac{1}{2} \ln\left(\frac{p}{p_0}\right).
 
 To correct DFT overbinding of O$_2$, the thesis replaces :math:`\tfrac{1}{2}E^{\mathrm{DFT}}_{\mathrm{O}_2}` using the experimental formation enthalpy of the corresponding oxide:
 
 .. math::
 
-   \\frac{1}{2} E^{\\mathrm{DFT}}_{\\mathrm{O}_2} =
-   E^{\\mathrm{DFT}}_{\\mathrm{Ag}_2\\mathrm{O}}
-   - 2E^{\\mathrm{DFT}}_{\\mathrm{Ag}}
-   + \\Delta H^{f}_{\\mathrm{Ag}_2\\mathrm{O}}.
+   \frac{1}{2} E^{\mathrm{DFT}}_{\mathrm{O}_2} =
+   E^{\mathrm{DFT}}_{\mathrm{Ag}_2\mathrm{O}}
+   - 2E^{\mathrm{DFT}}_{\mathrm{Ag}}
+   + \Delta H^{f}_{\mathrm{Ag}_2\mathrm{O}}.
 
 In the code, this correction is embedded in ``e_o2`` (see ``mcpy/utils/phase_diagram.py``).
 
@@ -72,8 +72,8 @@ What this function does
 -----------------------
 
 - Loads all frames from `relaxed_structures.xyz`.
-- Computes free-energy lines as a function of `\\Delta\\mu_O`.
-- Finds the lowest-energy structure at each `\\Delta\\mu_O`.
+- Computes free-energy lines as a function of :math:`\Delta\mu_O`.
+- Finds the lowest-energy structure at each :math:`\Delta\mu_O`.
 - Detects transition points between stable phases.
 - Highlights phase regions with background color bands and a color-changing stable-energy line.
 - Saves the resulting plot (`lines_phases_mace.png` by default).
