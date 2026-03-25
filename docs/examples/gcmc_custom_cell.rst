@@ -15,6 +15,14 @@ surface, improving efficiency and avoiding spurious attempts deep in the slab. T
 the accessible vertical extent. Different effective radii can be used in each cell to encode distinct
 overlap/clearance rules for Ag versus O manipulations.
 
+Relaxation-style GCMC acceptance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In dense metal systems, direct trial insertions can have low acceptance because the surrounding local
+geometry is initially unfavorable. A common remedy is to evaluate the acceptance criterion using a
+shortly relaxed version of the trial configuration (energy relaxation step; Senftle et al., 2013).
+This strategy is especially relevant when insertion/deletion is restricted to a physically constrained
+region above the surface (Wexler et al., 2019).
+
 System construction
 -------------------
 We build a periodic Ag(111) slab, fix the bottom layer, and define two ``CustomCell`` instances
