@@ -20,18 +20,18 @@ Let :math:`V_cell` be the cell volume and :math:`N_MC` the number of Monte Carlo
 .. math::
 
    I_k =
-   \\begin{cases}
-   1, & \\exists\\, a\\ \\text{such that}\\ \\|\\mathbf{x}_k-\\mathbf{r}_a\\|^2 \\le r_{\\mathrm{species}(a)}^2,\\\\
-   0, & \\text{otherwise.}
-   \\end{cases}
+   \begin{cases}
+   1, & \exists\, a\ \text{such that}\ \|\mathbf{x}_k-\mathbf{r}_a\|^2 \le r_{\mathrm{species}(a)}^2,\\
+   0, & \text{otherwise.}
+   \end{cases}
 
 Then the occupied fraction and free volume are
 
 .. math::
 
-   f_{\\mathrm{occ}} = \\frac{1}{N_{\\mathrm{MC}}}\\sum_{k=1}^{N_{\\mathrm{MC}}} I_k,
-   \\qquad
-   V_{\\mathrm{free}} = V_{\\mathrm{cell}}\\,(1 - f_{\\mathrm{occ}}).
+   f_{\mathrm{occ}} = \frac{1}{N_{\mathrm{MC}}}\sum_{k=1}^{N_{\mathrm{MC}}} I_k,
+   \qquad
+   V_{\mathrm{free}} = V_{\mathrm{cell}}\,(1 - f_{\mathrm{occ}}).
 
 Finally, this :math:`V_free` is used in the place of the geometric :math:`V` when computing the GCMC insertion/deletion acceptance probabilities (see the equations in :doc:`examples`).
 
