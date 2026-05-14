@@ -238,10 +238,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         """
         self.logger.info("\nSimulation Complete.")
         self.logger.info("Final Statistics:")
-        self.logger.info(f"Total Moves Attempted: {self.n_moves}")
-        self.logger.info(f"Acceptance Ratios: {self.count_acceptance}")
+        self.logger.info(f"Total Steps: {self._step}")
         self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
-        self._initialized = False  # Reset the initialization flag
+        self._initialized = False
 
     def _run(self) -> None:
         """
