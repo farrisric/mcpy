@@ -110,14 +110,14 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         acceptance_ratios = self.move_selector.get_acceptance_ration()
         self.move_selector.reset_counters()
         try:
-            with open(self._outfile, 'a') as outfile:
-                outfile.write("{:<10} {:<10} {:<15.6f} {:<20}\n".format(
-                    self._step,
-                    self.n_atoms,
-                    self.E_old,
-                    ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
-                              else "N/A" for ratio in acceptance_ratios)
-                ))
+            self._outfile_handle.write("{:<10} {:<10} {:<15.6f} {:<20}\n".format(
+                self._step,
+                self.n_atoms,
+                self.E_old,
+                ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
+                          else "N/A" for ratio in acceptance_ratios)
+            ))
+            self._outfile_handle.flush()
         except IOError as e:
             self.logger.error(f"Error writing to file {self._outfile}: {e}")
 
@@ -241,6 +241,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.logger.info(f"Total Steps: {self._step}")
         self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
         self._initialized = False
+        self.close_files()
 
     def _run(self) -> None:
         """

@@ -1,9 +1,10 @@
 from ase import Atoms
 import numpy as np
-from sklearn.metrics import pairwise_distances
 
 from .base_move import BaseMove
 from ..cell import Cell
+
+_MAX_INSERT_ATTEMPTS = 1000
 
 
 class InsertionMove(BaseMove):
@@ -29,12 +30,13 @@ class InsertionMove(BaseMove):
             atoms_new, self.cell.get_species())].positions
 
         insert_position = self.cell.get_random_point()
-        min_dist = np.min(pairwise_distances(
-            insert_position.reshape(1, -1), positions_bias).flatten())
 
-        while min_dist < self.min_insert:
-            insert_position = self.cell.get_random_point()
-            min_dist = np.min(pairwise_distances(
-                insert_position.reshape(1, -1), positions_bias).flatten())
+        if self.min_insert is not None and len(positions_bias) > 0:
+            for _ in range(_MAX_INSERT_ATTEMPTS):
+                dists = np.linalg.norm(positions_bias - insert_position, axis=1)
+                if dists.min() >= self.min_insert:
+                    break
+                insert_position = self.cell.get_random_point()
+
         atoms_new += Atoms(selected_species, positions=[insert_position])
         return atoms_new, 1, selected_species

@@ -59,8 +59,8 @@ class BaseEnsemble(ABC):
         self._outfile = outfile
         self._outfile_write_interval = outfile_write_interval
         self._traj_file = traj_file
-        with open(self._traj_file, 'w') as traj_file:
-            pass
+        self._traj_handle = open(self._traj_file, 'w')
+        self._outfile_handle = None
 
         # random number generator
         if random_seed is None:
@@ -107,8 +107,12 @@ class BaseEnsemble(ABC):
             energy (float): The energy value.
         """
         try:
-            with open(self._outfile, 'a') as outfile:
-                outfile.write(f'STEP: {step} ENERGY: {energy}\n')
+            if self._outfile_handle is not None:
+                self._outfile_handle.write(f'STEP: {step} ENERGY: {energy}\n')
+                self._outfile_handle.flush()
+            else:
+                with open(self._outfile, 'a') as outfile:
+                    outfile.write(f'STEP: {step} ENERGY: {energy}\n')
         except IOError as e:
             logger.error(f"Error writing to file {self._outfile}: {e}")
 
@@ -120,9 +124,20 @@ class BaseEnsemble(ABC):
             atoms (Atoms): The atomic configuration.
         """
         try:
-            write_xyz(atoms, energy, self._traj_file)
+            write_xyz(atoms, energy, self._traj_handle)
         except IOError as e:
             logger.error(f"Error writing to trajectory file {self._traj_file}: {e}")
+
+    def close_files(self) -> None:
+        if self._traj_handle is not None:
+            self._traj_handle.close()
+            self._traj_handle = None
+        if self._outfile_handle is not None:
+            self._outfile_handle.close()
+            self._outfile_handle = None
+
+    def __del__(self):
+        self.close_files()
 
     def compute_energy(self, atoms: Atoms) -> float:
         """
@@ -141,6 +156,7 @@ class BaseEnsemble(ABC):
             with open(self._outfile, 'w') as outfile:
                 outfile.write(self.get_outfile_header())
                 outfile.write(self.get_outfile_metadata())
+            self._outfile_handle = open(self._outfile, 'a')
         except IOError as e:
             self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
             raise
@@ -169,14 +185,13 @@ class BaseEnsemble(ABC):
         return f"STEP: {self._step} ENERGY: {self.compute_energy(self._atoms):.6f}\n"
 
 
-def write_xyz(atoms, energy, filename):
+def write_xyz(atoms, energy, file_or_path):
     """
-    Write an XYZ file from an ASE Atoms object, including the cell dimensions.
-    Optimized for faster file writing using numpy.
+    Write an XYZ frame to an open file handle or a path (append mode).
 
     Args:
         atoms (ase.Atoms): The ASE Atoms object to write.
-        filename (str): The path of the XYZ file to write to.
+        file_or_path: An open writable file object or a path string.
     """
     cell = atoms.get_cell()
     positions = atoms.get_positions()
@@ -188,7 +203,13 @@ def write_xyz(atoms, energy, filename):
     cell_str = " ".join(f"{value:.8f}" for row in cell for value in row)
     cell_data = f'Lattice="{cell_str}"'
 
-    with open(filename, 'a') as xyz_file:
-        xyz_file.write(header)
-        xyz_file.write(cell_data + "\n")
-        np.savetxt(xyz_file, atom_data, fmt="%s %s %s %s")
+    if isinstance(file_or_path, str):
+        with open(file_or_path, 'a') as xyz_file:
+            xyz_file.write(header)
+            xyz_file.write(cell_data + "\n")
+            np.savetxt(xyz_file, atom_data, fmt="%s %s %s %s")
+    else:
+        file_or_path.write(header)
+        file_or_path.write(cell_data + "\n")
+        np.savetxt(file_or_path, atom_data, fmt="%s %s %s %s")
+        file_or_path.flush()

@@ -21,3 +21,10 @@ testing/
 
 # Thesis-specific references (kept local; do not commit)
 private_thesis/
+
+# JOSS submission (private)
+joss/
+
+# Claude files
+CLAUDE.md
+.claude/
