@@ -26,6 +26,8 @@ class SphericalCell(Cell):
         self.species_radii = species_radii
         self.mc_sample_points = mc_sample_points
         self.sphere_volume = (4 / 3) * np.pi * (self.radius ** 3)
+        self._cached_n_atoms = None
+        self._cached_volume = None
 
     def move_atoms_to_center(self, atoms):
         """
@@ -50,14 +52,15 @@ class SphericalCell(Cell):
 
     def get_random_point(self):
         """
-        Get a random point inside the spherical cell.
+        Get a random point uniformly distributed inside the spherical cell.
+        Uses the Marsaglia/cube-root method — no rejection sampling.
 
         :return: A numpy array representing the random point (x, y, z).
         """
-        while True:
-            random_point = self.center + (np.random.rand(3) - 0.5) * 2 * self.radius
-            if self.is_point_inside(random_point):
-                return random_point
+        direction = np.random.randn(3)
+        direction /= np.linalg.norm(direction)
+        r = self.radius * (np.random.rand() ** (1.0 / 3.0))
+        return self.center + r * direction
 
     def get_atoms_specie_inside_cell(self, atoms, specie):
         return [a.index for a in atoms if a.symbol in specie and self.is_point_inside(a.position)]
@@ -73,10 +76,16 @@ class SphericalCell(Cell):
     def calculate_volume(self, atoms):
         """
         Estimate the free volume of the spherical cell using Monte Carlo sampling.
+        Result is cached by atom count; only recomputed when insertions/deletions change N.
 
         :param atoms: ASE Atoms object.
         :return: Estimated free volume.
         """
+        n_atoms = len(atoms)
+        if self._cached_n_atoms == n_atoms and self._cached_volume is not None:
+            self.volume = self._cached_volume
+            return
+
         random_points = []
         batch_size = int(1.2 * self.mc_sample_points)
         while len(random_points) < self.mc_sample_points:
@@ -101,3 +110,5 @@ class SphericalCell(Cell):
         free_fraction = count_free / self.mc_sample_points
 
         self.volume = free_fraction * self.sphere_volume
+        self._cached_n_atoms = n_atoms
+        self._cached_volume = self.volume
