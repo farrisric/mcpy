@@ -1,57 +1,54 @@
-Cell Types
-==========
+Cells
+=====
 
-`mcpy` uses *cell objects* to define the geometric region where Monte Carlo moves are sampled and where free volume is estimated.
+Cell objects in `mcpy` define **where** Monte Carlo moves act and **how much free volume** is
+available for insertions. They are the geometric counterpart of the move set: every cell
+provides random points for insertion, classifies atoms as "inside" the active region, and
+returns the accessible volume :math:`V_{\mathrm{free}}` used by the GCMC acceptance rules
+(see :ref:`free-volume`).
 
-Available cell types are exposed from `mcpy.cell`:
+Four cell types are exported from `mcpy.cell`:
 
 .. code-block:: python
 
    from mcpy.cell import Cell, CustomCell, SphericalCell, NullCell
 
 
-Why cells matter
-----------------
+Choosing exclusion radii (`species_radii`)
+------------------------------------------
 
-In GCMC moves (especially insertion/deletion), the cell controls:
+Every non-trivial cell takes a `species_radii` argument: an element-wise dictionary of
+exclusion radii. These radii control how the free-volume Monte Carlo estimator labels each
+sampled point as occupied or free, and therefore directly determine the
+:math:`V_{\mathrm{free}}` that appears in the GCMC acceptance terms.
 
-- where random trial points are generated,
-- which atoms are considered "inside" the active MC region,
-- and the accessible/free volume used in acceptance terms.
-
-Importance of `species_radii` for convergence
----------------------------------------------
-
-Setting `species_radii` is important because free volume is estimated by excluding points that fall inside atomic spheres.
-If radii are missing or unrealistic, the free-volume term can be poorly estimated, which leads to less efficient insertion/deletion acceptance behavior.
-
-During relaxation phases of a grand-canonical run, a good free-volume estimate helps the simulation spend less time on unphysical trial moves and improves sampling efficiency.
-In practice, this usually speeds up convergence toward the equilibrium composition/structure.
-
-For this reason, always provide physically meaningful radii for the species involved in your GCMC moves.
-See :doc:`species_radii` for a practical workflow to compute these values from relaxed structures (for example, O on Ag surfaces).
-
-Importance of `mc_sample_points` for free-volume accuracy
----------------------------------------------------------
-
-`mc_sample_points` sets how many random points are used in the Monte Carlo estimate of free volume.
-The algorithm samples points in the active cell and classifies each one as free or occupied.
-
-As a rule of thumb:
-
-- more `mc_sample_points` -> lower statistical noise and higher free-volume accuracy,
-- fewer `mc_sample_points` -> faster evaluation but noisier free-volume estimates.
-
-Choose this value by balancing accuracy and runtime cost for your system size and workflow.
+The thesis underlying this library calls this quantity :math:`r_{\mathrm{relax}}` and defines
+it operationally as the position of the first maximum in the radial distribution function of
+the adsorbate around the host atoms, calibrated on relaxed structures with the *same*
+calculator used in production. Using values that are too small inflates insertion attempts
+into atomic cores; using values that are too large collapses :math:`V_{\mathrm{free}}` and
+freezes the chemistry. See :doc:`species_radii` for a complete, reproducible workflow
+(including a ready-to-use script for O on Ag) and the recommended conventions for mapping
+pair distances onto element-wise radii.
 
 
-`Cell` (base periodic simulation box)
--------------------------------------
+Sampling resolution (`mc_sample_points`)
+----------------------------------------
 
-`Cell` uses the full ASE simulation cell (`atoms.cell`) as the MC region.
-Random points are generated uniformly in fractional coordinates and mapped to Cartesian coordinates.
+`mc_sample_points` sets the number of random points used in the free-volume estimate.
+Larger values reduce statistical noise on :math:`V_{\mathrm{free}}` at the cost of one
+up-front sweep per configuration change. In practice, :math:`10^5` points is a good default
+for nanoparticle- and slab-sized systems. The cached estimate is reused until the atom count
+changes, so the cost is amortised over many trial moves of equal :math:`N`.
 
-Use this when your active region is simply the full periodic box.
+
+`Cell` -- full periodic simulation box
+--------------------------------------
+
+`Cell` uses the full ASE simulation cell (`atoms.cell`) as the active MC region. Random
+points are sampled uniformly in fractional coordinates and mapped to Cartesian space.
+
+Use this when the active region is simply the entire periodic box.
 
 .. code-block:: python
 
@@ -62,17 +59,20 @@ Use this when your active region is simply the full periodic box.
    V = cell.get_volume()
 
 
-`CustomCell` (rectangular z-slab inside the box)
-------------------------------------------------
+`CustomCell` -- rectangular sub-slab
+------------------------------------
 
-`CustomCell` defines a sub-cell with custom height and bottom position along `z`.
-This is useful for surfaces or slabs where only part of the simulation box should be sampled.
+`CustomCell` carves out a sub-volume that spans the full :math:`x` and :math:`y` extent of
+the simulation box but has a finite thickness along :math:`z`. This is the standard
+construction for surface slabs, where insertions should be limited to the topmost layers
+and a slice of vacuum above them.
 
 Key parameters:
 
-- `custom_height`: thickness of the active region,
-- `bottom_z`: starting `z` coordinate of that region,
-- `species_radii`: per-element exclusion radii for free-volume estimation.
+- `custom_height` -- thickness of the active region along :math:`z`,
+- `bottom_z` -- :math:`z`-coordinate of its lower face,
+- `species_radii` -- per-element exclusion radii,
+- `mc_sample_points` -- free-volume sampling resolution.
 
 .. code-block:: python
 
@@ -80,7 +80,7 @@ Key parameters:
 
    custom_cell = CustomCell(
        atoms,
-       custom_height=8.0,
+       custom_height=5.5,
        bottom_z=5.0,
        species_radii={"O": 0.0, "Ag": 2.947},
        mc_sample_points=100_000,
@@ -88,15 +88,19 @@ Key parameters:
    custom_cell.calculate_volume(atoms)
 
 
-`SphericalCell` (nanoparticle-centered spherical region)
---------------------------------------------------------
+`SphericalCell` -- nanoparticle-centred region
+----------------------------------------------
 
-`SphericalCell` is designed for nanoparticles.
-It recenters the structure at the origin and defines a spherical MC region with:
+`SphericalCell` is designed for finite clusters. On construction it centres the structure on
+the origin and defines a spherical active region of radius
 
-- radius = max atom distance from center + `vacuum`.
+.. math::
 
-This is typically the most natural region for finite clusters.
+   R = \max_a \|\mathbf{r}_a - \mathbf{r}_{\mathrm{c}}\| + \mathrm{vacuum},
+
+i.e. the distance from the centre to the outermost atom plus a user-specified vacuum gap.
+Insertions outside this radius are automatically rejected, so the sampling stays close to
+the particle surface without wasting moves in pure vacuum.
 
 .. code-block:: python
 
@@ -111,11 +115,12 @@ This is typically the most natural region for finite clusters.
    spherical_cell.calculate_volume(atoms)
 
 
-`NullCell` (no active region)
------------------------------
+`NullCell` -- placeholder
+-------------------------
 
-`NullCell` is a no-op cell object that returns zero volume.
-Use it when an algorithm requires a cell-like object but you intentionally do not want insertion-region behavior.
+`NullCell` is a no-op cell. Its volume is zero and it provides no insertion points. Use it
+as a placeholder where the API requires a cell-like object but no insertion region is
+needed (e.g. a pure-displacement canonical run).
 
 .. code-block:: python
 
@@ -128,7 +133,7 @@ Use it when an algorithm requires a cell-like object but you intentionally do no
 Choosing the right cell
 -----------------------
 
-- Use `Cell` for full periodic bulk-like regions.
-- Use `CustomCell` for slab/surface windows inside a periodic cell.
-- Use `SphericalCell` for nanoparticles and finite clusters.
-- Use `NullCell` as a placeholder when no physical insertion region is needed.
+- `Cell` -- bulk periodic systems where the whole box is active.
+- `CustomCell` -- slab/surface windows inside a periodic box.
+- `SphericalCell` -- isolated clusters and nanoparticles.
+- `NullCell` -- placeholder for runs that need no insertion region.

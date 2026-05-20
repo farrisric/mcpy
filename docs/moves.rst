@@ -1,94 +1,103 @@
-Moves and Operations
-====================
+Moves
+=====
 
-In `mcpy`, a *move* (operation) proposes a new atomic configuration.
-The ensemble then accepts or rejects that proposal with the appropriate acceptance rule.
+A *move* in `mcpy` proposes a new atomic configuration. The ensemble then evaluates the
+corresponding acceptance rule -- Metropolis for number-conserving moves, de-Broglie for
+insertions and deletions -- and either commits the new configuration or rolls back.
 
+Every move follows the `BaseMove` interface and exposes:
 
-Core move interface
--------------------
+- `do_trial_move(atoms)` -- propose a trial structure (and, for number-changing moves,
+  signal the change via `delta_particles`),
+- volume hooks via the attached cell (`get_volume`, `calculate_volume`).
 
-All moves follow the `BaseMove` interface and implement:
-
-- `do_trial_move(atoms)`: propose a new structure,
-- optional volume hooks through the attached cell (`get_volume`, `calculate_volume`).
-
-Moves are typically combined using `MoveSelector`.
+A run typically mixes several move types using a `MoveSelector`.
 
 
 `MoveSelector`
 --------------
 
-`MoveSelector` chooses moves stochastically from a weighted list and tracks acceptance counters.
-This is the standard way to mix insertion/deletion/displacement (or other) operations in a run.
+`MoveSelector` samples one move per step from a weighted list and tracks acceptance
+statistics on two levels:
+
+- **per-interval counters** -- reset after each log write; reported in `outfile` as the
+  recent acceptance ratio of each move,
+- **cumulative counters** -- never reset; reported in the final summary at the end of the
+  run.
+
+Trial moves that cannot be proposed (for example, a deletion when no atom of the requested
+species lies inside the cell) are tracked separately and excluded from the acceptance-ratio
+denominator, so the reported ratios reflect *viable* attempts only.
 
 .. code-block:: python
 
    from mcpy.moves import MoveSelector, InsertionMove, DeletionMove
 
    selector = MoveSelector(
-       [1, 1],  # weights
-       [InsertionMove(cell, ["O"], seed=1, min_insert=0.5),
-        DeletionMove(cell, ["O"], seed=2)],
+       probabilities=[1, 1],
+       move_list=[
+           InsertionMove(cell, ["O"], seed=1, min_insert=0.5),
+           DeletionMove(cell, ["O"], seed=2),
+       ],
    )
 
+Weights need not sum to one -- they are interpreted as relative frequencies.
 
-Main move classes
------------------
 
-The following move classes are available from `mcpy.moves`:
+Built-in moves
+--------------
+
+The following move classes are available from `mcpy.moves`.
 
 `InsertionMove`
 ~~~~~~~~~~~~~~~
 
-Attempts insertion of a species at a random point sampled from the configured cell.
-Returns `delta_particles = +1` on success.
-
+Attempts to insert an atom of one of the selected species at a random point drawn from the
+attached cell. Sets `delta_particles = +1` on a successful proposal.
 
 `DeletionMove`
 ~~~~~~~~~~~~~~
 
-Attempts deletion of a randomly chosen atom of selected species within the active cell.
-Returns `delta_particles = -1` on success.
-
+Attempts to delete a randomly chosen atom of one of the selected species lying inside the
+attached cell. Sets `delta_particles = -1` on a successful proposal; returns falsy when no
+candidate atom exists, which the `MoveSelector` records as a failure rather than as a
+rejection.
 
 `DisplacementMove`
 ~~~~~~~~~~~~~~~~~~
 
-Displaces one randomly selected atom by a random vector up to `max_displacement`.
-Particle count does not change (`delta_particles = 0`).
-
+Displaces one randomly selected atom by a random vector with magnitude up to
+`max_displacement`. Particle count is preserved (`delta_particles = 0`).
 
 `PermutationMove`
 ~~~~~~~~~~~~~~~~~
 
-Swaps species labels of two atoms from different species groups.
-Useful for compositional ordering in multicomponent systems.
-
+Swaps the species labels of two atoms drawn from different species groups. Useful for
+sampling compositional ordering (homotop space) in multi-component systems at fixed
+stoichiometry.
 
 `ShakeMove`
 ~~~~~~~~~~~
 
-Randomly displaces all atoms by small random vectors (bounded by `r_max`).
-Useful as a global perturbation move.
-
+Displaces *all* atoms by independent random vectors bounded by `r_max`. Useful as a global
+perturbation, typically combined with a local relaxation in the calculator wrapper.
 
 `BrownianMove`
 ~~~~~~~~~~~~~~
 
-Runs a short MD segment (Velocity Verlet) at a target temperature as a trial move.
-Useful for larger relaxation-like perturbations.
+Runs a short Velocity-Verlet trajectory at a target temperature as the trial move. Useful
+as a relaxation-like perturbation that explores the local basin more thoroughly than a
+single random displacement.
 
 
-Advanced/experimental moves
----------------------------
+Experimental moves
+------------------
 
-`mcpy.moves.go_moves` includes additional specialized operations such as:
+`mcpy.moves.go_moves` contains additional specialised moves used in exploratory workflows:
 
-- `BallMove`,
-- `ShellMove`,
+- `BallMove`, `ShellMove`,
 - `BondMove`,
 - `HighEnergyAtomsMove`,
-- alternative `PermutationMove` / `ShakeMove` / `BrownianMove` variants.
+- alternative `PermutationMove`, `ShakeMove`, and `BrownianMove` variants.
 
-These are useful for custom workflows but are not part of the default `mcpy.moves` export list.
+These are not part of the default `mcpy.moves` export list and their interfaces may change.

@@ -1,136 +1,146 @@
-Calculating `species_radii`
+Calibrating `species_radii`
 ===========================
 
-This page describes a practical way to choose `species_radii` for GCMC free-volume estimation in `mcpy`.
+`species_radii` is the element-wise dictionary that controls how the free-volume Monte Carlo
+estimator decides whether a sampled point is occupied. Because :math:`V_{\mathrm{free}}` enters
+the GCMC insertion and deletion acceptance terms directly (see :ref:`free-volume`), the
+quality of these radii is a sensitive input -- not a tuning knob to leave at default values.
 
-The exclusion radii defined by `species_radii` determine how Monte Carlo sample points are
-classified as occupied vs free, which directly sets the accessible insertion volume
-``V_free`` used by GCMC acceptance terms.
+This page describes how to choose them in a reproducible way.
+
 
 Idea
 ----
 
-Choose radii from relaxed atomistic configurations so that insertion exclusion distances reflect your interaction model.
-For each relevant element pair, sample multiple starting geometries, relax, and measure the minimum stable interatomic distance.
+The exclusion radius for a host species should reflect the **shortest adsorbate-host distance
+that survives a local relaxation** with the calculator used in production. In the thesis
+that motivates this library, this radius is denoted :math:`r_{\mathrm{relax}}` and is
+identified as the position of the first maximum in the radial distribution function (RDF) of
+the adsorbate around host atoms, taken over an ensemble of relaxed insertion trials.
 
-Free-volume estimation in the custom insertion cell
------------------------------------------------------
-In `mcpy`, the accessible/free volume used inside Grand Canonical Monte Carlo (GCMC) acceptance criteria
-is estimated in a *custom insertion cell* (see `mcpy.cell.CustomCell`).
+In other words: every value of `species_radii` should be tied to the specific
+calculator and relaxation settings used during production. Re-calibrate if either changes.
 
-Monte Carlo sampling draws random points uniformly in the insertion cell. A sampled point is
-classified as *occupied* if it lies inside the exclusion sphere of at least one atom. The
-exclusion spheres are defined by `species_radii` (an element-wise mapping from chemical
-species to an exclusion radius).
 
-Let :math:`V_cell` be the cell volume and :math:`N_MC` the number of Monte Carlo sample points. For each random point :math:`\mathbf{x}_k`, define an indicator
+Free-volume estimate (recap)
+----------------------------
+
+For completeness, the estimator used by every cell object in `mcpy` is:
 
 .. math::
 
    I_k =
    \begin{cases}
    1, & \exists\, a\ \text{such that}\ \|\mathbf{x}_k-\mathbf{r}_a\|^2 \le r_{\mathrm{species}(a)}^2,\\
-   0, & \text{otherwise.}
+   0, & \text{otherwise,}
    \end{cases}
-
-Then the occupied fraction and free volume are
-
-.. math::
-
-   f_{\mathrm{occ}} = \frac{1}{N_{\mathrm{MC}}}\sum_{k=1}^{N_{\mathrm{MC}}} I_k,
    \qquad
-   V_{\mathrm{free}} = V_{\mathrm{cell}}\,(1 - f_{\mathrm{occ}}).
+   V_{\mathrm{free}} = V_{\mathrm{cell}}\,\bigl(1 - \tfrac{1}{N_{\mathrm{MC}}}\textstyle\sum_k I_k\bigr).
 
-Finally, this :math:`V_free` is used in the place of the geometric :math:`V` when computing the GCMC insertion/deletion acceptance probabilities (see the equations in :doc:`examples`).
+See :ref:`free-volume` for the role of :math:`V_{\mathrm{free}}` in the GCMC acceptance terms.
 
-Insertion region geometry (how the “cell” is chosen)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In the thesis, the insertion region is selected to restrict sampling to chemically relevant spatial regions:
+The insertion region itself is chosen to focus sampling on chemically relevant volumes:
 
-Surface slabs: the insertion region is a sub-volume that spans the full :math:`x` and :math:`y` dimensions of the simulation cell and a finite thickness along :math:`z` (e.g. a top slab subregion of height :math:`\sim 5.5\ \AA`).
+- **Surface slabs** -- a sub-region spanning the full :math:`(x, y)` extent of the cell and
+  a finite thickness along :math:`z` (e.g. ~5.5 Å) covering the topmost atomic layer and a
+  thin vacuum gap.
+- **Nanoparticles** -- a sphere centred on the particle, with a small vacuum margin
+  (e.g. ~3 Å) between the outermost atom and the boundary so insertions stay close to the
+  surface.
 
-Nanoparticles: each nanoparticle is centered in a spherical insertion region chosen to enforce a vacuum gap (e.g. :math:`\sim 3\ \AA`) between the outermost particle atom and the insertion boundary.
 
-Example: O on Ag surface
-------------------------
+Reference workflow: O on Ag
+---------------------------
 
-For oxygen insertion on silver surfaces, one practical workflow is:
+For oxygen insertions on silver surfaces the recommended workflow is:
 
-1. Build representative Ag surface slabs (facets and coverages relevant to your simulation).
-2. Place an O atom in many initial positions (top, bridge, hollow, and random lateral positions; different heights).
-3. Relax each structure with the same calculator/settings used in production.
-4. For each relaxed structure, compute nearest-neighbor distances between O and Ag atoms.
-5. Collect all O-Ag nearest distances and take the minimum physically stable value.
+1. Build representative Ag slabs covering the facets and coverages relevant to your study.
+2. Place a single O atom at many candidate sites (top, bridge, hollow, plus randomised
+   lateral positions and heights).
+3. Relax each structure with the *same* calculator and convergence settings used in
+   production.
+4. For every relaxed structure, record the nearest O-Ag distance.
+5. Aggregate the distribution and read off a conservative minimum stable O-Ag distance --
+   for example, the first peak of the RDF or the lower edge of its dominant mode.
 
-That minimum O-Ag distance can be used to define the O/Ag exclusion scale in `species_radii`.
+The resulting distance defines the O/Ag exclusion scale used in `species_radii`.
 
-How to map pair distances to `species_radii`
+
+Mapping pair distances to element-wise radii
 --------------------------------------------
 
-`species_radii` is element-wise, while your measurements are pair-wise distances.
-Use a consistent convention across your simulations.
+`species_radii` stores per-element radii, while the measurement above produces a *pair*
+distance. Either of the following conventions is used in the reference application; just be
+consistent across a project:
 
-Common choices are:
+- **All on the host species** -- put the full pair distance on the host and zero on the
+  adsorbate. For O on Ag::
 
-- Put the full pair distance on the host species and zero on the inserted species.
-  Example for O insertion in Ag: `{'Ag': d_min(O-Ag), 'O': 0.0}`.
-- Split a pair distance between species.
-  Example: `{'Ag': 0.5 * d_min(O-Ag), 'O': 0.5 * d_min(O-Ag)}`.
+      species_radii = {"Ag": d_min_O_Ag, "O": 0.0}
 
-In all cases, validate acceptance behavior and free-volume stability on short pilot runs before long production sampling.
+- **Split between species** -- divide the pair distance equally::
 
-Using `utils/compute_radii.py`
-------------------------------
+      species_radii = {"Ag": 0.5 * d_min_O_Ag, "O": 0.5 * d_min_O_Ag}
 
-`mcpy` already includes a ready-to-use script at `utils/compute_radii.py` that automates this workflow:
+Regardless of choice, validate the calibration with a short pilot run before launching
+production: monitor the insertion-move acceptance ratio and the reported
+:math:`V_{\mathrm{free}}` -- both should be stable and non-degenerate.
 
-- builds an FCC(111) metal slab,
-- inserts trial atoms many times in a custom insertion cell,
-- relaxes each trial structure with your MACE model,
-- stores insertion and relaxed nearest-neighbor distances in `*.npy`,
-- and writes a histogram/KDE figure (`dist_hist.png`) to identify representative relaxed distances.
 
-Inputs / Outputs
-~~~~~~~~~~~~~~~~~
-Input:
+Automated calibration with `compute_radii.py`
+---------------------------------------------
 
-- A path to your trained MACE model (passed as the single command-line argument).
+The script `mcpy/utils/compute_radii.py` automates the workflow above for FCC(111) hosts:
 
-Outputs (for each inserted species):
+- builds a periodic FCC(111) slab of the chosen metal,
+- repeatedly inserts a trial atom into a `CustomCell` placed over the surface,
+- relaxes each insertion with the supplied MACE model,
+- records the nearest-neighbour distance before and after relaxation,
+- saves the distance pairs and writes a histogram/KDE plot for visual inspection.
 
-- `<species>_distances.npy`: pairs of ``(d_insertion, d_relaxed)`` nearest-neighbor distances.
-- `dist_hist.png`: histogram/KDE plot used to pick a conservative exclusion distance.
-- `insertion.log`: logging of insertion/relaxation progress.
+Inputs
+~~~~~~
 
-Configure the script
-~~~~~~~~~~~~~~~~~~~~
+- a path to a trained MACE model (passed as the single command-line argument).
 
-In `utils/compute_radii.py`, set the key parameters:
+Outputs (one set per inserted species)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- `metal_species` (for example `Ag`),
-- `gas_species` (for example `O`),
+- ``<species>_distances.npy`` -- pairs of ``(d_insertion, d_relaxed)`` nearest-neighbour
+  distances.
+- ``dist_hist.png`` -- histogram and KDE of the relaxed distances, used to pick a
+  conservative exclusion distance.
+- ``insertion.log`` -- progress and per-trial diagnostics.
+
+Configuration
+~~~~~~~~~~~~~
+
+Edit the top of `compute_radii.py` to match your system before running:
+
+- `metal_species` (e.g. `"Ag"`),
+- `gas_species` (e.g. `"O"`),
 - `lattice_param`,
-- `cell_bottom` and `cell_height`,
+- `cell_bottom`, `cell_height` -- defines the rectangular insertion sub-slab,
 - `n_trials`,
-- and relaxation settings (`relax_max_steps`, `relax_fmax`).
+- `relax_max_steps`, `relax_fmax` -- relaxation convergence.
 
-Run the script
-~~~~~~~~~~~~~~
+Run
+~~~
 
 .. code-block:: bash
 
-   python utils/compute_radii.py /path/to/your_mace_model.model
+   python mcpy/utils/compute_radii.py /path/to/your_mace_model.model
 
-Interpretation for `species_radii`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Interpretation
+~~~~~~~~~~~~~~
 
-For O on Ag, inspect the relaxed O-Ag distance distribution (`O_distances.npy` and `dist_hist.png`) and select a conservative minimum stable O-Ag distance from your relaxed trials.
-
-Then define `species_radii` with your chosen convention, for example:
+Inspect ``<species>_distances.npy`` and ``dist_hist.png``. Identify the first peak of the
+relaxed distribution -- that is your :math:`r_{\mathrm{relax}}`. Then translate it into
+element-wise radii using one of the conventions above:
 
 .. code-block:: python
 
    species_radii = {"Ag": d_min_O_Ag, "O": 0.0}
 
-This keeps the same physical calibration method used by the script while matching the element-wise format expected by `mcpy`.
-
+The same script and procedure apply to other host/adsorbate pairs by changing
+`metal_species` and `gas_species`.

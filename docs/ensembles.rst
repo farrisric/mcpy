@@ -1,98 +1,107 @@
-Ensemble Classes
-================
+Ensembles
+=========
 
-`mcpy` provides ensemble classes to run Monte Carlo simulations in different thermodynamic settings.
+An *ensemble* in `mcpy` is the object that owns the Monte Carlo loop. It holds the atomic
+configuration, the energy calculator, the set of cells used for free-volume estimation, and
+the `MoveSelector` that proposes trial configurations. It then evaluates the appropriate
+acceptance rule and writes the trajectory and log.
 
+Three ensembles are available:
 
-Implemented ensembles
----------------------
+- :class:`CanonicalEnsemble` -- fixed composition (NVT) Metropolis sampling.
+- :class:`GrandCanonicalEnsemble` -- variable composition at fixed :math:`(\mu, V, T)`.
+- :class:`ReplicaExchange` -- a wrapper that runs several GCMC replicas at different
+  temperatures or chemical potentials and periodically attempts exchanges between them.
+
+The remainder of this page describes each one, the acceptance criteria they implement, and the
+free-volume estimator used by GCMC insertion/deletion.
+
 
 `BaseEnsemble`
-~~~~~~~~~~~~~~
+--------------
 
-Provides shared Monte Carlo infrastructure used by all concrete ensembles.
-It provides shared infrastructure such as:
+Shared infrastructure used by every concrete ensemble:
 
-- atom/cell/calculator storage,
-- energy evaluation,
-- trajectory and output writing,
-- common run initialization/finalization helpers.
+- storage of `atoms`, `cells`, and the ASE-compatible calculator,
+- single-point energy evaluation (optionally preceded by a local relaxation),
+- trajectory and log writers driven by `trajectory_write_interval` and
+  `outfile_write_interval`,
+- initialization, finalization, and step-counter management.
 
-You usually do not instantiate this class directly.
+`BaseEnsemble` is abstract -- you instantiate one of the concrete subclasses below.
 
 
 `CanonicalEnsemble`
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
-Samples the canonical (NVT) distribution at fixed composition and fixed physical temperature.
-It performs trial mutations and accepts/rejects them with a Metropolis criterion based on energy
-change and temperature.
+Samples the canonical (NVT) distribution at fixed composition. Trial moves are proposed by
+the configured `MoveSelector` and accepted with the Metropolis criterion.
 
-Canonical ensemble equations (NVT)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For a configuration :math:`i` with energy :math:`E_i`, the canonical Boltzmann probability is
+For a configuration :math:`i` with energy :math:`E_i`, the canonical Boltzmann weight is
 
 .. math::
 
    P_i = \frac{e^{-\beta E_i}}{Z},
+   \qquad
+   Z = \sum_j e^{-\beta E_j},
 
-with inverse temperature :math:`\beta = 1/(k_B T)` and partition function
-
-.. math::
-
-   Z = \sum_j e^{-\beta E_j}.
-
-When generating a trial move from state :math:`i` to :math:`j`, the Metropolis acceptance probability is
+with :math:`\beta = 1/(k_B T)`. The acceptance probability for a trial move
+:math:`i \rightarrow j` reduces to the symmetric Metropolis form
 
 .. math::
 
-   P_{ij}^{\mathrm{acc}} = \min\left(1, e^{-\beta (E_j - E_i)}\right).
+   P_{ij}^{\mathrm{acc}} = \min\!\left(1,\; e^{-\beta (E_j - E_i)}\right).
 
-Typical use case: structural optimization/sampling at fixed stoichiometry.
+Typical use: structural optimization or thermal sampling at fixed stoichiometry.
 
 
 `GrandCanonicalEnsemble`
-~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------
 
-Samples adsorption/desorption equilibria where the number of selected species fluctuates under reservoir chemical potentials.
-This is the core class for insertion/deletion sampling controlled by:
+Samples adsorption/desorption equilibria where the number of selected species fluctuates in
+contact with a reservoir at fixed chemical potentials.
 
-- chemical potentials `mu`,
-- temperature,
-- selected species,
-- and a `MoveSelector` with trial moves.
+In a grand-canonical run, the user fixes:
 
-Typical use case: adsorption/desorption equilibria and composition changes under given `mu, T`.
+- `temperature` -- sets :math:`\beta = 1/(k_B T)`,
+- `mu` -- a dictionary mapping each chemical species to its reservoir chemical potential,
+- `species` -- the chemical symbols that the move set is allowed to insert or delete,
+- `cells` -- one or more cell objects defining the insertion region and providing the
+  accessible (free) volume,
+- `move_selector` -- the weighted collection of trial moves.
 
-Grand canonical ensemble equations (GCMC)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In GCMC, the number of atoms can fluctuate while sampling a reservoir with fixed chemical potentials
-:math:`\mu`. Number-changing moves are accepted with different probabilities for deletion and insertion.
+Acceptance rules
+~~~~~~~~~~~~~~~~
+
+For a number-conserving move (e.g. displacement, permutation), `GrandCanonicalEnsemble` falls
+back to the Metropolis criterion above. For number-changing moves, the de-Broglie factors
+appear:
 
 Deletion :math:`(N \rightarrow N-1)`:
 
 .. math::
 
-   P_{ij}^{N \rightarrow N-1} =
-   \min\left(1, \frac{N\Lambda^3}{zV}
-   e^{-\beta (E_j - E_i)}\right).
+   P_{ij}^{\,N \rightarrow N-1} =
+   \min\!\left(1,\; \frac{N\,\Lambda^3}{z\,V_{\mathrm{free}}}
+   \,e^{-\beta (E_j - E_i)}\right).
 
 Insertion :math:`(N \rightarrow N+1)`:
 
 .. math::
 
-   P_{ij}^{N \rightarrow N+1} =
-   \min\left(1, \frac{zV}{(N+1)\Lambda^3}
-   e^{-\beta (E_j - E_i)}\right).
+   P_{ij}^{\,N \rightarrow N+1} =
+   \min\!\left(1,\; \frac{z\,V_{\mathrm{free}}}{(N+1)\,\Lambda^3}
+   \,e^{-\beta (E_j - E_i)}\right).
 
-Here :math:`\beta = 1/(k_B T)`, :math:`z = e^{\beta \mu}`, and :math:`\Lambda` is the thermal de Broglie wavelength:
+Here :math:`z = e^{\beta \mu}` is the species activity, and
 
 .. math::
 
-   \Lambda = \frac{h}{\sqrt{2\pi m k_B T}}.
+   \Lambda = \frac{h}{\sqrt{2\pi m\, k_B T}}
 
-In ``mcpy``, the geometric :math:`V` is replaced by the accessible/free volume estimated from the
-configured insertion cell (via `species_radii` and Monte Carlo sampling in the cell object).
+is the thermal de Broglie wavelength. The geometric volume :math:`V` of the textbook
+formulation is replaced by the accessible free volume :math:`V_{\mathrm{free}}` returned by
+the configured cell -- see :ref:`free-volume`.
 
 .. code-block:: python
 
@@ -111,88 +120,32 @@ configured insertion cell (via `species_radii` and Monte Carlo sampling in the c
    )
    gcmc.run(steps=10000)
 
-Inputs / Outputs (statistical meaning)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Inputs:
+Outputs
+~~~~~~~
 
-- `mu`: chemical potentials for each species. They bias insertion vs deletion so the
-  selected species number fluctuates in equilibrium.
-- `temperature`: physical temperature. It sets :math:`\\beta = 1/(k_B T)` in the
-  Metropolis factors.
-- `cells`: cell objects that define the insertion/deletion region and provide the accessible
-  free volume estimate ``V_free`` used in the acceptance rules.
-- `species`: which chemical symbols are allowed to change via the move set.
-- `move_selector`: collection of trial moves (insertion, deletion, lateral moves, …) and their
-  relative proposal weights.
-
-Outputs:
-
-- The ensemble evolves the internal configuration through accept/reject decisions.
-- A trajectory file is written to `traj_file` on `trajectory_write_interval` steps.
-- A text output file is written to `outfile` on `outfile_write_interval` steps (including
-  energy and acceptance ratios per move type).
+- A trajectory is appended to `traj_file` (extended XYZ, with `energy=` and
+  `Lattice=` on the comment line) every `trajectory_write_interval` steps.
+- A human-readable log is written to `outfile` every `outfile_write_interval` steps,
+  containing the step index, particle count, current energy, and the per-interval
+  acceptance ratio of each registered move. The interval counters are reset after every
+  write; cumulative ratios are reported at the end of the run.
 
 
-`ReplicaExchange`
-~~~~~~~~~~~~~~~~~
+.. _free-volume:
 
-Improves sampling by exchanging GCMC states between replicas across MPI ranks.
-It manages multiple replicas (typically at different temperatures or chemical potentials) and
-attempts periodic exchanges between neighboring replicas to improve sampling.
+Free volume and `species_radii`
+-------------------------------
 
-Notes:
+In the textbook GCMC equations, :math:`V` is the geometric volume of the simulation box. In
+practice, dense atomistic systems leave only a fraction of that volume actually accessible
+to a new particle. `mcpy` follows the hybrid scheme of Senftle et al.: every cell object
+estimates an accessible volume :math:`V_{\mathrm{free}}` by Monte Carlo sampling and that
+quantity is used in the acceptance rules above.
 
-- requires `mpi4py`,
-- designed to wrap GCMC instances created by a user-provided factory.
-
-
-Simulations without and with relaxation
----------------------------------------
-
-In practice, GCMC workflows are often run in two styles:
-
-**Without relaxation (pure MC acceptance on trial structures)**
-
-- Propose a trial configuration (insertion/deletion/displacement, …).
-- Evaluate the trial energy and accept/reject using the ensemble criterion.
-
-This is the fastest per-step workflow and is often used for broad screening.
-For insertion/deletion moves, free volume still matters because it enters the acceptance terms.
-
-**With relaxation (MC + local structural equilibration)**
-
-- After proposing a trial configuration, relax it briefly
-  (for example with a local optimizer or a short MD-like perturbation),
-- then accept/reject using the relaxed energy.
-
-Relaxation reduces sensitivity to unphysical trial overlaps, but each step costs extra compute.
-
-Free volume, `species_radii`, and `mc_sample_points`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Insertion/deletion acceptance needs an estimate of how much of the insertion region is
-actually available (not excluded by nearby atoms).
-
-In `mcpy`, cell objects compute that free volume with a Monte Carlo estimator. Two parameters
-are especially important:
-
-- `species_radii`: defines atomic exclusion spheres used to classify sampled points as occupied/free.
-  Realistic radii improve free-volume estimates and reduce unphysical insertion statistics.
-- `mc_sample_points`: number of random points used in the free-volume Monte Carlo estimate.
-  More points reduce statistical noise, but increase computational cost.
-
-With relaxation-heavy move sets, better free-volume estimates reduce wasted insertions and help
-the simulation reach stable acceptance behavior faster.
-
-Free-volume Monte Carlo estimate (using `species_radii`)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For GCMC insertion/deletion, the accessible/free volume :math:`V_{\mathrm{free}}` used in acceptance criteria is
-estimated by Monte Carlo sampling inside the configured insertion cell.
-
-Let :math:`V_{\mathrm{cell}}` be the geometric volume of the insertion cell and
-:math:`N_{\mathrm{MC}}` the number of random sample points :math:`\mathbf{x}_k`.
-For each sample point, define an occupancy indicator based on the exclusion sphere radii
-:math:`r_{\mathrm{species}(a)}`:
+Let :math:`V_{\mathrm{cell}}` be the geometric volume of the insertion region and
+:math:`N_{\mathrm{MC}}` the number of random sample points :math:`\mathbf{x}_k`. Each sample
+point is classified by an indicator that tests whether it falls inside the exclusion sphere
+of any atom :math:`a`:
 
 .. math::
 
@@ -202,7 +155,7 @@ For each sample point, define an occupancy indicator based on the exclusion sphe
    0, & \text{otherwise.}
    \end{cases}
 
-The occupied fraction and free volume are then
+The occupied fraction and the resulting free volume are
 
 .. math::
 
@@ -210,13 +163,66 @@ The occupied fraction and free volume are then
    \qquad
    V_{\mathrm{free}} = V_{\mathrm{cell}}\,(1 - f_{\mathrm{occ}}).
 
-In practice, this :math:`V_{\mathrm{free}}` replaces the geometric :math:`V` in the GCMC insertion/deletion
-acceptance equations.
+Two parameters control this estimator on every cell:
+
+- `species_radii` -- an element-wise mapping from chemical species to an exclusion radius.
+  Physically meaningful values are critical: if the radii are too small, GCMC will spend
+  most of its time proposing overlapping insertions; if they are too large, the accessible
+  volume collapses and insertions become impossible. See :doc:`species_radii` for a
+  reproducible workflow to calibrate them from short relaxation trials.
+- `mc_sample_points` -- number of random points used in the estimate. More points reduce
+  statistical noise on :math:`V_{\mathrm{free}}` at the cost of a single up-front sweep per
+  configuration change.
+
+With or without relaxation
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+GCMC workflows in `mcpy` are typically run in one of two styles:
+
+- **No relaxation** -- propose, evaluate the trial energy, accept/reject. Fast per step,
+  but acceptance is dominated by overlap rejections in dense regions.
+- **With relaxation** -- propose, run a short local optimization on the trial structure,
+  then accept/reject using the relaxed energy. This is the workflow used in the
+  reference application: relaxation absorbs unphysical overlaps and lets the system reach
+  stable acceptance behaviour in roughly an order of magnitude fewer steps.
+
+In both cases the free-volume estimate enters the insertion/deletion acceptance, so good
+`species_radii` calibration pays off either way.
 
 
-Quick selection guide
----------------------
+`ReplicaExchange`
+-----------------
 
-- Use `CanonicalEnsemble` for fixed-composition sampling.
-- Use `GrandCanonicalEnsemble` for variable-composition GCMC.
-- Use `ReplicaExchange` to accelerate sampling by exchanging states between replicas.
+`ReplicaExchange` parallelises sampling by running several GCMC replicas at different
+temperatures *or* different chemical potentials, one per MPI rank, and periodically
+attempting to swap their configurations. It requires `mpi4py` and a user-supplied factory
+that constructs the rank-local `GrandCanonicalEnsemble`.
+
+The exchange between two neighbouring replicas in temperature ladders is accepted with the
+standard parallel-tempering criterion
+
+.. math::
+
+   P_{\mathrm{exch}} = \min\!\left(1,\; e^{(\beta_2 - \beta_1)(E_2 - E_1)}\right),
+
+and an analogous expression involving :math:`\beta\mu \Delta N` is used when replicas
+differ in chemical potentials. After acceptance, replicas swap their configurations and
+energies; partner selection alternates between even and odd ranks on consecutive exchange
+attempts to ensure every replica eventually mixes with both neighbours.
+
+Notes:
+
+- the ensemble factory must produce per-rank output filenames (e.g. by including `rank` in
+  the trajectory and log paths) so that ranks do not race on the same files;
+- one MPI rank corresponds to one replica.
+
+
+Choosing the right ensemble
+---------------------------
+
+- :class:`CanonicalEnsemble` -- fixed-composition sampling, structural relaxation, or
+  thermal annealing.
+- :class:`GrandCanonicalEnsemble` -- variable-composition adsorption/desorption studies at
+  fixed :math:`(\mu, T)`, e.g. oxidation phase diagrams.
+- :class:`ReplicaExchange` -- when a single GCMC trajectory is prone to getting trapped in
+  a single basin and broader thermodynamic coverage is needed.
