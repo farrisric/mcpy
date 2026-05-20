@@ -11,7 +11,6 @@ import numpy as np
 
 from ..cell import Cell
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -44,8 +43,7 @@ class BaseEnsemble(ABC):
             outfile_write_interval (int, optional): The interval at which to write output files.
             Defaults to 10.
         """
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.INFO)
+        self.logger = logger
 
         self._accepted_trials = 0
         self._step = 0
@@ -113,8 +111,8 @@ class BaseEnsemble(ABC):
             else:
                 with open(self._outfile, 'a') as outfile:
                     outfile.write(f'STEP: {step} ENERGY: {energy}\n')
-        except IOError as e:
-            logger.error(f"Error writing to file {self._outfile}: {e}")
+        except IOError:
+            logger.exception("Error writing to file %s", self._outfile)
 
     def write_coordinates(self, atoms: Atoms, energy: float) -> None:
         """
@@ -125,8 +123,8 @@ class BaseEnsemble(ABC):
         """
         try:
             write_xyz(atoms, energy, self._traj_handle)
-        except IOError as e:
-            logger.error(f"Error writing to trajectory file {self._traj_file}: {e}")
+        except IOError:
+            logger.exception("Error writing to trajectory file %s", self._traj_file)
 
     def close_files(self) -> None:
         if self._traj_handle is not None:
@@ -157,13 +155,11 @@ class BaseEnsemble(ABC):
                 outfile.write(self.get_outfile_header())
                 outfile.write(self.get_outfile_metadata())
             self._outfile_handle = open(self._outfile, 'a')
-        except IOError as e:
-            self.logger.error(f"Failed to initialize output file '{self._outfile}': {e}")
+        except IOError:
+            self.logger.exception("Failed to initialize output file '%s'", self._outfile)
             raise
 
     def initialize_run(self) -> None:
-        self.logger.info(self.get_outfile_header())
-        self.logger.info(self.get_outfile_metadata())
         self._initialized = True
 
     def finalize_run(self) -> None:

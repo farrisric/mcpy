@@ -5,7 +5,6 @@ import numpy as np
 import random
 from .base_ensemble import BaseEnsemble
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

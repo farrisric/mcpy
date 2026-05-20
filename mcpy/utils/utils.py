@@ -1,9 +1,13 @@
+import logging
+import math
+
 from ase import Atoms
 from ase.neighborlist import NeighborList, natural_cutoffs
 from ase.cell import Cell
 
 import numpy as np
-import math
+
+logger = logging.getLogger(__name__)
 
 
 def get_volume(box: list) -> float:
@@ -34,7 +38,6 @@ def find_surface_indices(atoms: Atoms, tolerance: float = 0.1) -> list:
     for i in range(len(atoms)):
         indices, offsets = neighbor_list.get_neighbors(i)
         if len(indices) < 12:
-            print(len(indices))
             surface_indices.append(i)
 
     return surface_indices
@@ -66,7 +69,7 @@ def total_volume_with_overlap(spheres, positions):
     num_spheres = len(spheres)
     for i in range(num_spheres):
         total_vol += sphere_volume(spheres[i])
-    print('Total volue of Spheres: ', total_vol)
+    logger.debug('Total volume of spheres: %s', total_vol)
 
     for i in range(num_spheres):
         for j in range(i + 1, num_spheres):

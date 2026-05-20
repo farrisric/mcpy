@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, List, Dict
 
 import numpy as np
@@ -9,6 +10,8 @@ from ..utils.random_number_generator import RandomNumberGenerator
 from ..utils.set_unit_constant import SetUnits
 from ..moves.move_selector import MoveSelector
 from ..cell import Cell
+
+logger = logging.getLogger(__name__)
 
 
 class GrandCanonicalEnsemble(BaseEnsemble):
@@ -118,8 +121,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                           else "N/A" for ratio in acceptance_ratios)
             ))
             self._outfile_handle.flush()
-        except IOError as e:
-            self.logger.error(f"Error writing to file {self._outfile}: {e}")
+        except IOError:
+            self.logger.exception("Error writing to file %s", self._outfile)
 
     def _acceptance_condition(self,
                               potential_diff: float,
@@ -152,22 +155,20 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {self.units.lambda_dbs[species]:.3e}, p: {p:.3e}, "
-                f"Beta: {self.units.beta:.3e}, "
-                f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
-                f"Potential diff: {potential_diff:.3e}, "
-                f"Delta_particles: {delta_particles}")
+                "Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, "
+                "Exp Arg %s, Potential diff: %.3e, Delta_particles: %d",
+                self.units.lambda_dbs[species], p, self.units.beta, exp_term,
+                potential_diff - self._mu[species], potential_diff, delta_particles)
 
         if delta_particles == -1:  # Deletion move
             db_term = self.units.de_broglie_deletion(volume, self.n_atoms, species)
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                f"Lambda_db: {self.units.lambda_dbs[species]:.3e}, p: {p:.3e}, "
-                f"Beta: {self.units.beta:.3e}, "
-                f"Exp: {exp_term:.3e}, Exp Arg {potential_diff - self._mu[species]}, "
-                f"Potential diff: {potential_diff:.3e}, "
-                f"Delta_particles: {delta_particles}")
+                "Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, "
+                "Exp Arg %s, Potential diff: %.3e, Delta_particles: %d",
+                self.units.lambda_dbs[species], p, self.units.beta, exp_term,
+                potential_diff - self._mu[species], potential_diff, delta_particles)
         if p > 1:
             return True
         return p > self.rng_acceptance.get_uniform()
@@ -193,27 +194,21 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.move_selector.acceptance_counter()
                 self.calculate_cells_volume(self.atoms)
 
-                self.logger.debug(f"Volume: {volume:.3f}, "
-                                  f"Delta_particles: {delta_particles}, "
-                                  f"Species: {species}")
+                self.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
+                                  volume, delta_particles, species)
 
     def initialize_run(self) -> None:
         """
         Initializes the Grand Canonical Monte Carlo simulation.
-        Prepares logging and computes the initial state.
+
+        The full simulation header/table is written to ``self._outfile``;
+        the logger emits a single event-style message so users tailing
+        stdout see that the run has started.
         """
-        self.logger.info("+-------------------------------------------------+")
-        self.logger.info("| Grand Canonical Ensemble Monte Carlo Simulation |")
-        self.logger.info("+-------------------------------------------------+")
-        self.logger.info("Simulation Parameters:")
-        self.logger.info(f"Temperature (K): {self._temperature}")
-        self.logger.info(f"Chemical potentials: {self._mu}")
-        self.logger.info("Starting simulation...\n")
-        self.logger.info("{:<10} {:<10} {:<15} {:<20}".format(
-            "Step", "N_atoms", "Energy (eV)",
-            f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
-        ))
-        self.logger.info("-" * 60)
+        self.logger.info(
+            "GCMC starting: T=%s K, mu=%s, outfile=%s",
+            self._temperature, self._mu, self._outfile,
+        )
         self._initialized = True
 
     def run(self, steps: int) -> None:
@@ -234,12 +229,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
     def finalize_run(self) -> None:
         """
         Finalizes the Grand Canonical Monte Carlo simulation.
-        Logs the summary statistics.
         """
-        self.logger.info("\nSimulation Complete.")
-        self.logger.info("Final Statistics:")
-        self.logger.info(f"Total Steps: {self._step}")
-        self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
+        self.logger.info(
+            "GCMC complete: steps=%d, final_energy=%.6f eV",
+            self._step, self.E_old,
+        )
         self._initialized = False
         self.close_files()
 
@@ -253,15 +247,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.do_gcmc_step()
 
         if self._step % self._outfile_write_interval == 0:
-            acceptance_ratios = self.move_selector.get_acceptance_ration()
-            self.logger.info("{:<10} {:<10} {:<15.6f} {:<20}".format(
-                self._step,
-                self.n_atoms,
-                self.E_old,
-                ", ".join(f"{ratio * 100:.1f}%" if not np.isnan(ratio)
-                          else "N/A" for ratio in acceptance_ratios)
-            ))
             self.write_outfile()
+            self.logger.debug("step=%d N=%d E=%.6f",
+                              self._step, self.n_atoms, self.E_old)
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms, self.E_old)

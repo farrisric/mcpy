@@ -1,6 +1,5 @@
 from collections import Counter
 import numpy as np
-import warnings
 import logging
 
 try:
@@ -10,7 +9,7 @@ except ImportError:
 
 from ..utils import RandomNumberGenerator
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+logger = logging.getLogger(__name__)
 
 
 class ReplicaExchange:
@@ -55,19 +54,8 @@ class ReplicaExchange:
 
         self._re_step = 0
 
-        gcmc_logger = logging.getLogger(self.gcmc.__class__.__name__)
-        gcmc_logger.setLevel(logging.WARNING)
         self.rng = RandomNumberGenerator(seed=seed)
-
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format=f"%(asctime)s [Rank {self.rank}] %(levelname)s: %(message)s",
-            handlers=[
-                logging.FileHandler(f"replica_exchange_rank_{self.rank}.log"),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(f"{__name__}.rank{self.rank}")
 
         self._outfile = outfile
         self.write_out_interval = write_out_interval
@@ -157,8 +145,8 @@ class ReplicaExchange:
                 dest=partner_rank,
                 source=partner_rank,
             )
-        except Exception as e:
-            self.logger.error(f"Communication error with rank {partner_rank}: {e}")
+        except Exception:
+            self.logger.exception("Communication error with rank %s", partner_rank)
             return
 
         if self._acceptance_condition_T(rank_state, partner_state):
@@ -323,8 +311,8 @@ class ReplicaExchange:
                     "Chemical Potentials (eV)", "Temperature (K)", "Accepted Exchange (%)"
                 ))
                 outfile.write("-" * 140 + "\n")
-        except IOError as e:
-            self.logger.error(f"Error opening output file: {e}")
+        except IOError:
+            self.logger.exception("Error opening output file %s", self._outfile)
 
     def write_outfile(self, step: int) -> None:
         """
@@ -346,5 +334,5 @@ class ReplicaExchange:
                                             state["temperature"],
                                             state["accepted_percentage"]
                                             ))
-        except IOError as e:
-            self.logger.error(f"Error writing summary to file: {e}")
+        except IOError:
+            self.logger.exception("Error writing summary to file %s", self._outfile)
