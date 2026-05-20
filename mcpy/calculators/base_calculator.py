@@ -2,6 +2,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator as ASECalculator
 from ase.optimize import LBFGS
 
+
 class BaseCalculator:
     """Adapter for using any ASE calculator in mcpy ensembles."""
 
@@ -11,15 +12,9 @@ class BaseCalculator:
         self.fmax = fmax
 
     def get_potential_energy(self, atoms: Atoms) -> float:
-        atoms.calc = self.calculator
-        return float(atoms.get_potential_energy())
-    
-    def get_potential_energy(self, atoms: Atoms) -> float:
         """
-        Calculate the potential energy of the given atoms.
-
-        :param atoms: ASE Atoms object.
-        :return: Potential energy as a float.
+        Relax with LBFGS up to ``self.steps`` / ``self.fmax`` then return the
+        potential energy.
         """
         atoms.calc = self.calculator
         opt = LBFGS(atoms, logfile=None)

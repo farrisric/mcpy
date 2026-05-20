@@ -1,4 +1,4 @@
-from ase import Atoms
+import numpy as np
 
 from .base_move import BaseMove
 from ..cell import NullCell
@@ -7,34 +7,28 @@ from ..cell import NullCell
 class PermutationMove(BaseMove):
     """Class for performing a permutation move.
 
-    Returns:
-        Atoms: Updated ASE Atoms object after the permutation."""
+    Mutates ``atoms`` in place by swapping two atomic numbers. The ensemble
+    rolls back the arrays snapshot on rejection.
+    """
     def __init__(self,
                  species: list[str],
                  seed: int
                  ) -> None:
-        """
-        Initializes the permutation move.
-
-        """
         cell = NullCell()
         super().__init__(cell, species, seed)
 
-    def do_trial_move(self, atoms) -> Atoms:
+    def do_trial_move(self, atoms):
         """
-        Permute the symbols of two random atoms.
-
-        Returns:
-        Atoms: Updated ASE Atoms object after the permutation.
+        Permute the chemical numbers of two random atoms of different species.
         """
-        atoms_new = atoms.copy()
         species_pair = self.rng.random.sample(self.species, 2)
-        indices_symbol_a = [atom.index for atom in atoms_new if atom.symbol == species_pair[0]]
-        indices_symbol_b = [atom.index for atom in atoms_new if atom.symbol == species_pair[1]]
-        if len(indices_symbol_a) == 0 or len(indices_symbol_b) == 0:
+        symbols = np.asarray(atoms.get_chemical_symbols())
+        indices_a = np.where(symbols == species_pair[0])[0]
+        indices_b = np.where(symbols == species_pair[1])[0]
+        if len(indices_a) == 0 or len(indices_b) == 0:
             return False, 0, 'X'
-        i = self.rng.random.choice(indices_symbol_a)
-        j = self.rng.random.choice(indices_symbol_b)
-        atoms_new[i].symbol, atoms_new[j].symbol = \
-            atoms_new[j].symbol, atoms_new[i].symbol
-        return atoms_new, 0, 'X'
+        i = int(self.rng.random.choice(indices_a))
+        j = int(self.rng.random.choice(indices_b))
+        nums = atoms.arrays['numbers']
+        nums[i], nums[j] = nums[j], nums[i]
+        return atoms, 0, 'X'

@@ -1,7 +1,7 @@
 import random
 import logging
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Optional, List
 
 from ase import Atoms
@@ -22,26 +22,20 @@ class BaseEnsemble(ABC):
                  calculator: Calculator,
                  user_tag: Optional[str] = None,
                  random_seed: Optional[int] = None,
-                 traj_file: str = 'trajectory.xyz',
+                 traj_file: Optional[str] = 'trajectory.xyz',
+                 traj_mode: str = 'w',
                  trajectory_write_interval: int = 1,
-                 outfile: str = 'outfile.out',
+                 outfile: Optional[str] = 'outfile.out',
+                 outfile_mode: str = 'w',
                  outfile_write_interval: int = 1) -> None:
         """
         Base class for ensembles in Monte Carlo simulations.
 
-        Args:
-            atoms (Atoms): The initial configuration of the system.
-            calculator (Calculator): The calculator object used for energy calculations.
-            user_tag (str, optional): A user-defined tag for the ensemble. Defaults to None.
-            random_seed (int, optional): The random seed for the random number generator. Defaults
-            to None.
-            trajectory_write_interval (int, optional): The interval at which to write trajectory
-            files. Defaults to None.
-            traj_file (str, optional): The file to write trajectory data. Defaults to
-            'traj_test.traj'.
-            outfile (str, optional): The file to write output data. Defaults to 'outfile.out'.
-            outfile_write_interval (int, optional): The interval at which to write output files.
-            Defaults to 10.
+        Files are not opened in ``__init__``; they are opened by
+        :meth:`initialize_run`, which is called automatically from
+        :meth:`run`. Pass ``traj_file=None`` or ``outfile=None`` to disable
+        either output channel. Use ``traj_mode='a'`` / ``outfile_mode='a'``
+        to append to existing files (e.g. for restart).
         """
         self.logger = logger
 
@@ -54,27 +48,37 @@ class BaseEnsemble(ABC):
         self._user_tag = user_tag
 
         self._trajectory_write_interval = trajectory_write_interval
-        self._outfile = outfile
         self._outfile_write_interval = outfile_write_interval
+        self._outfile = outfile
+        self._outfile_mode = outfile_mode
         self._traj_file = traj_file
-        self._traj_handle = open(self._traj_file, 'w')
-        self._outfile_handle = None
+        self._traj_mode = traj_mode
 
-        # random number generator
+        self._traj_handle = None
+        self._outfile_handle = None
+        self._initialized = False
+
+        # Seed source for derived generators (moves, acceptance test). We do
+        # not touch the global ``random`` module: moves carry their own RNG.
         if random_seed is None:
             self._random_seed = random.randint(0, int(1e16))
         else:
             self._random_seed = random_seed
-        random.seed(a=self._random_seed)
+
+    def __enter__(self):
+        self.initialize_run()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.finalize_run()
+        return False
 
     @property
     def atoms(self) -> Atoms:
-        """ Current configuration (copy). """
         return self._atoms
 
     @property
     def cells(self) -> Cell:
-        """ Current configuration (copy). """
         return self._cells
 
     @atoms.setter
@@ -83,91 +87,101 @@ class BaseEnsemble(ABC):
 
     @property
     def step(self) -> int:
-        """ Current trial step counter. """
         return self._step
 
     def calculate_cells_volume(self, atoms) -> None:
-        """
-        Update the volume of the cells.
-
-        Args:
-            cells (List[Cell]): List of Cell objects.
-        """
         for cell in self.cells:
             cell.calculate_volume(atoms)
 
     def write_outfile(self, step: int, energy: float) -> None:
         """
-        Write the step and energy to the output file.
-
-        Args:
-            step (int): The current step.
-            energy (float): The energy value.
+        Default outfile writer: ``STEP: <s> ENERGY: <e>``. Subclasses
+        typically override this. No-op when ``outfile`` is disabled or the
+        handle was never opened.
         """
+        if self._outfile is None or self._outfile_handle is None:
+            return
         try:
-            if self._outfile_handle is not None:
-                self._outfile_handle.write(f'STEP: {step} ENERGY: {energy}\n')
-                self._outfile_handle.flush()
-            else:
-                with open(self._outfile, 'a') as outfile:
-                    outfile.write(f'STEP: {step} ENERGY: {energy}\n')
-        except IOError:
-            logger.exception("Error writing to file %s", self._outfile)
+            self._outfile_handle.write(f'STEP: {step} ENERGY: {energy}\n')
+            self._outfile_handle.flush()
+        except (OSError, AttributeError):
+            self.logger.exception("Error writing to file %s", self._outfile)
 
     def write_coordinates(self, atoms: Atoms, energy: float) -> None:
-        """
-        Write the trajectory file.
-
-        Args:
-            atoms (Atoms): The atomic configuration.
-        """
+        if self._traj_file is None or self._traj_handle is None:
+            return
         try:
             write_xyz(atoms, energy, self._traj_handle)
-        except IOError:
-            logger.exception("Error writing to trajectory file %s", self._traj_file)
+        except (OSError, AttributeError):
+            self.logger.exception("Error writing to trajectory file %s", self._traj_file)
 
     def close_files(self) -> None:
         if self._traj_handle is not None:
-            self._traj_handle.close()
+            try:
+                self._traj_handle.close()
+            except OSError:
+                self.logger.exception("Error closing trajectory file %s", self._traj_file)
             self._traj_handle = None
         if self._outfile_handle is not None:
-            self._outfile_handle.close()
+            try:
+                self._outfile_handle.close()
+            except OSError:
+                self.logger.exception("Error closing outfile %s", self._outfile)
             self._outfile_handle = None
 
     def __del__(self):
-        self.close_files()
+        # Safety net only. Deterministic cleanup goes through finalize_run /
+        # the context manager.
+        try:
+            self.close_files()
+        except Exception:
+            pass
 
     def compute_energy(self, atoms: Atoms) -> float:
-        """
-        Computes the potential energy of the given atoms.
-
-        Args:
-            atoms (Atoms): The configuration of atoms.
-
-        Returns:
-            float: The potential energy.
-        """
         return self._calculator.get_potential_energy(atoms)
 
     def initialize_outfile(self) -> None:
+        """Create the outfile, write header/metadata, leave handle open for appends."""
+        if self._outfile is None:
+            return
         try:
-            with open(self._outfile, 'w') as outfile:
-                outfile.write(self.get_outfile_header())
-                outfile.write(self.get_outfile_metadata())
+            with open(self._outfile, self._outfile_mode) as outfile:
+                if self._outfile_mode == 'w':
+                    outfile.write(self.get_outfile_header())
+                    outfile.write(self.get_outfile_metadata())
             self._outfile_handle = open(self._outfile, 'a')
-        except IOError:
+        except OSError:
             self.logger.exception("Failed to initialize output file '%s'", self._outfile)
             raise
 
     def initialize_run(self) -> None:
+        """Open file handles. Idempotent. Subclasses extend, then call super first."""
+        if self._initialized:
+            return
+        if self._traj_file is not None and self._traj_handle is None:
+            try:
+                self._traj_handle = open(self._traj_file, self._traj_mode)
+            except OSError:
+                self.logger.exception("Failed to open trajectory file '%s'", self._traj_file)
+                raise
         self._initialized = True
 
     def finalize_run(self) -> None:
-        self.logger.info("\nSimulation Complete.")
-        self.logger.info("Final Statistics:")
-        self.logger.info(f"Total Moves Attempted: {self.n_moves}")
-        self.logger.info(f"Acceptance Ratios: {self.count_acceptance}")
-        self.logger.info(f"Final Energy (eV): {self.E_old:.6f}")
+        """Log summary statistics and close files. Idempotent."""
+        if not self._initialized:
+            return
+        self.logger.info("Simulation complete.")
+        ms = getattr(self, 'move_selector', None)
+        if ms is not None:
+            if hasattr(ms, 'total_ratios'):
+                self.logger.info("Total attempts per move: %s", ms.move_counter_total)
+                self.logger.info("Cumulative acceptance ratios: %s", ms.total_ratios())
+            else:
+                self.logger.info("Attempts per move: %s", ms.move_counter)
+                self.logger.info("Acceptance ratios: %s", ms.get_acceptance_ratio())
+        if hasattr(self, 'E_old'):
+            self.logger.info("Final energy (eV): %.6f", self.E_old)
+        self.close_files()
         self._initialized = False
 
     def get_outfile_header(self) -> str:
@@ -176,36 +190,40 @@ class BaseEnsemble(ABC):
     def get_outfile_metadata(self) -> str:
         return ""
 
-    def format_step_output(self) -> str:
-        """Format one step of output. Override in subclasses."""
-        return f"STEP: {self._step} ENERGY: {self.compute_energy(self._atoms):.6f}\n"
+    @abstractmethod
+    def _run(self) -> None:
+        """Perform a single ensemble step. Implemented by subclasses."""
+        raise NotImplementedError
+
+    def run(self, steps: int) -> None:
+        """Standard run loop: initialize_run, loop _run, finalize_run."""
+        self.initialize_run()
+        try:
+            for _ in range(steps):
+                self._run()
+        finally:
+            self.finalize_run()
 
 
 def write_xyz(atoms, energy, file_or_path):
     """
     Write an XYZ frame to an open file handle or a path (append mode).
-
-    Args:
-        atoms (ase.Atoms): The ASE Atoms object to write.
-        file_or_path: An open writable file object or a path string.
+    Single-string build; avoids the per-frame ``np.savetxt`` overhead.
     """
-    cell = atoms.get_cell()
-    positions = atoms.get_positions()
+    cell = np.asarray(atoms.get_cell())
+    positions = atoms.positions
     symbols = atoms.get_chemical_symbols()
-    comment = f"energy={energy:.6f}"
     num_atoms = len(atoms)
-    atom_data = np.column_stack((symbols, positions))
-    header = f"{num_atoms}\n{comment} "
-    cell_str = " ".join(f"{value:.8f}" for row in cell for value in row)
-    cell_data = f'Lattice="{cell_str}"'
+    cell_str = " ".join(f"{v:.8f}" for v in cell.ravel())
+
+    parts = [f"{num_atoms}\n", f'energy={energy:.6f} Lattice="{cell_str}"\n']
+    for s, p in zip(symbols, positions):
+        parts.append(f"{s} {p[0]} {p[1]} {p[2]}\n")
+    text = "".join(parts)
 
     if isinstance(file_or_path, str):
         with open(file_or_path, 'a') as xyz_file:
-            xyz_file.write(header)
-            xyz_file.write(cell_data + "\n")
-            np.savetxt(xyz_file, atom_data, fmt="%s %s %s %s")
+            xyz_file.write(text)
     else:
-        file_or_path.write(header)
-        file_or_path.write(cell_data + "\n")
-        np.savetxt(file_or_path, atom_data, fmt="%s %s %s %s")
+        file_or_path.write(text)
         file_or_path.flush()

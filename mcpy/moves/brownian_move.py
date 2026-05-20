@@ -1,6 +1,5 @@
 from .base_move import BaseMove
 from ase import Atoms
-# from ase.md.langevin import Langevin
 from ase.md.verlet import VelocityVerlet
 from ase import units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
@@ -8,10 +7,12 @@ from ..cell import NullCell
 
 
 class BrownianMove(BaseMove):
-    def __init__(self, temperature: float, calculator , steps: int, d_t: float,
+    def __init__(self, temperature: float, calculator, steps: int, d_t: float,
                  seed: int) -> None:
         """
-        Initializes the Shake move with the given maximum displacement distance and RNG.
+        Initialize the Brownian-style MD move. Mutates ``atoms`` in place by
+        running ``steps`` of Velocity-Verlet at the given temperature; the
+        ensemble snapshots arrays beforehand to allow rollback on rejection.
         """
         cell = NullCell()
         super().__init__(cell, species=['X'], seed=seed)
@@ -21,14 +22,13 @@ class BrownianMove(BaseMove):
         self.d_t = d_t
         self.name = 'Brownian'
 
-    def do_trial_move(self, atoms: Atoms) -> Atoms:
+    def do_trial_move(self, atoms: Atoms):
         """
-        Performs the shake move by randomly displacing each atom within a sphere of radius r_max.
+        Run a short MD trajectory in place from a Maxwell-Boltzmann velocity
+        sample at ``self.temperature``.
         """
-        atoms_new = atoms.copy()
-        MaxwellBoltzmannDistribution(atoms_new, temperature_K=self.temperature)
-        atoms_new.calc = self.calculator
-        # dyn = Langevin(new_atoms, 5 * units.fs, self.temperature * units.kB, 0.002, logfile=None)
-        dyn = VelocityVerlet(atoms_new, self.d_t * units.fs, logfile=None)
+        MaxwellBoltzmannDistribution(atoms, temperature_K=self.temperature)
+        atoms.calc = self.calculator
+        dyn = VelocityVerlet(atoms, self.d_t * units.fs, logfile=None)
         dyn.run(steps=self.steps)
-        return atoms_new, 0, 'X'
+        return atoms, 0, 'X'

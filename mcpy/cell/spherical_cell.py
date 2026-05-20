@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .cell import Cell
 
@@ -8,107 +9,132 @@ class SphericalCell(Cell):
     A class representing a spherical cell for nanoparticles.
     """
 
-    def __init__(self, atoms, vacuum, species_radii, mc_sample_points=100_000):
+    def __init__(self, atoms, vacuum, species_radii, mc_sample_points=100_000, seed=None):
         """
         Initialize the SphericalCell object.
 
         :param atoms: ASE Atoms object containing the atomic configuration.
-        :param center: Optional. The center of the spherical cell (default is the geometric center
-                       of the atoms).
-        :param radius: Optional. The radius of the spherical cell.
+        :param vacuum: Padding added to the bounding radius.
         :param species_radii: Dict mapping atom symbols to atomic radii.
-        :param mc_sample_points: Number of random points.
+        :param mc_sample_points: Number of random points used to estimate
+                                 the free volume.
+        :param seed: Optional seed for the cell-local numpy RNG used by
+                     ``get_random_point`` and the volume sampler.
         """
-        super().__init__(atoms)
+        super().__init__(atoms, species_radii=species_radii, seed=seed)
         self.center = np.zeros(3)
         self.move_atoms_to_center(atoms)
-        self.radius = np.linalg.norm(atoms.positions - self.center, axis=1).max() + vacuum
+        self.radius = float(
+            np.linalg.norm(atoms.positions - self.center, axis=1).max() + vacuum
+        )
         self.species_radii = species_radii
-        self.mc_sample_points = mc_sample_points
-        self.sphere_volume = (4 / 3) * np.pi * (self.radius ** 3)
-        self._cached_n_atoms = None
-        self._cached_volume = None
+        self.mc_sample_points = int(mc_sample_points)
+        self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
+        self.volume = self.sphere_volume
 
     def move_atoms_to_center(self, atoms):
         """
-        Translate the atoms so that their center of mass coincides with the center of the spherical
-        cell. This modifies the atoms in place.
-
-        :param atoms: ASE Atoms object to be moved.
+        Translate the atoms so that their center of mass coincides with the
+        center of the spherical cell. Modifies the atoms in place.
         """
         current_com = atoms.get_center_of_mass()
-        shift = self.center - current_com
-        atoms.translate(shift)
+        atoms.translate(self.center - current_com)
 
     def is_point_inside(self, point):
         """
         Check if a given point is inside the spherical cell.
-
-        :param point: A numpy array representing the point (x, y, z).
-        :return: True if the point is inside the spherical cell, False otherwise.
         """
-        distance = np.linalg.norm(point - self.center)
-        return distance <= self.radius
+        diff = point - self.center
+        return float(np.dot(diff, diff)) <= self.radius ** 2
 
     def get_random_point(self):
         """
-        Get a random point uniformly distributed inside the spherical cell.
-        Uses the Marsaglia/cube-root method — no rejection sampling.
-
-        :return: A numpy array representing the random point (x, y, z).
+        Uniform sample inside the sphere via the cube-root method. Uses the
+        cell-local RNG so runs are reproducible when a seed is provided.
         """
-        direction = np.random.randn(3)
+        direction = self._rng.standard_normal(3)
         direction /= np.linalg.norm(direction)
-        r = self.radius * (np.random.rand() ** (1.0 / 3.0))
+        r = self.radius * (self._rng.random() ** (1.0 / 3.0))
         return self.center + r * direction
 
     def get_atoms_specie_inside_cell(self, atoms, specie):
-        return [a.index for a in atoms if a.symbol in specie and self.is_point_inside(a.position)]
+        """
+        Vectorized: indices of atoms whose symbol is in ``specie`` and whose
+        position is inside the cell.
+        """
+        if len(atoms) == 0:
+            return np.empty(0, dtype=int)
+        symbols = np.asarray(atoms.get_chemical_symbols())
+        if isinstance(specie, str):
+            species_list = [specie]
+        else:
+            species_list = list(specie)
+        species_mask = np.isin(symbols, species_list)
+        diff = atoms.positions - self.center
+        inside = np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
+        return np.where(species_mask & inside)[0]
 
     def get_species(self):
         """
         Get the species present in the custom cell.
-
-        :return: A list of species present in the custom cell.
         """
         return list(self.species_radii.keys())
 
+    def _sample_sphere_points(self, n):
+        """
+        Uniform random points inside the sphere. Rejection sample from the
+        bounding cube; oversample to keep loops short.
+        """
+        out = np.empty((n, 3), dtype=float)
+        filled = 0
+        radius_sq = self.radius ** 2
+        # 2 * (6/pi) ≈ ~3.82; 1.5x is enough most of the time, but loop to
+        # cover the tail.
+        oversample = int(1.5 * n) + 1
+        while filled < n:
+            pts = (self._rng.random((oversample, 3)) - 0.5) * 2.0 * self.radius
+            d2 = np.einsum('ij,ij->i', pts, pts)
+            keep = pts[d2 <= radius_sq]
+            take = min(len(keep), n - filled)
+            out[filled:filled + take] = keep[:take]
+            filled += take
+        return out + self.center
+
     def calculate_volume(self, atoms):
         """
-        Estimate the free volume of the spherical cell using Monte Carlo sampling.
-        Result is cached by atom count; only recomputed when insertions/deletions change N.
+        Estimate the free volume of the spherical cell.
 
-        :param atoms: ASE Atoms object.
-        :return: Estimated free volume.
+        Approach: sample ``mc_sample_points`` points uniformly inside the
+        sphere, then for each unique atomic radius query the nearest atom of
+        that radius via a cKDTree. A point is "free" iff no nearest atom is
+        within that atom's radius. Avoids the O(N_points * N_atoms) broadcast.
         """
         n_atoms = len(atoms)
-        if self._cached_n_atoms == n_atoms and self._cached_volume is not None:
-            self.volume = self._cached_volume
+        if n_atoms == 0:
+            self.volume = self.sphere_volume
             return
 
-        random_points = []
-        batch_size = int(1.2 * self.mc_sample_points)
-        while len(random_points) < self.mc_sample_points:
-            points = self.center + (np.random.rand(batch_size, 3) - 0.5) * 2 * self.radius
-            dists = np.linalg.norm(points - self.center, axis=1)
-            inside = points[dists <= self.radius]
-            random_points.append(inside)
-            if len(np.concatenate(random_points)) >= self.mc_sample_points:
-                break
+        pts = self._sample_sphere_points(self.mc_sample_points)
 
-        cart_coords = np.concatenate(random_points)[:self.mc_sample_points]
+        symbols = atoms.get_chemical_symbols()
+        radii = np.fromiter(
+            (self.species_radii[s] for s in symbols),
+            dtype=float, count=n_atoms,
+        )
+        positions = atoms.positions
 
-        positions = atoms.get_positions()
-        radii = np.array([self.species_radii[atom.symbol] for atom in atoms])
-        r_sq = radii**2
+        covered = np.zeros(self.mc_sample_points, dtype=bool)
+        # One kdtree per unique radius; query nearest atom of that radius.
+        # A point is covered if the nearest such atom is within r.
+        for r in np.unique(radii):
+            if r <= 0.0:
+                continue
+            mask = radii == r
+            sub_pos = positions[mask]
+            tree = cKDTree(sub_pos)
+            # distance_upper_bound returns inf above r; that's the rejection.
+            dists, _ = tree.query(pts, k=1, distance_upper_bound=float(r))
+            covered |= np.isfinite(dists)
 
-        deltas = cart_coords[:, None, :] - positions[None, :, :]
-        dists_sq = np.einsum('ijk,ijk->ij', deltas, deltas)
-
-        is_inside_any_atom = np.any(dists_sq <= r_sq[None, :], axis=1)
-        count_free = np.count_nonzero(~is_inside_any_atom)
-        free_fraction = count_free / self.mc_sample_points
-
+        free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
         self.volume = free_fraction * self.sphere_volume
-        self._cached_n_atoms = n_atoms
-        self._cached_volume = self.volume
