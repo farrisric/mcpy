@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle. &mdash; mcpy 0.1.0 documentation</title>
+  <title>Canonical Monte Carlo (NVT) on a bimetallic nanoparticle &mdash; mcpy 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
 
@@ -16,6 +16,7 @@
       <script src="../_static/documentation_options.js?v=01f34227"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -42,19 +43,30 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
 <li class="toctree-l2 current"><a class="reference internal" href="../examples.html#examples-by-workflow">Examples by workflow</a><ul class="current">
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a><ul class="current">
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Canonical Monte Carlo (NVT) on a bimetallic nanoparticle</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a></li>
@@ -63,6 +75,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -80,7 +97,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
-      <li class="breadcrumb-item active">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</li>
+      <li class="breadcrumb-item active">Canonical Monte Carlo (NVT) on a bimetallic nanoparticle</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../_sources/examples/mc_simulations.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -90,64 +107,85 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle">
-<h1>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.<a class="headerlink" href="#canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle" title="Link to this heading"></a></h1>
-<p>Replace the EMT calculator with your MLIP (e.g., MACE) for production.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">fcc111</span>
+  <section id="canonical-monte-carlo-nvt-on-a-bimetallic-nanoparticle">
+<h1>Canonical Monte Carlo (NVT) on a bimetallic nanoparticle<a class="headerlink" href="#canonical-monte-carlo-nvt-on-a-bimetallic-nanoparticle" title="Link to this heading"></a></h1>
+<p>This example uses <code class="xref py py-class docutils literal notranslate"><span class="pre">CanonicalEnsemble</span></code> to sample fixed-composition
+configurations of a small Au/Pt cluster at constant temperature. Trial
+configurations are generated by ASE’s Genetic Algorithm (GA) operators
+(<code class="docutils literal notranslate"><span class="pre">op_list</span></code>), relaxed locally, and accepted with the Metropolis rule.</p>
+<section id="goal">
+<h2>Goal<a class="headerlink" href="#goal" title="Link to this heading"></a></h2>
+<p>For a 38-atom Au<sub>19</sub>Pt<sub>19</sub> truncated-octahedral cluster at
+<span class="math notranslate nohighlight">\(T = 800\,\mathrm{K}\)</span>, sample low-energy chemical orderings without
+changing the atom count.</p>
+</section>
+<section id="code">
+<h2>Code<a class="headerlink" href="#code" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Octahedron</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.calculators.emt</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMT</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atoms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.ga.standardmutations</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermutationMutation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.ga.utilities</span><span class="w"> </span><span class="kn">import</span> <span class="n">closest_distances_generator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.ga</span><span class="w"> </span><span class="kn">import</span> <span class="n">OperationSelector</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">LBFGS</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">CanonicalEnsemble</span>
 
-<span class="c1"># --- mcpy imports ---</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">CanonicalEnsemble</span><span class="p">,</span> <span class="n">MoveSelector</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">TranslationMove</span><span class="p">,</span> <span class="n">SwapMove</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimulationLogger</span>
+<span class="c1"># Build a small Au/Pt cluster (half Au, half Pt).</span>
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">Octahedron</span><span class="p">(</span><span class="s1">&#39;Au&#39;</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">half</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+<span class="n">atoms</span><span class="o">.</span><span class="n">symbols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Au&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">half</span> <span class="o">+</span> <span class="p">[</span><span class="s1">&#39;Pt&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span> <span class="o">-</span> <span class="n">half</span><span class="p">)</span>
+<span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">EMT</span><span class="p">()</span>
 
-
-<span class="c1"># System: a small Ag slab fragment as a proxy nanoparticle</span>
-<span class="n">slab</span> <span class="o">=</span> <span class="n">fcc111</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">vacuum</span><span class="o">=</span><span class="mf">8.0</span><span class="p">)</span> <span class="c1"># small demo system</span>
-<span class="n">slab</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">EMT</span><span class="p">()</span> <span class="c1"># swap with MACE for research: MACECalculator(model_path=...)</span>
-
-
-<span class="c1"># Ensemble parameters</span>
-<span class="n">T</span> <span class="o">=</span> <span class="mf">500.0</span> <span class="c1"># K</span>
-<span class="n">n_steps</span> <span class="o">=</span> <span class="mi">20_000</span>
-
-
-<span class="c1"># Moves</span>
-<span class="n">moves</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">([</span>
-<span class="p">(</span><span class="n">TranslationMove</span><span class="p">(</span><span class="n">max_displacement</span><span class="o">=</span><span class="mf">0.15</span><span class="p">),</span> <span class="mf">0.85</span><span class="p">),</span>
-<span class="p">(</span><span class="n">SwapMove</span><span class="p">(</span><span class="n">symbol_a</span><span class="o">=</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">symbol_b</span><span class="o">=</span><span class="s1">&#39;Ag&#39;</span><span class="p">),</span> <span class="mf">0.15</span><span class="p">),</span> <span class="c1"># placeholder; for alloys, set real species</span>
-<span class="p">])</span>
-
-
-<span class="c1"># Logger</span>
-<span class="n">logger</span> <span class="o">=</span> <span class="n">SimulationLogger</span><span class="p">(</span><span class="s1">&#39;outputs/mc.log&#39;</span><span class="p">,</span> <span class="n">write_every</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-
-
-<span class="c1"># Canonical MC</span>
-<span class="n">ensemble</span> <span class="o">=</span> <span class="n">CanonicalEnsemble</span><span class="p">(</span>
-<span class="n">atoms</span><span class="o">=</span><span class="n">slab</span><span class="p">,</span>
-<span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-<span class="n">moves</span><span class="o">=</span><span class="n">moves</span><span class="p">,</span>
-<span class="n">rng_seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span>
-<span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span>
+<span class="c1"># GA operator list: a single permutation mutation (swap species).</span>
+<span class="n">blmin</span> <span class="o">=</span> <span class="n">closest_distances_generator</span><span class="p">([</span><span class="s1">&#39;Au&#39;</span><span class="p">,</span> <span class="s1">&#39;Pt&#39;</span><span class="p">],</span> <span class="n">ratio_of_covalent_radii</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<span class="n">op_list</span> <span class="o">=</span> <span class="n">OperationSelector</span><span class="p">(</span>
+    <span class="p">[</span><span class="mf">1.0</span><span class="p">],</span>
+    <span class="p">[</span><span class="n">PermutationMutation</span><span class="p">(</span><span class="n">n_top</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">atoms</span><span class="p">),</span> <span class="n">probability</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">blmin</span><span class="o">=</span><span class="n">blmin</span><span class="p">)],</span>
 <span class="p">)</span>
 
-
-<span class="c1"># Run</span>
-<span class="n">ensemble</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">n_steps</span><span class="o">=</span><span class="n">n_steps</span><span class="p">,</span> <span class="n">equilibration</span><span class="o">=</span><span class="mi">2_000</span><span class="p">)</span>
-
-
-<span class="c1"># Save final structure</span>
-<span class="n">slab</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;outputs/mc_final.traj&#39;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;MC completed. Final energy (eV):&#39;</span><span class="p">,</span> <span class="n">slab</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">())</span>
+<span class="n">mc</span> <span class="o">=</span> <span class="n">CanonicalEnsemble</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
+    <span class="n">calculator</span><span class="o">=</span><span class="n">EMT</span><span class="p">(),</span>
+    <span class="n">optimizer</span><span class="o">=</span><span class="n">LBFGS</span><span class="p">,</span>
+    <span class="n">fmax</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">800.0</span><span class="p">,</span>
+    <span class="n">op_list</span><span class="o">=</span><span class="n">op_list</span><span class="p">,</span>
+    <span class="n">random_seed</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
+    <span class="n">outfile</span><span class="o">=</span><span class="s1">&#39;mc_nvt.out&#39;</span><span class="p">,</span>
+    <span class="n">traj_file</span><span class="o">=</span><span class="s1">&#39;mc_nvt.xyz&#39;</span><span class="p">,</span>
+    <span class="n">outfile_write_interval</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">trajectory_write_interval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">mc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">2_000</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">mc_nvt.out</span></code> — step log with the running lowest energy.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mc_nvt.xyz</span></code> — every accepted configuration, one frame per acceptance.</p></li>
+</ul>
+</section>
+<section id="interpretation">
+<h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">CanonicalEnsemble</span></code> does <strong>not</strong> insert or delete atoms — the total
+number of Au and Pt is conserved across the run.</p></li>
+<li><p>The configurations it writes to disk are <em>post-relaxation</em> — energies are
+directly comparable across frames.</p></li>
+<li><p>Replace <code class="docutils literal notranslate"><span class="pre">PermutationMutation</span></code> with any ASE GA operator (e.g.
+<code class="docutils literal notranslate"><span class="pre">RattleMutation</span></code>) to sample positional disorder instead of chemical
+ordering.</p></li>
+</ul>
+</section>
+<section id="next-steps">
+<h2>Next steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>For variable composition, switch to <a class="reference internal" href="gcmc_simulations.html"><span class="doc">Minimal GCMC on an Ag(111) slab</span></a>.</p></li>
+<li><p>See <a class="reference internal" href="../moves.html"><span class="doc">Moves</span></a> for the GCMC-side move set.</p></li>
+</ul>
+</section>
 </section>
 
 

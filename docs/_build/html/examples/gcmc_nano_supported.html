@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle. &mdash; mcpy 0.1.0 documentation</title>
+  <title>GCMC of O on a supported Ag nanoparticle &mdash; mcpy 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
 
@@ -16,11 +16,12 @@
       <script src="../_static/documentation_options.js?v=01f34227"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="gcmc_simulations.html" />
-    <link rel="prev" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="gcmc_bimet_nano.html" /> 
+    <link rel="next" title="Minimal GCMC on an Ag(111) slab" href="gcmc_simulations.html" />
+    <link rel="prev" title="GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations" href="gcmc_bimet_nano.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -42,13 +43,24 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
@@ -56,10 +68,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="gcmc_custom_cell.html">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_nano.html">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano.html">GCMC of O on an Ag octahedral nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">GCMC of O on a supported Ag nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Minimal GCMC on an Ag(111) slab</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a></li>
@@ -67,6 +79,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -84,7 +101,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
-      <li class="breadcrumb-item active">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</li>
+      <li class="breadcrumb-item active">GCMC of O on a supported Ag nanoparticle</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../_sources/examples/gcmc_nano_supported.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -94,85 +111,128 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle">
-<h1>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.<a class="headerlink" href="#canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle" title="Link to this heading"></a></h1>
-<p>Replace the EMT calculator with your MLIP (e.g., MACE) for production.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Octahedron</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">read</span>
+  <section id="gcmc-of-o-on-a-supported-ag-nanoparticle">
+<h1>GCMC of O on a supported Ag nanoparticle<a class="headerlink" href="#gcmc-of-o-on-a-supported-ag-nanoparticle" title="Link to this heading"></a></h1>
+<p>Grand-canonical sampling of oxygen on an Ag truncated-octahedral
+nanoparticle placed on an Al<sub>2</sub>O<sub>3</sub> support. A
+<code class="xref py py-class docutils literal notranslate"><span class="pre">CustomCell</span></code> confines insertion/deletion to a slab-shaped region
+above the support, and the lower half of the support is held fixed with
+ASE constraints.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">examples/gcmc_nano_supported.py</span></code>.</p>
+<section id="goal">
+<h2>Goal<a class="headerlink" href="#goal" title="Link to this heading"></a></h2>
+<p>At fixed <span class="math notranslate nohighlight">\(T = 500\,\mathrm{K}\)</span> and chosen
+<span class="math notranslate nohighlight">\(\Delta\mu_{\mathrm{O}}\)</span>, sample equilibrium O coverage on the
+supported cluster.</p>
+</section>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>A POSCAR of the support (<code class="docutils literal notranslate"><span class="pre">Al2O3.poscar</span></code> in the script).</p></li>
+<li><p>A MACE checkpoint or other ASE calculator that can describe Ag, Al,
+and O.</p></li>
+</ul>
+</section>
+<section id="code">
+<h2>Code<a class="headerlink" href="#code" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Octahedron</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.constraints</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixAtoms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">read</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mace.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">mace_mp</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeletionMove</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">InsertionMove</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves.move_selector</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">MACE_F_Calculator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">CustomCell</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeletionMove</span><span class="p">,</span> <span class="n">InsertionMove</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves.move_selector</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.utils.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_p_at_support</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mf">500.0</span>
+<span class="n">delta_mu_O</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span>
+<span class="n">mus</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.99</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">4.91</span> <span class="o">+</span> <span class="n">delta_mu_O</span><span class="p">}</span>
 
+<span class="n">ss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SeedSequence</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">seed_del</span><span class="p">,</span> <span class="n">seed_ins</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">generate_state</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">))</span>
 
 <span class="n">support</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="s1">&#39;Al2O3.poscar&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">((</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
 <span class="n">support</span><span class="o">.</span><span class="n">center</span><span class="p">(</span><span class="n">vacuum</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">z</span> <span class="o">=</span> <span class="n">support</span><span class="o">.</span><span class="n">positions</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
 <span class="n">z_half</span> <span class="o">=</span> <span class="n">z</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">z</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">-</span> <span class="n">z</span><span class="o">.</span><span class="n">min</span><span class="p">())</span>
-<span class="n">mask</span> <span class="o">=</span> <span class="n">z</span> <span class="o">&lt;</span> <span class="n">z_half</span>                           <span class="c1"># True for atoms to be fixed</span>
-<span class="n">support</span><span class="o">.</span><span class="n">set_constraint</span><span class="p">(</span><span class="n">FixAtoms</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">))</span>
+<span class="n">support</span><span class="o">.</span><span class="n">set_constraint</span><span class="p">(</span><span class="n">FixAtoms</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="p">(</span><span class="n">z</span> <span class="o">&lt;</span> <span class="n">z_half</span><span class="p">)))</span>
 
 <span class="n">surface_z</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">support</span><span class="o">.</span><span class="n">positions</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]))</span>
 <span class="n">particle</span> <span class="o">=</span> <span class="n">Octahedron</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
 <span class="n">atoms</span> <span class="o">=</span> <span class="n">get_p_at_support</span><span class="p">(</span><span class="n">support</span><span class="p">,</span> <span class="n">particle</span><span class="p">,</span> <span class="n">contact_surface</span><span class="o">=</span><span class="s1">&#39;100&#39;</span><span class="p">,</span> <span class="n">gap</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
 
-<span class="n">scell</span> <span class="o">=</span> <span class="n">CustomCell</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">custom_height</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">bottom_z</span><span class="o">=</span><span class="n">surface_z</span><span class="p">,</span>
-                    <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="mf">2.068</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span> <span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;Al&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">})</span>
+<span class="n">scell</span> <span class="o">=</span> <span class="n">CustomCell</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="p">,</span>
+    <span class="n">custom_height</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">bottom_z</span><span class="o">=</span><span class="n">surface_z</span><span class="p">,</span>
+    <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="mf">2.068</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;Al&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">},</span>
+<span class="p">)</span>
 
-<span class="n">calculator</span> <span class="o">=</span> <span class="n">MACE_F_Calculator</span><span class="p">(</span>
-                <span class="n">model_paths</span><span class="o">=</span><span class="s1">&#39;/home/riccardo/Downloads/mace-small-density-agnesi-stress.model&#39;</span><span class="p">,</span>
-                <span class="n">steps</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
-                <span class="n">fmax</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
-                <span class="n">cueq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span>
-                <span class="p">)</span>
+<span class="n">calculator</span> <span class="o">=</span> <span class="n">mace_mp</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
 
-<span class="n">species</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">]</span>
+<span class="n">move_selector</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">(</span>
+    <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="p">[</span><span class="n">DeletionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed_del</span><span class="p">),</span>
+     <span class="n">InsertionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span> <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed_ins</span><span class="p">)],</span>
+<span class="p">)</span>
 
-<span class="n">move_list</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-            <span class="p">[</span><span class="n">DeletionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span>
-                        <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>
-                        <span class="n">seed</span><span class="o">=</span><span class="mi">43215423143</span><span class="p">),</span>
-            <span class="n">InsertionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span>
-                            <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>
-                            <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
-                            <span class="n">seed</span><span class="o">=</span><span class="mi">3675437856</span><span class="p">)]]</span>
-
-<span class="n">move_selector</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">(</span><span class="o">*</span><span class="n">move_list</span><span class="p">)</span>
-
-<span class="n">mus</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.99</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">4.91</span><span class="p">}</span>
-<span class="n">delta_mu_O</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span>
-<span class="n">mus</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">delta_mu_O</span>
-<span class="n">T</span> <span class="o">=</span> <span class="mi">500</span>
-
+<span class="n">tag</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">atoms</span><span class="o">.</span><span class="n">get_chemical_formula</span><span class="p">()</span><span class="si">}</span><span class="s1">_dmu_</span><span class="si">{</span><span class="n">delta_mu_O</span><span class="si">}</span><span class="s1">&#39;</span>
 <span class="n">gcmc</span> <span class="o">=</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">(</span>
-            <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
-            <span class="n">cells</span><span class="o">=</span><span class="p">[</span><span class="n">scell</span><span class="p">],</span>
-            <span class="n">calculator</span><span class="o">=</span><span class="n">calculator</span><span class="p">,</span>
-            <span class="n">mu</span><span class="o">=</span><span class="n">mus</span><span class="p">,</span>
-            <span class="n">units_type</span><span class="o">=</span><span class="s1">&#39;metal&#39;</span><span class="p">,</span>
-            <span class="n">species</span><span class="o">=</span><span class="n">species</span><span class="p">,</span>
-            <span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-            <span class="n">move_selector</span><span class="o">=</span><span class="n">move_selector</span><span class="p">)</span>
-
-<span class="n">gcmc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="mi">1000000</span><span class="p">)</span>
+    <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
+    <span class="n">cells</span><span class="o">=</span><span class="p">[</span><span class="n">scell</span><span class="p">],</span>
+    <span class="n">calculator</span><span class="o">=</span><span class="n">calculator</span><span class="p">,</span>
+    <span class="n">mu</span><span class="o">=</span><span class="n">mus</span><span class="p">,</span>
+    <span class="n">units_type</span><span class="o">=</span><span class="s1">&#39;metal&#39;</span><span class="p">,</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
+    <span class="n">move_selector</span><span class="o">=</span><span class="n">move_selector</span><span class="p">,</span>
+    <span class="n">outfile</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.out&#39;</span><span class="p">,</span>
+    <span class="n">traj_file</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.xyz&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">gcmc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="mi">1_000_000</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gcmc_&lt;formula&gt;_dmu_&lt;x&gt;.out</span></code> — step log with per-move acceptance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gcmc_&lt;formula&gt;_dmu_&lt;x&gt;.xyz</span></code> — extended XYZ trajectory.</p></li>
+</ul>
+</section>
+<section id="interpretation">
+<h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">bottom_z=surface_z</span></code> anchors the MC region just above the topmost
+support atom; <code class="docutils literal notranslate"><span class="pre">custom_height=20</span></code> opens a 20 Å vertical region for
+insertions. Both values must match your support’s vacuum padding.</p></li>
+<li><p>The Al support enters <code class="docutils literal notranslate"><span class="pre">species_radii</span></code> only so the free-volume
+estimator excludes overlaps with it. Al atoms are <em>not</em> in
+<code class="docutils literal notranslate"><span class="pre">species</span></code> and so are neither inserted nor deleted.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">get_p_at_support</span></code> from <code class="xref py py-mod docutils literal notranslate"><span class="pre">mcpy.utils.utils</span></code> positions the
+cluster’s chosen facet against the support with a fixed gap.</p></li>
+</ul>
+</section>
+<section id="next-steps">
+<h2>Next steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Strip the support to recover the in-vacuum cluster: see
+<a class="reference internal" href="gcmc_nano.html"><span class="doc">GCMC of O on an Ag octahedral nanoparticle</span></a>.</p></li>
+<li><p>Sweep <span class="math notranslate nohighlight">\(\Delta\mu_{\mathrm{O}}\)</span> and post-process with
+<a class="reference internal" href="phase_diagram_analysis.html"><span class="doc">Phase diagram analysis from relaxed trajectories</span></a>.</p></li>
+</ul>
+</section>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="gcmc_bimet_nano.html" class="btn btn-neutral float-left" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="gcmc_simulations.html" class="btn btn-neutral float-right" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="gcmc_bimet_nano.html" class="btn btn-neutral float-left" title="GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gcmc_simulations.html" class="btn btn-neutral float-right" title="Minimal GCMC on an Ag(111) slab" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

@@ -19,7 +19,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Cells" href="cells.html" />
+    <link rel="next" title="Your first simulation" href="first_simulation.html" />
     <link rel="prev" title="mcpy" href="index.html" /> 
 </head>
 
@@ -42,7 +42,7 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a></li>
@@ -50,14 +50,31 @@
 <li class="toctree-l2"><a class="reference internal" href="#from-source">From source</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#verify-the-installation">Verify the installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mlip-backends">MLIP backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#nvidia-alchemi-backend-optional">NVIDIA Alchemi backend (optional)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mpi-for-replica-exchange">MPI for Replica Exchange</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -123,6 +140,35 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </div>
 <p>GPU support follows each backend’s own installation guide.</p>
 </section>
+<section id="nvidia-alchemi-backend-optional">
+<h2>NVIDIA Alchemi backend (optional)<a class="headerlink" href="#nvidia-alchemi-backend-optional" title="Link to this heading"></a></h2>
+<p>For GPU-native MACE evaluation, <code class="docutils literal notranslate"><span class="pre">mcpy</span></code> ships an optional <code class="docutils literal notranslate"><span class="pre">AlchemiCalculator</span></code>
+and <code class="docutils literal notranslate"><span class="pre">AlchemiFCalculator</span></code> backed by <a class="reference external" href="https://github.com/NVIDIA/nvalchemi-toolkit">nvalchemi-toolkit</a>. Recommended for systems
+with <strong>≥500 atoms</strong> on CUDA — benchmarks on an RTX 5090 show ~2x speedup at
+586 atoms and ~4x speedup at 976 atoms vs <code class="docutils literal notranslate"><span class="pre">mace_mp</span></code> + ASE.</p>
+<p>Install via the <code class="docutils literal notranslate"><span class="pre">alchemi</span></code> extra:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>alchemi<span class="o">]</span>
+</pre></div>
+</div>
+<p>This pulls in <code class="docutils literal notranslate"><span class="pre">nvalchemi-toolkit[mace]</span></code>. Requires a CUDA-enabled PyTorch
+build matching your driver.</p>
+<p>Usage (drop-in replacement for <code class="docutils literal notranslate"><span class="pre">MACE_F_Calculator</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlchemiFCalculator</span>
+
+<span class="n">calc</span> <span class="o">=</span> <span class="n">AlchemiFCalculator</span><span class="p">(</span>
+    <span class="n">checkpoint</span><span class="o">=</span><span class="s1">&#39;medium-mpa-0&#39;</span><span class="p">,</span>
+    <span class="n">steps</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+    <span class="n">fmax</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">,</span>
+    <span class="n">enable_cueq</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">compile_model</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>   <span class="c1"># required for GCMC (dynamic atom count)</span>
+    <span class="n">dt</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>                <span class="c1"># tuned default; not 0.1</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>See <code class="docutils literal notranslate"><span class="pre">NVALCHEMI_NOTES.md</span></code> in the repository root for tuning details and
+known pitfalls.</p>
+</section>
 <section id="mpi-for-replica-exchange">
 <h2>MPI for Replica Exchange<a class="headerlink" href="#mpi-for-replica-exchange" title="Link to this heading"></a></h2>
 <p><cite>mpi4py</cite> is not pulled in automatically, since it depends on a system MPI implementation.
@@ -142,7 +188,7 @@ Install it with conda before running RE-GCMC:</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="mcpy" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="cells.html" class="btn btn-neutral float-right" title="Cells" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="first_simulation.html" class="btn btn-neutral float-right" title="Your first simulation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

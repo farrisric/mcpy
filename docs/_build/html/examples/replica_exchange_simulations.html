@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle. &mdash; mcpy 0.1.0 documentation</title>
+  <title>Replica-Exchange GCMC across a temperature ladder &mdash; mcpy 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
 
@@ -16,11 +16,12 @@
       <script src="../_static/documentation_options.js?v=01f34227"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Phase diagram analysis from relaxed trajectories" href="phase_diagram_analysis.html" />
-    <link rel="prev" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="gcmc_simulations.html" /> 
+    <link rel="prev" title="Minimal GCMC on an Ag(111) slab" href="gcmc_simulations.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -42,13 +43,24 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
@@ -56,7 +68,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a><ul class="current">
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Replica-Exchange GCMC across a temperature ladder</a></li>
 <li class="toctree-l4"><a class="reference internal" href="phase_diagram_analysis.html">Phase diagram analysis from relaxed trajectories</a></li>
 </ul>
 </li>
@@ -64,6 +76,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -81,7 +98,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
-      <li class="breadcrumb-item active">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</li>
+      <li class="breadcrumb-item active">Replica-Exchange GCMC across a temperature ladder</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../_sources/examples/replica_exchange_simulations.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -91,89 +108,140 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle">
-<h1>Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.<a class="headerlink" href="#canonical-monte-carlo-constant-nvt-on-a-small-ag-nanoparticle" title="Link to this heading"></a></h1>
-<p>Replace the EMT calculator with your MLIP (e.g., MACE) for production.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Replica-Exchange GCMC (RE-GCMC) swapping across chemical potentials of O.</span>
-<span class="sd">Replicas differ by mu_O; periodic exchange attempts enhance sampling.</span>
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+  <section id="replica-exchange-gcmc-across-a-temperature-ladder">
+<h1>Replica-Exchange GCMC across a temperature ladder<a class="headerlink" href="#replica-exchange-gcmc-across-a-temperature-ladder" title="Link to this heading"></a></h1>
+<p>Parallel tempering over six replicas of an Ag(111) + O system, exchanging
+configurations between neighbouring temperatures every <code class="docutils literal notranslate"><span class="pre">exchange_interval</span></code>
+GCMC steps. One MPI rank corresponds to one replica.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">examples/re_gcmc.py</span></code>.</p>
+<section id="goal">
+<h2>Goal<a class="headerlink" href="#goal" title="Link to this heading"></a></h2>
+<p>Run RE-GCMC at <span class="math notranslate nohighlight">\(T \in \{250, 300, 350, 400, 450, 500\}\,\mathrm{K}\)</span>
+with shared <span class="math notranslate nohighlight">\(\mu_{\mathrm{Ag}}, \mu_{\mathrm{O}}\)</span> to escape local
+basins that a single GCMC trajectory would not leave.</p>
+</section>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">mpi4py</span></code> and a working system MPI (see <a class="reference internal" href="../installation.html"><span class="doc">Installation</span></a>).</p></li>
+<li><p>A MACE checkpoint, or any ASE calculator that you wrap in
+<code class="docutils literal notranslate"><span class="pre">BaseCalculator</span></code>.</p></li>
+</ul>
+</section>
+<section id="code">
+<h2>Code<a class="headerlink" href="#code" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">fcc111</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase.calculators.emt</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMT</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.constraints</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixAtoms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mace.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">mace_mp</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">CustomCell</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplicaExchange</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">InsertionMove</span><span class="p">,</span> <span class="n">DeletionMove</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves.move_selector</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
 
-<span class="c1"># --- mcpy imports ---</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">,</span> <span class="n">ReplicaExchange</span><span class="p">,</span> <span class="n">MoveSelector</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdsorbMove</span><span class="p">,</span> <span class="n">DesorbMove</span><span class="p">,</span> <span class="n">LateralDisplacementMove</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.chemistry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChemicalPotential</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimulationLogger</span>
+<span class="n">temperatures</span> <span class="o">=</span> <span class="p">[</span><span class="mi">250</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">350</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">450</span><span class="p">,</span> <span class="mi">500</span><span class="p">]</span>
+<span class="n">gcmc_steps</span> <span class="o">=</span> <span class="mi">200</span>
+<span class="n">exchange_interval</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">delta_mu_O</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span>
 
+<span class="n">ss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SeedSequence</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">seeds</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">generate_state</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">)]</span>
 
-<span class="c1"># Common structure</span>
-<span class="n">base</span> <span class="o">=</span> <span class="n">fcc111</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">vacuum</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
-<span class="n">base</span><span class="o">.</span><span class="n">pbc</span> <span class="o">=</span> <span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
-<span class="n">base</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">EMT</span><span class="p">()</span> <span class="c1"># replace with MLIP</span>
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">fcc111</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">4.1592</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">periodic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vacuum</span><span class="o">=</span><span class="mf">8.0</span><span class="p">)</span>
+<span class="n">atoms</span><span class="o">.</span><span class="n">set_constraint</span><span class="p">(</span><span class="n">FixAtoms</span><span class="p">(</span><span class="n">indices</span><span class="o">=</span><span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">index</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="mi">3</span><span class="p">]))</span>
 
+<span class="n">cell_ag</span> <span class="o">=</span> <span class="n">CustomCell</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">custom_height</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span> <span class="n">bottom_z</span><span class="o">=</span><span class="mf">12.8</span> <span class="o">-</span> <span class="mf">2.11</span><span class="p">,</span>
+                     <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="mf">2.75</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">})</span>
+<span class="n">cell_o</span>  <span class="o">=</span> <span class="n">CustomCell</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">custom_height</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span> <span class="n">bottom_z</span><span class="o">=</span><span class="mf">12.8</span> <span class="o">-</span> <span class="mf">2.11</span><span class="p">,</span>
+                     <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="mf">2.11</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">})</span>
 
-<span class="n">T</span> <span class="o">=</span> <span class="mf">600.0</span> <span class="c1"># K</span>
+<span class="n">calculator</span> <span class="o">=</span> <span class="n">mace_mp</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
+<span class="n">calculator</span><span class="o">.</span><span class="n">steps</span> <span class="o">=</span> <span class="mi">40</span>
+<span class="n">calculator</span><span class="o">.</span><span class="n">fmax</span> <span class="o">=</span> <span class="mf">0.1</span>
 
+<span class="n">mus</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.99</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">4.91</span> <span class="o">+</span> <span class="n">delta_mu_O</span><span class="p">}</span>
 
-<span class="c1"># Ladder of chemical potentials (eV)</span>
-<span class="n">mu_values</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mf">0.6</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.8</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.4</span><span class="p">]</span>
-
-
-<span class="n">replicas</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">mu</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mu_values</span><span class="p">):</span>
-<span class="n">atoms_i</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="n">moves</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">([</span>
-<span class="p">(</span><span class="n">AdsorbMove</span><span class="p">(</span><span class="n">species</span><span class="o">=</span><span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="n">candidate_sites</span><span class="o">=</span><span class="s1">&#39;fcc&#39;</span><span class="p">,</span> <span class="n">max_height</span><span class="o">=</span><span class="mf">1.8</span><span class="p">),</span> <span class="mf">0.40</span><span class="p">),</span>
-<span class="p">(</span><span class="n">DesorbMove</span><span class="p">(</span><span class="n">species</span><span class="o">=</span><span class="s1">&#39;O&#39;</span><span class="p">),</span> <span class="mf">0.40</span><span class="p">),</span>
-<span class="p">(</span><span class="n">LateralDisplacementMove</span><span class="p">(</span><span class="n">species</span><span class="o">=</span><span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="n">max_displacement</span><span class="o">=</span><span class="mf">0.20</span><span class="p">),</span> <span class="mf">0.20</span><span class="p">),</span>
-<span class="p">])</span>
-<span class="n">logger</span> <span class="o">=</span> <span class="n">SimulationLogger</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;outputs/rex_rep</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">.log&#39;</span><span class="p">,</span> <span class="n">write_every</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
-<span class="n">ensemble</span> <span class="o">=</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">(</span>
-<span class="n">atoms</span><span class="o">=</span><span class="n">atoms_i</span><span class="p">,</span>
-<span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
-<span class="n">chemical_potentials</span><span class="o">=</span><span class="p">[</span><span class="n">ChemicalPotential</span><span class="p">(</span><span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="n">mu</span><span class="p">,</span> <span class="s1">&#39;eV&#39;</span><span class="p">)],</span>
-<span class="n">moves</span><span class="o">=</span><span class="n">moves</span><span class="p">,</span>
-<span class="n">rng_seed</span><span class="o">=</span><span class="mi">100</span> <span class="o">+</span> <span class="n">i</span><span class="p">,</span>
-<span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span>
+<span class="n">move_selector</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">(</span>
+    <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span>
+    <span class="p">[</span><span class="n">DeletionMove</span><span class="p">(</span><span class="n">cell_ag</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Ag&#39;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="n">seeds</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+     <span class="n">DeletionMove</span><span class="p">(</span><span class="n">cell_o</span><span class="p">,</span>  <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>  <span class="n">seed</span><span class="o">=</span><span class="n">seeds</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+     <span class="n">InsertionMove</span><span class="p">(</span><span class="n">cell_ag</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Ag&#39;</span><span class="p">],</span> <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seeds</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span>
+     <span class="n">InsertionMove</span><span class="p">(</span><span class="n">cell_o</span><span class="p">,</span>  <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>  <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seeds</span><span class="p">[</span><span class="mi">3</span><span class="p">])],</span>
 <span class="p">)</span>
-<span class="n">replicas</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ensemble</span><span class="p">)</span>
 
+<span class="k">def</span><span class="w"> </span><span class="nf">gcmc_factory</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="n">tag</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;rank</span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s1">_T</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span>
+    <span class="k">return</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">(</span>
+        <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
+        <span class="n">cells</span><span class="o">=</span><span class="p">[</span><span class="n">cell_ag</span><span class="p">,</span> <span class="n">cell_o</span><span class="p">],</span>
+        <span class="n">calculator</span><span class="o">=</span><span class="n">calculator</span><span class="p">,</span>
+        <span class="n">mu</span><span class="o">=</span><span class="n">mus</span><span class="p">,</span>
+        <span class="n">units_type</span><span class="o">=</span><span class="s1">&#39;metal&#39;</span><span class="p">,</span>
+        <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">],</span>
+        <span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
+        <span class="n">move_selector</span><span class="o">=</span><span class="n">move_selector</span><span class="p">,</span>
+        <span class="n">outfile</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.out&#39;</span><span class="p">,</span>
+        <span class="n">traj_file</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.xyz&#39;</span><span class="p">,</span>
+        <span class="n">trajectory_write_interval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">outfile_write_interval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">)</span>
 
 <span class="n">rex</span> <span class="o">=</span> <span class="n">ReplicaExchange</span><span class="p">(</span>
-<span class="n">replicas</span><span class="o">=</span><span class="n">replicas</span><span class="p">,</span>
-<span class="n">swap_interval</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="c1"># attempt swaps every 1000 MC steps</span>
-<span class="n">scheme</span><span class="o">=</span><span class="s1">&#39;neighbor&#39;</span><span class="p">,</span> <span class="c1"># swap only adjacent chemical potentials</span>
-<span class="n">rng_seed</span><span class="o">=</span><span class="mi">2025</span><span class="p">,</span>
+    <span class="n">gcmc_factory</span><span class="p">,</span>
+    <span class="n">temperatures</span><span class="o">=</span><span class="n">temperatures</span><span class="p">,</span>
+    <span class="n">gcmc_steps</span><span class="o">=</span><span class="n">gcmc_steps</span><span class="p">,</span>
+    <span class="n">exchange_interval</span><span class="o">=</span><span class="n">exchange_interval</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="n">seeds</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span>
 <span class="p">)</span>
-
-
-<span class="c1"># Run 10k steps per replica with exchanges</span>
-<span class="n">rex</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">n_steps</span><span class="o">=</span><span class="mi">10_000</span><span class="p">,</span> <span class="n">equilibration</span><span class="o">=</span><span class="mi">2_000</span><span class="p">)</span>
-
-
-<span class="c1"># Collect and save data</span>
-<span class="n">rex</span><span class="o">.</span><span class="n">save_observables</span><span class="p">(</span><span class="s1">&#39;outputs/rex_observables.csv&#39;</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ens</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rex</span><span class="o">.</span><span class="n">replicas</span><span class="p">):</span>
-<span class="n">ens</span><span class="o">.</span><span class="n">atoms</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;outputs/rex_final_rep</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">.traj&#39;</span><span class="p">)</span>
-
-
-<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;RE-GCMC completed. Swap acceptance:&#39;</span><span class="p">,</span> <span class="n">rex</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;swap_acceptance&#39;</span><span class="p">))</span>
+<span class="n">rex</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </pre></div>
 </div>
+</section>
+<section id="run-it">
+<h2>Run it<a class="headerlink" href="#run-it" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpirun<span class="w"> </span>-n<span class="w"> </span><span class="m">6</span><span class="w"> </span>python<span class="w"> </span>re_gcmc.py
+</pre></div>
+</div>
+<p>The number of MPI ranks must equal <code class="docutils literal notranslate"><span class="pre">len(temperatures)</span></code>.</p>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>One <code class="docutils literal notranslate"><span class="pre">gcmc_rank*_T*.out</span></code> log and matching <code class="docutils literal notranslate"><span class="pre">.xyz</span></code> trajectory per rank.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replica_exchange.log</span></code> — the cross-replica exchange log.</p></li>
+</ul>
+</section>
+<section id="interpretation">
+<h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gcmc_factory</span></code> must produce <em>per-rank</em> output filenames, otherwise all
+ranks race on the same files.</p></li>
+<li><p>A healthy exchange acceptance is typically 20–40 %. If it is too low,
+reduce the temperature gap between neighbouring replicas; if too high,
+widen it.</p></li>
+<li><p>For a chemical-potential ladder, pass <code class="docutils literal notranslate"><span class="pre">mus=[mu_0,</span> <span class="pre">mu_1,</span> <span class="pre">...]</span></code> instead
+of <code class="docutils literal notranslate"><span class="pre">temperatures</span></code>; the corresponding acceptance criterion is selected
+automatically.</p></li>
+</ul>
+</section>
+<section id="next-steps">
+<h2>Next steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>See <code class="docutils literal notranslate"><span class="pre">ReplicaExchange</span></code> in <a class="reference internal" href="../ensembles.html"><span class="doc">Ensembles</span></a> for the parallel-tempering
+acceptance rule.</p></li>
+<li><p>Combine the per-rank trajectories into a phase diagram with
+<a class="reference internal" href="phase_diagram_analysis.html"><span class="doc">Phase diagram analysis from relaxed trajectories</span></a>.</p></li>
+</ul>
+</section>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="gcmc_simulations.html" class="btn btn-neutral float-left" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gcmc_simulations.html" class="btn btn-neutral float-left" title="Minimal GCMC on an Ag(111) slab" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="phase_diagram_analysis.html" class="btn btn-neutral float-right" title="Phase diagram analysis from relaxed trajectories" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

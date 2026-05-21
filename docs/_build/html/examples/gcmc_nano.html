@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Grand Canonical Monte Carlo on an Ag Nanoparticle &mdash; mcpy 0.1.0 documentation</title>
+  <title>GCMC of O on an Ag octahedral nanoparticle &mdash; mcpy 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
 
@@ -16,10 +16,11 @@
       <script src="../_static/documentation_options.js?v=01f34227"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="gcmc_bimet_nano.html" />
+    <link rel="next" title="GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations" href="gcmc_bimet_nano.html" />
     <link rel="prev" title="Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell" href="gcmc_custom_cell.html" /> 
 </head>
 
@@ -42,13 +43,24 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
@@ -56,10 +68,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="gcmc_custom_cell.html">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_nano_supported.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">GCMC of O on an Ag octahedral nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano_supported.html">GCMC of O on a supported Ag nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Minimal GCMC on an Ag(111) slab</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a></li>
@@ -67,6 +79,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -84,7 +101,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
-      <li class="breadcrumb-item active">Grand Canonical Monte Carlo on an Ag Nanoparticle</li>
+      <li class="breadcrumb-item active">GCMC of O on an Ag octahedral nanoparticle</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../_sources/examples/gcmc_nano.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -94,123 +111,108 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="grand-canonical-monte-carlo-on-an-ag-nanoparticle">
-<h1>Grand Canonical Monte Carlo on an Ag Nanoparticle<a class="headerlink" href="#grand-canonical-monte-carlo-on-an-ag-nanoparticle" title="Link to this heading"></a></h1>
-<p>This tutorial demonstrates a <strong>Grand Canonical Monte Carlo (GCMC)</strong> simulation of oxygen adsorption and desorption on a truncated octahedral Ag nanoparticle.
-The objective is to explore equilibrium coverage as a function of the oxygen chemical potential at a fixed temperature.
-The calculation uses the <cite>GrandCanonicalEnsemble</cite> class from <cite>mcpy</cite>, together with a move selector containing insertion, deletion, and lateral diffusion moves.</p>
-<p>For production studies, the <strong>EMT calculator</strong> used here can be replaced by a <strong>Machine Learning Interatomic Potential (MLIP)</strong> such as MACE, NequIP, or ACE.</p>
-<section id="thermodynamic-setup">
-<h2>Thermodynamic setup<a class="headerlink" href="#thermodynamic-setup" title="Link to this heading"></a></h2>
-<p>Chemical potentials are expressed in eV and correspond to reference values for Ag and O.
-The value of Δμ<sub>O</sub> shifts the oxygen potential relative to the reference, mimicking oxidizing or reducing conditions.
-The system is simulated at constant temperature T = 500 K.</p>
-<p><strong>System preparation</strong></p>
-<p>We first create a truncated octahedral Ag nanoparticle and define a spherical Monte Carlo cell that limits the sampling region for insertions and deletions.
-The spherical cell is constructed with atomic radii that define exclusion zones to prevent overlaps during insertion.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Octahedron</span>
+  <section id="gcmc-of-o-on-an-ag-octahedral-nanoparticle">
+<h1>GCMC of O on an Ag octahedral nanoparticle<a class="headerlink" href="#gcmc-of-o-on-an-ag-octahedral-nanoparticle" title="Link to this heading"></a></h1>
+<p>Grand-canonical sampling of oxygen on a truncated-octahedral Ag
+nanoparticle in vacuum. A <code class="xref py py-class docutils literal notranslate"><span class="pre">SphericalCell</span></code> confines insertions and
+deletions to a shell around the cluster.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">examples/gcmc_nano.py</span></code>.</p>
+<section id="goal">
+<h2>Goal<a class="headerlink" href="#goal" title="Link to this heading"></a></h2>
+<p>At fixed <span class="math notranslate nohighlight">\(T = 500\,\mathrm{K}\)</span> and a chosen <span class="math notranslate nohighlight">\(\mu_{\mathrm{O}}\)</span>,
+sample equilibrium O coverage on the nanoparticle. Repeat across
+<span class="math notranslate nohighlight">\(\Delta\mu_{\mathrm{O}}\)</span> to construct a coverage–chemical-potential
+curve.</p>
+</section>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>A MACE checkpoint, or any ASE calculator (the script defaults to
+<code class="docutils literal notranslate"><span class="pre">mace_mp</span></code> on CUDA — swap for EMT or another calculator for a quick
+smoke test).</p></li>
+<li><p>See <a class="reference internal" href="../first_simulation.html"><span class="doc">Your first simulation</span></a> for the minimal API walkthrough.</p></li>
+</ul>
+</section>
+<section id="code">
+<h2>Code<a class="headerlink" href="#code" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Octahedron</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mace.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">mace_mp</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">SphericalCell</span>
-
-<span class="n">atoms</span> <span class="o">=</span> <span class="n">Octahedron</span><span class="p">(</span><span class="s2">&quot;Ag&quot;</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">species_radii</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="mf">2.95</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">1.4</span><span class="p">}</span>
-<span class="n">scell</span> <span class="o">=</span> <span class="n">SphericalCell</span><span class="p">(</span>
-    <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
-    <span class="n">vacuum</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
-    <span class="n">species_radii</span><span class="o">=</span><span class="n">species_radii</span><span class="p">,</span>
-    <span class="n">mc_sample_points</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
-<span class="p">)</span>
-</pre></div>
-</div>
-<p><strong>Calculator</strong></p>
-<p>To allow fast testing, the EMT calculator is used.
-For realistic energetics, it can be replaced by a trained MACE model, for example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.calculators.emt</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMT</span>
-<span class="n">calculator</span> <span class="o">=</span> <span class="n">EMT</span><span class="p">()</span>
-<span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calculator</span>
-
-<span class="c1"># Example MACE calculator (replace path with your model)</span>
-<span class="c1"># from mcpy.calculators import MACE_F_Calculator</span>
-<span class="c1"># calculator = MACE_F_Calculator(</span>
-<span class="c1">#     model_paths=&quot;/path/to/mace.model&quot;,</span>
-<span class="c1">#     steps=20,</span>
-<span class="c1">#     fmax=0.1,</span>
-<span class="c1">#     cueq=False,</span>
-<span class="c1">#     device=&quot;cpu&quot;,</span>
-<span class="c1"># )</span>
-<span class="c1"># atoms.calc = calculator</span>
-</pre></div>
-</div>
-<p><strong>Move selection</strong></p>
-<p>The move selector combines insertion, deletion, and lateral displacement moves for the oxygen adsorbate.
-Probabilities are adjusted to balance adsorption and desorption attempts while promoting local relaxation through lateral diffusion.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">InsertionMove</span><span class="p">,</span> <span class="n">DeletionMove</span><span class="p">,</span> <span class="n">LateralDisplacementMove</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeletionMove</span><span class="p">,</span> <span class="n">InsertionMove</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves.move_selector</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
 
-<span class="n">move_selector</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">(</span>
-    <span class="p">[</span><span class="n">InsertionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;O&quot;</span><span class="p">],</span> <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">3675437856</span><span class="p">),</span> <span class="mf">0.40</span><span class="p">],</span>
-    <span class="p">[</span><span class="n">DeletionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;O&quot;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">43215423143</span><span class="p">),</span> <span class="mf">0.40</span><span class="p">],</span>
-    <span class="p">[</span><span class="n">LateralDisplacementMove</span><span class="p">(</span><span class="n">species</span><span class="o">=</span><span class="s2">&quot;O&quot;</span><span class="p">,</span> <span class="n">max_displacement</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">13579</span><span class="p">),</span> <span class="mf">0.20</span><span class="p">],</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mf">500.0</span>
+<span class="n">delta_mu_O</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span>
+<span class="n">mus</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.99</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mf">4.91</span> <span class="o">+</span> <span class="n">delta_mu_O</span><span class="p">}</span>
+
+<span class="n">ss</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">SeedSequence</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">seed_del</span><span class="p">,</span> <span class="n">seed_ins</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">generate_state</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">))</span>
+
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">Octahedron</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">scell</span> <span class="o">=</span> <span class="n">SphericalCell</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="p">,</span>
+    <span class="n">vacuum</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Ag&#39;</span><span class="p">:</span> <span class="mf">2.947</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+    <span class="n">mc_sample_points</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
 <span class="p">)</span>
-</pre></div>
-</div>
-<p><strong>Ensemble definition</strong></p>
-<p>The Grand Canonical ensemble is initialized with temperature, chemical potentials, and the move selector.
-The oxygen chemical potential is modified by Δμ<sub>O</sub> to control the adsorbate coverage.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimulationLogger</span>
 
-<span class="n">T</span> <span class="o">=</span> <span class="mf">500.0</span>  <span class="c1"># K</span>
-<span class="n">mus</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.99</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">4.91</span><span class="p">}</span>
-<span class="n">delta_mu_O</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.50</span>
-<span class="n">mus</span><span class="p">[</span><span class="s2">&quot;O&quot;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">delta_mu_O</span>
+<span class="n">calculator</span> <span class="o">=</span> <span class="n">mace_mp</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">)</span>
 
-<span class="n">logger</span> <span class="o">=</span> <span class="n">SimulationLogger</span><span class="p">(</span><span class="s2">&quot;gcmc.log&quot;</span><span class="p">,</span> <span class="n">write_every</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<span class="n">move_selector</span> <span class="o">=</span> <span class="n">MoveSelector</span><span class="p">(</span>
+    <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="p">[</span><span class="n">DeletionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed_del</span><span class="p">),</span>
+     <span class="n">InsertionMove</span><span class="p">(</span><span class="n">scell</span><span class="p">,</span> <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span> <span class="n">min_insert</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed_ins</span><span class="p">)],</span>
+<span class="p">)</span>
 
+<span class="n">tag</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">atoms</span><span class="o">.</span><span class="n">get_chemical_formula</span><span class="p">()</span><span class="si">}</span><span class="s1">_dmu_</span><span class="si">{</span><span class="n">delta_mu_O</span><span class="si">}</span><span class="s1">&#39;</span>
 <span class="n">gcmc</span> <span class="o">=</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">(</span>
     <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
     <span class="n">cells</span><span class="o">=</span><span class="p">[</span><span class="n">scell</span><span class="p">],</span>
+    <span class="n">calculator</span><span class="o">=</span><span class="n">calculator</span><span class="p">,</span>
     <span class="n">mu</span><span class="o">=</span><span class="n">mus</span><span class="p">,</span>
-    <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;O&quot;</span><span class="p">],</span>
+    <span class="n">units_type</span><span class="o">=</span><span class="s1">&#39;metal&#39;</span><span class="p">,</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;O&#39;</span><span class="p">],</span>
     <span class="n">temperature</span><span class="o">=</span><span class="n">T</span><span class="p">,</span>
     <span class="n">move_selector</span><span class="o">=</span><span class="n">move_selector</span><span class="p">,</span>
-    <span class="n">units_type</span><span class="o">=</span><span class="s2">&quot;metal&quot;</span><span class="p">,</span>
-    <span class="n">rng_seed</span><span class="o">=</span><span class="mi">24680</span><span class="p">,</span>
-    <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span>
-    <span class="n">observables_path</span><span class="o">=</span><span class="s2">&quot;gcmc_observables.csv&quot;</span><span class="p">,</span>
-    <span class="n">write_traj_every</span><span class="o">=</span><span class="mi">2000</span><span class="p">,</span>
-    <span class="n">traj_path</span><span class="o">=</span><span class="s2">&quot;gcmc_trajectory.traj&quot;</span><span class="p">,</span>
+    <span class="n">outfile</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.out&#39;</span><span class="p">,</span>
+    <span class="n">traj_file</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;gcmc_</span><span class="si">{</span><span class="n">tag</span><span class="si">}</span><span class="s1">.xyz&#39;</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="n">gcmc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="mi">1_000_000</span><span class="p">)</span>
 </pre></div>
 </div>
-<p><strong>Running the simulation</strong></p>
-<p>The simulation is divided into an equilibration phase followed by production steps.
-After completion, basic metrics such as move acceptance ratios and final coverage are printed.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">gcmc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">n_steps</span><span class="o">=</span><span class="mi">50_000</span><span class="p">,</span> <span class="n">equilibration</span><span class="o">=</span><span class="mi">5_000</span><span class="p">)</span>
-<span class="n">atoms</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;gcmc_final.traj&quot;</span><span class="p">)</span>
-
-<span class="n">acc</span> <span class="o">=</span> <span class="n">gcmc</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;acceptance&quot;</span><span class="p">,</span> <span class="p">{})</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Acceptance ratios:&quot;</span><span class="p">,</span> <span class="n">acc</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Final N(O):&quot;</span><span class="p">,</span> <span class="n">gcmc</span><span class="o">.</span><span class="n">observables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;N_O&quot;</span><span class="p">))</span>
-</pre></div>
-</div>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gcmc_&lt;formula&gt;_dmu_&lt;x&gt;.out</span></code> — step log with per-move acceptance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gcmc_&lt;formula&gt;_dmu_&lt;x&gt;.xyz</span></code> — extended XYZ trajectory.</p></li>
+</ul>
 </section>
 <section id="interpretation">
 <h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h2>
-<p>After convergence, analyse the resulting observables:</p>
 <ul class="simple">
-<li><p>Plot the oxygen coverage against step number to assess equilibration.</p></li>
-<li><p>Repeat the calculation for several values of Δμ<sub>O</sub> to construct a coverage–μ<sub>O</sub> diagram.</p></li>
-<li><p>Verify acceptance ratios for each move (ideal range: 10–50 %).
-Adjust <cite>min_insert</cite>, <cite>max_displacement</cite>, and move probabilities to maintain balance between insertion and deletion.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">SphericalCell</span></code> recomputes its free volume after every accepted
+move; <code class="docutils literal notranslate"><span class="pre">species_radii</span></code> set per-element exclusion radii that prevent
+trial insertions from overlapping existing atoms.</p></li>
+<li><p>Healthy insertion/deletion acceptance is typically 5–30 %. Adjust
+<code class="docutils literal notranslate"><span class="pre">min_insert</span></code> and the <code class="docutils literal notranslate"><span class="pre">vacuum</span></code> padding if acceptance collapses.</p></li>
+<li><p>Run a short warm-up and discard the leading frames before computing
+averages; the trajectory is written from step 0.</p></li>
 </ul>
 </section>
-<section id="common-pitfalls">
-<h2>Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Link to this heading"></a></h2>
+<section id="next-steps">
+<h2>Next steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>Ensure consistent <strong>energy units</strong> between the calculator and ensemble (<cite>units_type=’metal’</cite> for eV).</p></li>
-<li><p>Verify that the <strong>spherical cell</strong> has sufficient vacuum to avoid self-interaction.</p></li>
-<li><p>Always perform a short equilibration before collecting statistics.</p></li>
-<li><p>Fix random seeds for full <strong>reproducibility</strong>.</p></li>
+<li><p>Sweep <span class="math notranslate nohighlight">\(\Delta\mu_{\mathrm{O}}\)</span> and post-process the trajectories
+with <a class="reference internal" href="phase_diagram_analysis.html"><span class="doc">Phase diagram analysis from relaxed trajectories</span></a>.</p></li>
+<li><p>Replace the single sphere with a supported-particle setup in
+<a class="reference internal" href="gcmc_nano_supported.html"><span class="doc">GCMC of O on a supported Ag nanoparticle</span></a>.</p></li>
+<li><p>Add a metal permutation move on a bimetallic cluster in
+<a class="reference internal" href="gcmc_bimet_nano.html"><span class="doc">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</span></a>.</p></li>
 </ul>
 </section>
 </section>
@@ -220,7 +222,7 @@ Adjust <cite>min_insert</cite>, <cite>max_displacement</cite>, and move probabil
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="gcmc_custom_cell.html" class="btn btn-neutral float-left" title="Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="gcmc_bimet_nano.html" class="btn btn-neutral float-right" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="gcmc_bimet_nano.html" class="btn btn-neutral float-right" title="GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

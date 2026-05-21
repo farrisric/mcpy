@@ -43,6 +43,43 @@ Install only the backends you intend to use. For example, MACE:
 
 GPU support follows each backend's own installation guide.
 
+NVIDIA Alchemi backend (optional)
+---------------------------------
+
+For GPU-native MACE evaluation, ``mcpy`` ships an optional ``AlchemiCalculator``
+and ``AlchemiFCalculator`` backed by `nvalchemi-toolkit
+<https://github.com/NVIDIA/nvalchemi-toolkit>`_. Recommended for systems
+with **≥500 atoms** on CUDA — benchmarks on an RTX 5090 show ~2x speedup at
+586 atoms and ~4x speedup at 976 atoms vs ``mace_mp`` + ASE.
+
+Install via the ``alchemi`` extra:
+
+.. code-block:: bash
+
+   pip install -e .[alchemi]
+
+This pulls in ``nvalchemi-toolkit[mace]``. Requires a CUDA-enabled PyTorch
+build matching your driver.
+
+Usage (drop-in replacement for ``MACE_F_Calculator``):
+
+.. code-block:: python
+
+   from mcpy.calculators import AlchemiFCalculator
+
+   calc = AlchemiFCalculator(
+       checkpoint='medium-mpa-0',
+       steps=500,
+       fmax=0.05,
+       device='cuda',
+       enable_cueq=True,
+       compile_model=False,   # required for GCMC (dynamic atom count)
+       dt=1.0,                # tuned default; not 0.1
+   )
+
+See ``NVALCHEMI_NOTES.md`` in the repository root for tuning details and
+known pitfalls.
+
 MPI for Replica Exchange
 ------------------------
 

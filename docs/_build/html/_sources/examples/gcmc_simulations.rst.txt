@@ -1,64 +1,106 @@
-Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.
-================================================================
+Minimal GCMC on an Ag(111) slab
+===============================
 
-Replace the EMT calculator with your MLIP (e.g., MACE) for production.
+Shortest possible GCMC example using only EMT, suitable for a quick smoke
+test of the install. For a calibrated MLIP-based run see
+:doc:`../first_simulation` and the tutorial in
+:doc:`../tutorials/oxidation_phase_diagram`.
 
+Goal
+----
+
+Run 500 GCMC steps of oxygen insertion/deletion on a clean Ag(111) slab at
+:math:`T = 500\,\mathrm{K}` and :math:`\mu_{\mathrm{O}} = -5.0\,\mathrm{eV}`,
+using EMT so it runs anywhere without GPUs or MACE checkpoints.
+
+.. note::
+
+   EMT is **only** for plumbing tests — its O–Ag interaction is not
+   physical. Swap in MACE (or any ASE calculator) for production.
+
+Code
+----
 
 .. code-block:: python
-    
-    from __future__ import annotations
 
+   import numpy as np
+   from ase.build import fcc111
+   from ase.calculators.emt import EMT
+   from ase.constraints import FixAtoms
 
-    import numpy as np
-    from ase.build import fcc111
-    from ase.calculators.emt import EMT
+   from mcpy.calculators import BaseCalculator
+   from mcpy.cell import CustomCell
+   from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+   from mcpy.moves import InsertionMove, DeletionMove
+   from mcpy.moves.move_selector import MoveSelector
 
+   atoms = fcc111('Ag', a=4.085, size=(3, 3, 3), vacuum=8.0, periodic=True)
+   atoms.set_constraint(FixAtoms(indices=[a.index for a in atoms if a.tag == 3]))
 
-    # --- mcpy imports ---
-    from mcpy import GrandCanonicalEnsemble, MoveSelector
-    from mcpy.moves import AdsorbMove, DesorbMove, LateralDisplacementMove
-    from mcpy.chemistry import ChemicalPotential
-    from mcpy.logging import SimulationLogger
+   cell = CustomCell(
+       atoms,
+       custom_height=5.0,
+       bottom_z=atoms.positions[:, 2].max() + 0.5,
+       species_radii={'Ag': 2.75, 'O': 0.0},
+   )
 
+   # BaseCalculator wraps an ASE calculator with LBFGS pre-relaxation,
+   # which is the hybrid-GCMC workflow used throughout mcpy.
+   calculator = BaseCalculator(calculator=EMT(), steps=20, fmax=0.1)
 
-    # Build substrate
-    slab = fcc111('Ag', size=(4, 4, 4), vacuum=10.0)
-    slab.pbc = (True, True, False)
-    slab.calc = EMT() # swap with MLIP for production
+   ss = np.random.SeedSequence(0)
+   s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
+   moves = MoveSelector(
+       [1, 1],
+       [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1),
+        DeletionMove(cell, species=['O'], seed=s2)],
+   )
 
+   gcmc = GrandCanonicalEnsemble(
+       atoms=atoms,
+       cells=[cell],
+       calculator=calculator,
+       mu={'O': -5.0},
+       units_type='metal',
+       species=['O'],
+       temperature=500.0,
+       move_selector=moves,
+       outfile='gcmc_demo.out',
+       traj_file='gcmc_demo.xyz',
+   )
+   gcmc.run(steps=500)
 
-    # Thermodynamic state
-    T = 600.0 # K
-    mu_O = ChemicalPotential(species='O', value=-1.10, reference='eV') # example value
+Outputs
+-------
 
+- ``gcmc_demo.out`` — step log with per-move acceptance ratios.
+- ``gcmc_demo.xyz`` — extended XYZ trajectory; each frame's comment line
+  carries ``energy=`` and ``Lattice=``.
 
-    # Move set: adsorption, desorption, lateral diffusion
-    moves = MoveSelector([
-    (AdsorbMove(species='O', candidate_sites='fcc', max_height=1.8), 0.40),
-    (DesorbMove(species='O'), 0.40),
-    (LateralDisplacementMove(species='O', max_displacement=0.20), 0.20),
-    ])
+What the trajectory looks like
+------------------------------
 
+Running the same setup with a MACE-MP small foundation model (in place
+of EMT) over four :math:`\Delta\mu_O` values produces the following
+coverage trace — each line follows :math:`N_O` on the slab as a function
+of GCMC step:
 
-    logger = SimulationLogger('outputs/gcmc.log', write_every=100)
+.. figure:: ../_static/coverage_evolution.png
+   :alt: O coverage vs GCMC step for four chemical potentials.
+   :width: 80%
+   :align: center
 
+   N\ :sub:`O` vs GCMC step at four :math:`\Delta\mu_O` values, Ag(111)
+   3×3×3, :math:`T = 500\,\mathrm{K}`. More oxidizing conditions (yellow)
+   drive higher coverage; reducing conditions (purple) keep the slab
+   nearly clean.
 
-    ensemble = GrandCanonicalEnsemble(
-    atoms=slab,
-    temperature=T,
-    chemical_potentials=[mu_O],
-    moves=moves,
-    rng_seed=7,
-    logger=logger,
-    )
+The four trajectories can be concatenated and fed into the phase-diagram
+analyzer — see :doc:`phase_diagram_analysis`.
 
+Next steps
+----------
 
-    # Production parameters
-    n_steps = 50_000
-    ensemble.run(n_steps=n_steps, equilibration=5_000)
-
-
-    # Dump observables
-    ensemble.save_observables('outputs/gcmc_observables.csv')
-    slab.write('outputs/gcmc_final.traj')
-    print('GCMC completed. Coverage (theta):', ensemble.observables.get('coverage_O', None))
+- Replace EMT with a MACE checkpoint: see :doc:`../first_simulation`.
+- Sweep :math:`\mu_{\mathrm{O}}` to build a phase diagram:
+  :doc:`../tutorials/oxidation_phase_diagram`.

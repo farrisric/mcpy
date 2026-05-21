@@ -41,14 +41,30 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -77,86 +93,68 @@
              
   <section id="mcpy">
 <h1>mcpy<a class="headerlink" href="#mcpy" title="Link to this heading"></a></h1>
-<section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
-<p><cite>mcpy</cite> is a Python library for <strong>Grand Canonical Monte Carlo (GCMC)</strong> simulations of atomistic
-systems, with native support for <strong>Replica-Exchange GCMC (RE-GCMC)</strong> and modern
-<strong>machine-learning interatomic potentials (MLIPs)</strong> such as MACE.</p>
-<p>It targets computational materials science and heterogeneous catalysis, where the goal is often
-to predict the thermodynamic stability and composition of surfaces and nanoparticles under
-realistic temperature and chemical-potential conditions. The library is built on the
-<strong>Atomic Simulation Environment (ASE)</strong>, so any ASE-compatible calculator – DFT, classical
-potentials, or MLIPs – can drive the sampling.</p>
-<p>The implementation follows the hybrid GCMC scheme of Senftle et al., in which trial
-insertions/deletions are paired with a short local relaxation. This makes acceptance
-realistic in densely packed metallic systems and is a prerequisite for the workflow used to
-build oxidation phase diagrams of Ag surfaces and nanoparticles in our reference application.</p>
-</section>
-<section id="features">
-<h2>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h2>
+<p>Grand Canonical Monte Carlo for atomistic systems — with native Replica
+Exchange and machine-learning interatomic potentials.</p>
+<p><cite>mcpy</cite> predicts the composition and stability of surfaces and nanoparticles
+under realistic temperature and chemical-potential conditions. It is built on
+the Atomic Simulation Environment (ASE), so any ASE-compatible calculator —
+DFT, classical potentials, or MLIPs such as MACE — can drive the sampling.</p>
+<section id="highlights">
+<h2>Highlights<a class="headerlink" href="#highlights" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>GCMC and Replica-Exchange GCMC in a single, modular run loop.</p></li>
-<li><p>Free-volume estimation via Monte Carlo sampling, with element-wise exclusion radii
-(<cite>species_radii</cite>) that can be calibrated from relaxed structures.</p></li>
-<li><p>Canonical (NVT) sampling for fixed-composition runs.</p></li>
-<li><p>Multiple cell geometries: full periodic box, rectangular sub-slab, and spherical region
-around a nanoparticle.</p></li>
-<li><p>Trial-move framework with insertion, deletion, displacement, permutation, shake, and short
-Brownian (Velocity-Verlet) moves, mixed through a weighted <cite>MoveSelector</cite>.</p></li>
-<li><p>Per-step output and XYZ trajectory writers with per-move acceptance statistics.</p></li>
-<li><p>Phase-diagram utilities for post-processing GCMC ensembles.</p></li>
+<li><p><strong>GCMC and Replica-Exchange GCMC</strong> in a single, modular run loop.</p></li>
+<li><p><strong>Hybrid scheme of Senftle et al.</strong> — every trial insertion/deletion is
+followed by a short local relaxation, which makes acceptance realistic in
+densely packed metallic systems.</p></li>
+<li><p><strong>Calibratable free volume</strong> via Monte Carlo sampling with element-wise
+exclusion radii.</p></li>
+<li><p><strong>Cell geometries out of the box</strong> — periodic box, rectangular sub-slab,
+spherical region around a nanoparticle, and user-defined custom cells.</p></li>
+<li><p><strong>Modular trial moves</strong> — insertion, deletion, displacement, permutation,
+shake, and Brownian moves, mixed through a weighted <code class="docutils literal notranslate"><span class="pre">MoveSelector</span></code>.</p></li>
+<li><p><strong>MLIP-ready</strong> — MACE, NequIP, ACE, and an optional GPU-native
+NVIDIA Alchemi backend for large systems.</p></li>
+<li><p><strong>Phase-diagram utilities</strong> for post-processing GCMC ensembles into
+surface and nanoparticle phase diagrams.</p></li>
 </ul>
+</section>
+<section id="citing-mcpy">
+<h2>Citing mcpy<a class="headerlink" href="#citing-mcpy" title="Link to this heading"></a></h2>
+<p>If you use <cite>mcpy</cite> in a publication, please cite the project repository and
+the hybrid GCMC method it implements (see <a class="reference internal" href="bibliography.html"><span class="doc">Bibliography</span></a>).</p>
 <div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<p class="caption" role="heading"><span class="caption-text">Get started</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#requirements">Requirements</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#from-pypi">From PyPI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#from-source">From source</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-the-installation">Verify the installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#mlip-backends">MLIP backends</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#mpi-for-replica-exchange">MPI for Replica Exchange</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="first_simulation.html">Your first simulation</a></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#choosing-exclusion-radii-species-radii">Choosing exclusion radii (<cite>species_radii</cite>)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#sampling-resolution-mc-sample-points">Sampling resolution (<cite>mc_sample_points</cite>)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#cell-full-periodic-simulation-box"><cite>Cell</cite> – full periodic simulation box</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#customcell-rectangular-sub-slab"><cite>CustomCell</cite> – rectangular sub-slab</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#sphericalcell-nanoparticle-centred-region"><cite>SphericalCell</cite> – nanoparticle-centred region</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#nullcell-placeholder"><cite>NullCell</cite> – placeholder</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cells.html#choosing-the-right-cell">Choosing the right cell</a></li>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
+<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a><ul>
-<li class="toctree-l2"><a class="reference internal" href="species_radii.html#idea">Idea</a></li>
-<li class="toctree-l2"><a class="reference internal" href="species_radii.html#free-volume-estimate-recap">Free-volume estimate (recap)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="species_radii.html#reference-workflow-o-on-ag">Reference workflow: O on Ag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="species_radii.html#mapping-pair-distances-to-element-wise-radii">Mapping pair distances to element-wise radii</a></li>
-<li class="toctree-l2"><a class="reference internal" href="species_radii.html#automated-calibration-with-compute-radii-py">Automated calibration with <cite>compute_radii.py</cite></a></li>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#baseensemble"><cite>BaseEnsemble</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#canonicalensemble"><cite>CanonicalEnsemble</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#grandcanonicalensemble"><cite>GrandCanonicalEnsemble</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#free-volume-and-species-radii">Free volume and <cite>species_radii</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#replicaexchange"><cite>ReplicaExchange</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="ensembles.html#choosing-the-right-ensemble">Choosing the right ensemble</a></li>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 </ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="moves.html#moveselector"><cite>MoveSelector</cite></a></li>
-<li class="toctree-l2"><a class="reference internal" href="moves.html#built-in-moves">Built-in moves</a></li>
-<li class="toctree-l2"><a class="reference internal" href="moves.html#experimental-moves">Experimental moves</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#acceptance-rules">Acceptance rules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#examples-by-workflow">Examples by workflow</a></li>
-</ul>
-</li>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 </div>
 </section>

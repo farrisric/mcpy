@@ -19,8 +19,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Grand Canonical Monte Carlo on an Ag Nanoparticle" href="gcmc_nano.html" />
-    <link rel="prev" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="mc_simulations.html" /> 
+    <link rel="next" title="GCMC of O on an Ag octahedral nanoparticle" href="gcmc_nano.html" />
+    <link rel="prev" title="Canonical Monte Carlo (NVT) on a bimetallic nanoparticle" href="mc_simulations.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -42,13 +42,24 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
@@ -56,10 +67,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a><ul class="current">
 <li class="toctree-l4 current"><a class="current reference internal" href="#">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_nano.html">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_nano_supported.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano.html">GCMC of O on an Ag octahedral nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano_supported.html">GCMC of O on a supported Ag nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Minimal GCMC on an Ag(111) slab</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a></li>
@@ -67,6 +78,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -273,8 +289,8 @@ the slab interior.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="mc_simulations.html" class="btn btn-neutral float-left" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="gcmc_nano.html" class="btn btn-neutral float-right" title="Grand Canonical Monte Carlo on an Ag Nanoparticle" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="mc_simulations.html" class="btn btn-neutral float-left" title="Canonical Monte Carlo (NVT) on a bimetallic nanoparticle" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gcmc_nano.html" class="btn btn-neutral float-right" title="GCMC of O on an Ag octahedral nanoparticle" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

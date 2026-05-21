@@ -20,8 +20,8 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="examples/mc_simulations.html" />
-    <link rel="prev" title="Moves" href="moves.html" /> 
+    <link rel="next" title="Canonical Monte Carlo (NVT) on a bimetallic nanoparticle" href="examples/mc_simulations.html" />
+    <link rel="prev" title="Oxidation phase diagram of a metallic surface" href="tutorials/oxidation_phase_diagram.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -43,13 +43,24 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+              <p class="caption" role="heading"><span class="caption-text">Get started</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="first_simulation.html">Your first simulation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
 <li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
-<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
 <li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Examples</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#acceptance-rules">Acceptance rules</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#basin-hopping-and-metropolis-mc-share-the-same-functional-form">Basin Hopping and Metropolis MC share the same functional form</a></li>
@@ -59,19 +70,19 @@
 <li class="toctree-l2"><a class="reference internal" href="#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#examples-by-workflow">Examples by workflow</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="examples/mc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/mc_simulations.html">Canonical Monte Carlo (NVT) on a bimetallic nanoparticle</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="examples/gcmc_custom_cell.html">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
-<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_nano.html">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_nano_supported.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_nano.html">GCMC of O on an Ag octahedral nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_bimet_nano.html">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_nano_supported.html">GCMC of O on a supported Ag nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/gcmc_simulations.html">Minimal GCMC on an Ag(111) slab</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="examples/replica_exchange_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="examples/replica_exchange_simulations.html">Replica-Exchange GCMC across a temperature ladder</a></li>
 <li class="toctree-l4"><a class="reference internal" href="examples/phase_diagram_analysis.html">Phase diagram analysis from relaxed trajectories</a></li>
 </ul>
 </li>
@@ -79,6 +90,11 @@
 </li>
 </ul>
 </li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bibliography.html">Bibliography</a></li>
 </ul>
 
         </div>
@@ -179,7 +195,7 @@ transitions.</p>
 <h3>Canonical Monte Carlo (NVT)<a class="headerlink" href="#canonical-monte-carlo-nvt" title="Link to this heading"></a></h3>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="examples/mc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/mc_simulations.html">Canonical Monte Carlo (NVT) on a bimetallic nanoparticle</a></li>
 </ul>
 </div>
 </section>
@@ -188,10 +204,10 @@ transitions.</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="examples/gcmc_custom_cell.html">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_nano.html">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_nano_supported.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_nano.html">GCMC of O on an Ag octahedral nanoparticle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_bimet_nano.html">GCMC of H on a Pt/Au bimetallic nanoparticle with metal permutations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_nano_supported.html">GCMC of O on a supported Ag nanoparticle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/gcmc_simulations.html">Minimal GCMC on an Ag(111) slab</a></li>
 </ul>
 </div>
 </section>
@@ -199,7 +215,7 @@ transitions.</p>
 <h3>Replica-Exchange GCMC (RE-GCMC)<a class="headerlink" href="#replica-exchange-gcmc-re-gcmc" title="Link to this heading"></a></h3>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="examples/replica_exchange_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/replica_exchange_simulations.html">Replica-Exchange GCMC across a temperature ladder</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/phase_diagram_analysis.html">Phase diagram analysis from relaxed trajectories</a></li>
 </ul>
 </div>
@@ -211,8 +227,8 @@ transitions.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="moves.html" class="btn btn-neutral float-left" title="Moves" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="examples/mc_simulations.html" class="btn btn-neutral float-right" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="tutorials/oxidation_phase_diagram.html" class="btn btn-neutral float-left" title="Oxidation phase diagram of a metallic surface" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="examples/mc_simulations.html" class="btn btn-neutral float-right" title="Canonical Monte Carlo (NVT) on a bimetallic nanoparticle" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

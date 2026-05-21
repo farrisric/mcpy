@@ -1,45 +1,71 @@
 mcpy
 ====
 
-Overview
---------
+Grand Canonical Monte Carlo for atomistic systems — with native Replica
+Exchange and machine-learning interatomic potentials.
 
-`mcpy` is a Python library for **Grand Canonical Monte Carlo (GCMC)** simulations of atomistic
-systems, with native support for **Replica-Exchange GCMC (RE-GCMC)** and modern
-**machine-learning interatomic potentials (MLIPs)** such as MACE.
+`mcpy` predicts the composition and stability of surfaces and nanoparticles
+under realistic temperature and chemical-potential conditions. It is built on
+the Atomic Simulation Environment (ASE), so any ASE-compatible calculator —
+DFT, classical potentials, or MLIPs such as MACE — can drive the sampling.
 
-It targets computational materials science and heterogeneous catalysis, where the goal is often
-to predict the thermodynamic stability and composition of surfaces and nanoparticles under
-realistic temperature and chemical-potential conditions. The library is built on the
-**Atomic Simulation Environment (ASE)**, so any ASE-compatible calculator -- DFT, classical
-potentials, or MLIPs -- can drive the sampling.
+Highlights
+----------
 
-The implementation follows the hybrid GCMC scheme of Senftle et al., in which trial
-insertions/deletions are paired with a short local relaxation. This makes acceptance
-realistic in densely packed metallic systems and is a prerequisite for the workflow used to
-build oxidation phase diagrams of Ag surfaces and nanoparticles in our reference application.
+- **GCMC and Replica-Exchange GCMC** in a single, modular run loop.
+- **Hybrid scheme of Senftle et al.** — every trial insertion/deletion is
+  followed by a short local relaxation, which makes acceptance realistic in
+  densely packed metallic systems.
+- **Calibratable free volume** via Monte Carlo sampling with element-wise
+  exclusion radii.
+- **Cell geometries out of the box** — periodic box, rectangular sub-slab,
+  spherical region around a nanoparticle, and user-defined custom cells.
+- **Modular trial moves** — insertion, deletion, displacement, permutation,
+  shake, and Brownian moves, mixed through a weighted ``MoveSelector``.
+- **MLIP-ready** — MACE, NequIP, ACE, and an optional GPU-native
+  NVIDIA Alchemi backend for large systems.
+- **Phase-diagram utilities** for post-processing GCMC ensembles into
+  surface and nanoparticle phase diagrams.
 
-Features
---------
 
-- GCMC and Replica-Exchange GCMC in a single, modular run loop.
-- Free-volume estimation via Monte Carlo sampling, with element-wise exclusion radii
-  (`species_radii`) that can be calibrated from relaxed structures.
-- Canonical (NVT) sampling for fixed-composition runs.
-- Multiple cell geometries: full periodic box, rectangular sub-slab, and spherical region
-  around a nanoparticle.
-- Trial-move framework with insertion, deletion, displacement, permutation, shake, and short
-  Brownian (Velocity-Verlet) moves, mixed through a weighted `MoveSelector`.
-- Per-step output and XYZ trajectory writers with per-move acceptance statistics.
-- Phase-diagram utilities for post-processing GCMC ensembles.
+Citing mcpy
+-----------
+
+If you use `mcpy` in a publication, please cite the project repository and
+the hybrid GCMC method it implements (see :doc:`bibliography`).
+
 
 .. toctree::
-   :caption: Contents:
-   :maxdepth: 2
+   :caption: Get started
+   :maxdepth: 1
 
    installation
+   first_simulation
+
+.. toctree::
+   :caption: Background
+   :maxdepth: 1
+
+   ensembles
    cells
    species_radii
-   ensembles
    moves
+
+.. toctree::
+   :caption: Tutorials
+   :maxdepth: 1
+
+   tutorials/oxidation_phase_diagram
+
+.. toctree::
+   :caption: Examples
+   :maxdepth: 1
+
    examples
+
+.. toctree::
+   :caption: Reference
+   :maxdepth: 1
+
+   glossary
+   bibliography

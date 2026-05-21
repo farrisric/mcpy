@@ -2,10 +2,39 @@ Phase diagram analysis from relaxed trajectories
 ================================================
 
 This example shows how to analyze relaxed structures and construct a phase-diagram plot
-using the utility function in `utils/phase_diagram.py`.
+using the utility function in :mod:`mcpy.utils.phase_diagram`.
 
 The script evaluates the phase stability of each relaxed frame as a function of the oxygen
-chemical potential ``\\Delta\\mu_O`` and selects the lowest-energy structure across the sweep.
+chemical potential :math:`\Delta\mu_O` and selects the lowest-energy structure across the sweep.
+
+Example output
+--------------
+
+The figure below was produced by running a short MACE-MP sweep across
+:math:`\Delta\mu_O \in \{-0.6, -0.3, 0.0, +0.3\}\,\mathrm{eV}` on an
+Ag(111) 3×3×3 slab at :math:`T = 500\,\mathrm{K}` (248 GCMC frames total),
+then feeding the merged trajectory into ``analyze_phase_diagram_results``.
+
+.. figure:: ../_static/phase_diagram_quick.png
+   :alt: Surface phase diagram from a quick MACE-MP GCMC sweep.
+   :width: 80%
+   :align: center
+
+   Surface Gibbs energy :math:`\gamma(\Delta\mu_O)` for every relaxed
+   configuration in the sweep (gray lines). The colored envelope marks
+   the stable phase at each :math:`\Delta\mu_O`; vertical bands separate
+   distinct stable phases. The hatched dark-red region indicates
+   :math:`\Delta\mu_O > -\Delta H^f_{\mathrm{Ag}_2\mathrm{O}}`, where
+   bulk Ag\ :sub:`2`\ O is more stable than any surface phase.
+
+What to read off the plot:
+
+- **Phase transitions** appear as kinks in the lower envelope; the
+  :math:`\Delta\mu_O` values are returned in ``transitions_delta_mu_o``.
+- **Color intensity** encodes the surface oxide ratio
+  (O atoms divided by top-layer Ag atoms above ``z_threshold``).
+- The leftmost band corresponds to the clean reference slab
+  (``idx_ref``); rightward bands carry increasing O coverage.
 
 Thermodynamic model (from the thesis)
 --------------------------------------
@@ -53,12 +82,12 @@ Concretely, it performs the following loop:
 4. For each :math:`\Delta\mu_O` bin, select the index of the stable phase as ``argmin`` of :math:`\gamma` over all configurations.
 5. Detect transition points when the stable phase index changes between neighboring bins; these are returned as ``transitions_delta_mu_o``.
 
-Import from `utils`
--------------------
+Importing the analysis helper
+-----------------------------
 
 .. code-block:: python
 
-   from utils import analyze_phase_diagram_results
+   from mcpy.utils.phase_diagram import analyze_phase_diagram_results
 
    result = analyze_phase_diagram_results(
        trajectory_path="relaxed_structures.xyz",
@@ -106,5 +135,6 @@ You can still run the same analysis script directly:
 
 .. code-block:: bash
 
-   python utils/phase_diagram.py relaxed_structures.xyz --idx-ref 2400 --output lines_phases_mace.png
+   python -m mcpy.utils.phase_diagram relaxed_structures.xyz \
+       --idx-ref 2400 --output lines_phases_mace.png
 
