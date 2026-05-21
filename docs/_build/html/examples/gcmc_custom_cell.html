@@ -1,61 +1,132 @@
+
+
 <!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<html lang="en" data-content_root="../">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell &mdash; mcpy 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
 
-    <title>Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell &#8212; mcpy 0.1.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d1102ebc" />
-    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=686e5160" />
-    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
-    <script src="../_static/documentation_options.js?v=01f34227"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Grand Canonical Monte Carlo on an Ag Nanoparticle" href="gcmc_nano.html" />
-    <link rel="prev" title="Examples" href="../examples.html" />
-   
-  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
-  
+    <link rel="prev" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." href="mc_simulations.html" /> 
+</head>
 
-  
-  
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
 
-  </head><body>
-  
-
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
           
+          
+          <a href="../index.html" class="icon icon-home">
+            mcpy
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../cells.html">Cells</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../species_radii.html">Calibrating <cite>species_radii</cite></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ensembles.html">Ensembles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../moves.html">Moves</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#acceptance-rules">Acceptance rules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../examples.html#examples-by-workflow">Examples by workflow</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../examples.html#canonical-monte-carlo-nvt">Canonical Monte Carlo (NVT)</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano.html">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_bimet_nano.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_nano_supported.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+<li class="toctree-l4"><a class="reference internal" href="gcmc_simulations.html">Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle.</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
 
-          <div class="body" role="main">
-            
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">mcpy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
+      <li class="breadcrumb-item active">Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/examples/gcmc_custom_cell.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
   <section id="grand-canonical-monte-carlo-on-a-small-ag-111-surface-with-a-custom-simulation-cell">
-<h1>Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell<a class="headerlink" href="#grand-canonical-monte-carlo-on-a-small-ag-111-surface-with-a-custom-simulation-cell" title="Link to this heading">¶</a></h1>
+<h1>Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell<a class="headerlink" href="#grand-canonical-monte-carlo-on-a-small-ag-111-surface-with-a-custom-simulation-cell" title="Link to this heading"></a></h1>
 <p>This tutorial demonstrates <strong>Grand Canonical Monte Carlo (GCMC)</strong> on an Ag(111) slab where
 adsorbate insertion/deletion is restricted to a prescribed volume above the surface via a
 <code class="docutils literal notranslate"><span class="pre">CustomCell</span></code>. Two distinct cells are used: one targeting Ag atoms and another targeting O atoms.
 Chemical potentials are referenced to bulk Ag and ½O₂, then shifted by Δμ<sub>O</sub> to explore
 oxidizing conditions at fixed temperature.</p>
+<p>This tutorial sets up a constrained grand-canonical Monte Carlo run (variable atom counts),
+so you sample equilibrium adsorption configurations for specified <code class="docutils literal notranslate"><span class="pre">mu</span></code> and <code class="docutils literal notranslate"><span class="pre">T</span></code>.</p>
 <section id="concept-of-the-custom-cell">
-<h2>Concept of the custom cell<a class="headerlink" href="#concept-of-the-custom-cell" title="Link to this heading">¶</a></h2>
+<h2>Concept of the custom cell<a class="headerlink" href="#concept-of-the-custom-cell" title="Link to this heading"></a></h2>
 <p>A custom simulation cell restricts trial insertions and deletions to a region directly above the
-surface, improving efficiency and avoiding spurious attempts deep in the slab. The lower boundary
-(<code class="docutils literal notranslate"><span class="pre">bottom_z</span></code>) anchors the cell a small distance above the topmost Ag layer; <code class="docutils literal notranslate"><span class="pre">custom_height</span></code> defines
-the accessible vertical extent. Different effective radii can be used in each cell to encode distinct
-overlap/clearance rules for Ag versus O manipulations.</p>
+surface. This avoids wasting proposals in excluded (physically irrelevant) space.</p>
+<p>The lower boundary (<code class="docutils literal notranslate"><span class="pre">bottom_z</span></code>) anchors the cell above the topmost Ag layer, and <code class="docutils literal notranslate"><span class="pre">custom_height</span></code>
+sets the accessible vertical extent. Different <code class="docutils literal notranslate"><span class="pre">species_radii</span></code> can be used in each cell to apply
+different overlap/clearance rules for Ag vs O.</p>
+<section id="relaxation-style-gcmc-acceptance">
+<h3>Relaxation-style GCMC acceptance<a class="headerlink" href="#relaxation-style-gcmc-acceptance" title="Link to this heading"></a></h3>
+<p>In dense metals, raw insertions often clash with nearby atoms, producing very low acceptance.
+To reduce this effect, evaluate acceptance using a briefly relaxed trial configuration
+(<code class="docutils literal notranslate"><span class="pre">energy</span> <span class="pre">relaxation</span> <span class="pre">step</span></code>; Senftle et al., 2013).
+This is especially important when insertions/deletions are restricted to a constrained region
+above the surface (Wexler et al., 2019).</p>
+</section>
 </section>
 <section id="system-construction">
-<h2>System construction<a class="headerlink" href="#system-construction" title="Link to this heading">¶</a></h2>
+<h2>System construction<a class="headerlink" href="#system-construction" title="Link to this heading"></a></h2>
 <p>We build a periodic Ag(111) slab, fix the bottom layer, and define two <code class="docutils literal notranslate"><span class="pre">CustomCell</span></code> instances
 for Ag and O, respectively. The values for <code class="docutils literal notranslate"><span class="pre">bottom_z</span></code> and <code class="docutils literal notranslate"><span class="pre">custom_height</span></code> should be adapted
 to your lattice constant and vacuum spacing.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ase.build</span> <span class="kn">import</span> <span class="n">fcc111</span>
-<span class="kn">from</span> <span class="nn">ase.constraints</span> <span class="kn">import</span> <span class="n">FixAtoms</span>
-<span class="kn">from</span> <span class="nn">mcpy.cell</span> <span class="kn">import</span> <span class="n">CustomCell</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">fcc111</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.constraints</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixAtoms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">CustomCell</span>
 
 <span class="n">atoms</span> <span class="o">=</span> <span class="n">fcc111</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">4.165</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">periodic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">vacuum</span><span class="o">=</span><span class="mf">8.0</span><span class="p">)</span>
 <span class="n">bottom_layer</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">index</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">atoms</span> <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="mi">3</span><span class="p">]</span>
@@ -78,17 +149,17 @@ to your lattice constant and vacuum spacing.</p>
 </div>
 </section>
 <section id="calculator">
-<h2>Calculator<a class="headerlink" href="#calculator" title="Link to this heading">¶</a></h2>
+<h2>Calculator<a class="headerlink" href="#calculator" title="Link to this heading"></a></h2>
 <p>For a quick functional test, you may start with EMT. For production, switch to your
 trained MACE model. Keep units consistent with the ensemble (energies in eV).</p>
 <p><strong>EMT option</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ase.calculators.emt</span> <span class="kn">import</span> <span class="n">EMT</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.calculators.emt</span><span class="w"> </span><span class="kn">import</span> <span class="n">EMT</span>
 <span class="n">calculator</span> <span class="o">=</span> <span class="n">EMT</span><span class="p">()</span>
 <span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calculator</span>
 </pre></div>
 </div>
 <p><strong>MACE option</strong></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mcpy.calculators</span> <span class="kn">import</span> <span class="n">MACE_F_Calculator</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.calculators</span><span class="w"> </span><span class="kn">import</span> <span class="n">MACE_F_Calculator</span>
 <span class="n">calculator</span> <span class="o">=</span> <span class="n">MACE_F_Calculator</span><span class="p">(</span>
     <span class="n">model_paths</span><span class="o">=</span><span class="s1">&#39;/path/to/mace-small-density-agnesi-stress.model&#39;</span><span class="p">,</span>
     <span class="n">steps</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
@@ -101,12 +172,12 @@ trained MACE model. Keep units consistent with the ensemble (energies in eV).</p
 </div>
 </section>
 <section id="move-selection">
-<h2>Move selection<a class="headerlink" href="#move-selection" title="Link to this heading">¶</a></h2>
-<p>We combine four moves: deletion and insertion for Ag within the Ag-targeting cell, and
-deletion and insertion for O within the O-targeting cell. Probabilities are chosen to balance
-the four operations; <code class="docutils literal notranslate"><span class="pre">min_insert</span></code> controls the minimal clearance on insertion.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mcpy.moves</span> <span class="kn">import</span> <span class="n">DeletionMove</span><span class="p">,</span> <span class="n">InsertionMove</span>
-<span class="kn">from</span> <span class="nn">mcpy.moves.move_selector</span> <span class="kn">import</span> <span class="n">MoveSelector</span>
+<h2>Move selection<a class="headerlink" href="#move-selection" title="Link to this heading"></a></h2>
+<p>This tutorial combines four moves: Ag insertion/deletion in the Ag-targeting cell and
+O insertion/deletion in the O-targeting cell. The move weights balance these proposals, and
+<code class="docutils literal notranslate"><span class="pre">min_insert</span></code> controls the minimum clearance required for an insertion.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeletionMove</span><span class="p">,</span> <span class="n">InsertionMove</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves.move_selector</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
 
 <span class="n">move_list</span> <span class="o">=</span> <span class="p">[</span>
     <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span>
@@ -122,12 +193,12 @@ the four operations; <code class="docutils literal notranslate"><span class="pre
 </div>
 </section>
 <section id="thermodynamic-references">
-<h2>Thermodynamic references<a class="headerlink" href="#thermodynamic-references" title="Link to this heading">¶</a></h2>
-<p>We set μ<sub>Ag</sub> from bulk Ag and μ<sub>O</sub> from ½O₂ computed with the chosen calculator.
-To reduce bias from local relaxation settings during reference calculations, the calculator is
-temporarily made stricter, then restored for GCMC. Finally, Δμ<sub>O</sub> is applied to explore
-more oxidizing conditions.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ase.build</span> <span class="kn">import</span> <span class="n">bulk</span><span class="p">,</span> <span class="n">molecule</span>
+<h2>Thermodynamic references<a class="headerlink" href="#thermodynamic-references" title="Link to this heading"></a></h2>
+<p>We define reference chemical potentials from bulk Ag and from ½O₂ computed using the chosen calculator.
+To avoid bias from different relaxation tolerances, the calculator is temporarily made stricter for
+reference energies and then restored for production GCMC. Finally, <code class="docutils literal notranslate"><span class="pre">Δμ_O</span></code> shifts the oxygen
+chemical potential to generate more oxidizing conditions.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span><span class="p">,</span> <span class="n">molecule</span>
 
 <span class="n">o2</span> <span class="o">=</span> <span class="n">molecule</span><span class="p">(</span><span class="s1">&#39;O2&#39;</span><span class="p">)</span>
 <span class="n">ag_bulk</span> <span class="o">=</span> <span class="n">bulk</span><span class="p">(</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">4.165</span><span class="p">)</span>
@@ -153,10 +224,10 @@ more oxidizing conditions.</p>
 </div>
 </section>
 <section id="ensemble-and-run">
-<h2>Ensemble and run<a class="headerlink" href="#ensemble-and-run" title="Link to this heading">¶</a></h2>
+<h2>Ensemble and run<a class="headerlink" href="#ensemble-and-run" title="Link to this heading"></a></h2>
 <p>The ensemble uses metal units (eV, eV/K). The trajectory and text logs are written at
 user-defined intervals; adjust these for your system size and performance goals.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mcpy.ensembles.grand_canonical_ensemble</span> <span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
 
 <span class="n">species</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Ag&#39;</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">]</span>
 
@@ -180,15 +251,15 @@ user-defined intervals; adjust these for your system size and performance goals.
 </div>
 </section>
 <section id="interpretation">
-<h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading">¶</a></h2>
-<p>Scan several values of Δμ<sub>O</sub> to construct coverage–μ curves at fixed temperature.
-Inspect acceptance ratios per move type and adjust <code class="docutils literal notranslate"><span class="pre">min_insert</span></code>, cell height,
-and move probabilities if insertions are systematically rejected or deletions dominate.
-Validate that the chosen <code class="docutils literal notranslate"><span class="pre">bottom_z</span></code> and <code class="docutils literal notranslate"><span class="pre">custom_height</span></code> span the physically relevant
-adsorption region without intersecting the slab interior.</p>
+<h2>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h2>
+<p>Scan <code class="docutils literal notranslate"><span class="pre">Δμ_O</span></code> to build coverage vs chemical-potential curves at fixed temperature.
+If acceptance is poor, check acceptance ratios by move type and tune <code class="docutils literal notranslate"><span class="pre">min_insert</span></code>, cell height,
+and move weights.
+Finally, verify that <code class="docutils literal notranslate"><span class="pre">bottom_z</span></code>/<code class="docutils literal notranslate"><span class="pre">custom_height</span></code> cover the adsorption region without overlapping
+the slab interior.</p>
 </section>
 <section id="common-pitfalls">
-<h2>Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Link to this heading">¶</a></h2>
+<h2>Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>Mismatch between calculator units and ensemble settings.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">bottom_z</span></code> too low or <code class="docutils literal notranslate"><span class="pre">custom_height</span></code> too large, causing insertions inside the slab or in vacuum.</p></li>
@@ -199,79 +270,34 @@ adsorption region without intersecting the slab interior.</p>
 </section>
 
 
+           </div>
           </div>
-          
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="mc_simulations.html" class="btn btn-neutral float-left" title="Canonical Monte Carlo (constant NVT) on a small Ag nanoparticle." accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="gcmc_nano.html" class="btn btn-neutral float-right" title="Grand Canonical Monte Carlo on an Ag Nanoparticle" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Riccardo Farris, Emanuele Telari.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="Main">
-        <div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="../index.html">mcpy</a></h1>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
 
-
-
-
-
-
-
-
-
-<search id="searchbox" style="display: none" role="search">
-    <div class="searchformwrapper">
-    <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
-      <input type="submit" value="Go" />
-    </form>
-    </div>
-</search>
-<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="../examples.html">Examples</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="../examples.html#canonical-monte-carlo-mc">Canonical Monte Carlo (MC)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../examples.html#replica-exchange-grand-canonical-monte-carlo-re-gcmc">Replica-Exchange Grand Canonical Monte Carlo (RE-GCMC)</a></li>
-</ul>
-</li>
-</ul>
-
-<div class="relations">
-<h3>Related Topics</h3>
-<ul>
-  <li><a href="../index.html">Documentation overview</a><ul>
-  <li><a href="../examples.html">Examples</a><ul>
-      <li>Previous: <a href="../examples.html" title="previous chapter">Examples</a></li>
-      <li>Next: <a href="gcmc_nano.html" title="next chapter">Grand Canonical Monte Carlo on an Ag Nanoparticle</a></li>
-  </ul></li>
-  </ul></li>
-</ul>
-</div>
-
-
-
-
-
-
-
-
-        </div>
-      </div>
-      <div class="clearer"></div>
-    </div>
-    <div class="footer">
-      &#169;2025, Riccardo Farris, Emanuele Telari.
-      
-      |
-      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
-      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
-      
-      |
-      <a href="../_sources/examples/gcmc_custom_cell.rst.txt"
-          rel="nofollow">Page source</a>
-    </div>
-
-    
-
-    
-  </body>
+</body>
 </html>

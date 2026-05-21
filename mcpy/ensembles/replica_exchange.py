@@ -22,14 +22,11 @@ class ReplicaExchange:
                  outfile="replica_exchange.log",
                  write_out_interval=20,
                  seed=31):
-        """
-        ReplicaExchange for GCMC.
+        """ReplicaExchange for GCMC.
 
-        Parameters:
-        - gcmc_factory (function): Function to create a GCMC instance for a given temperature.
-        - temperatures (list): List of gcmc_properties for each replica.
-        - n_steps (int): Total number of GCMC steps.
-        - exchange_interval (int): Steps between exchange attempts.
+        ``gcmc_factory`` must produce per-rank unique output filenames (e.g.
+        by including ``rank`` in the traj/outfile paths), otherwise all
+        ranks race on the same files.
         """
         if MPI is None:
             raise ImportError("mpi4py is required for ReplicaExchange. Please install it.")
@@ -47,7 +44,6 @@ class ReplicaExchange:
             assert len(mus) == self.size, "Number of mus must match MPI ranks."
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
-        
 
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
@@ -58,32 +54,20 @@ class ReplicaExchange:
         self.logger = logging.getLogger(f"{__name__}.rank{self.rank}")
 
         self._outfile = outfile
+        self._outfile_handle = None
         self.write_out_interval = write_out_interval
 
     def get_partner_rank(self, global_random):
         if global_random > 0.5:
             if self.rank == 0 or self.rank == self.size - 1:
-                return None  # No valid partner for edge ranks in this case
+                return None
             return self.rank - 1 if self.rank % 2 == 0 else self.rank + 1
         else:
             return self.rank + 1 if self.rank % 2 == 0 else self.rank - 1
 
     def _acceptance_condition_T(self, state1, state2):
-        """
-        Determines whether to accept a replica exchange between two replicas.
-
-        Args:
-            state1 (dict): State of the first replica, including its energy.
-            temp1 (float): Temperature of the first replica.
-            state2 (dict): State of the second replica, including its energy.
-            temp2 (float): Temperature of the second replica.
-
-        Returns:
-            bool: True if the exchange is accepted, False otherwise.
-        """
         energy1 = state1['energy']
         beta1 = state1['beta']
-
         energy2 = state2['energy']
         beta2 = state2['beta']
 
@@ -99,16 +83,18 @@ class ReplicaExchange:
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
         exponential_arg = 0
+        deltas = {}
         for specie in self.gcmc.species:
-            for i, state in enumerate([state1, state2]):
+            for state in (state1, state2):
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 
             delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
+            deltas[specie] = delta_specie
             exponential_arg += (
                 state2['beta'] * state2['mu'][specie] * (-delta_specie)
-                ) + (
-                    state1['beta'] * state1['mu'][specie] * delta_specie
-                    )
+            ) + (
+                state1['beta'] * state1['mu'][specie] * delta_specie
+            )
 
         exponential = np.exp(exponential_arg)
         exchange_prob = min(1.0, exponential)
@@ -118,7 +104,7 @@ class ReplicaExchange:
             f"Exponential Arg: {exponential_arg:.3f}, "
             f"Exponential: {exponential:.3f}, "
             f"Exchange Prob: {exchange_prob:.3f}, "
-            f"Delta N: {delta_specie}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
+            f"Deltas: {deltas}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
         )
         return self.rng.get_uniform() < exchange_prob
@@ -147,7 +133,7 @@ class ReplicaExchange:
             )
         except Exception:
             self.logger.exception("Communication error with rank %s", partner_rank)
-            return
+            return False
 
         if self._acceptance_condition_T(rank_state, partner_state):
             self.logger.debug(f"Accepted exchange with rank {partner_rank}")
@@ -159,25 +145,33 @@ class ReplicaExchange:
 
     def run(self):
         """Run the Parallel Tempering GCMC simulation."""
+        # Per-rank GCMC initialization (opens its own outfile/traj).
+        self.gcmc.initialize_run()
         if self.rank == 0:
             self.initialize_outfile()
-            self.initialize_run()
+        self.initialize_run()
 
-        for step in range(self.gcmc_steps):
-            self.gcmc._run()
+        try:
+            for step in range(self.gcmc_steps):
+                self.gcmc._run()
 
-            if step > 0 and step % self.exchange_interval == 0:
-                self.gcmc.exchange_attempts += 1
-                if self.do_exchange():
-                    self.gcmc.exchange_successes += 1
+                if step > 0 and step % self.exchange_interval == 0:
+                    self.gcmc.exchange_attempts += 1
+                    if self.do_exchange():
+                        self.gcmc.exchange_successes += 1
 
-            if step % self.write_out_interval == 0:
-                # self.summarize_states(step)
-                self.write_outfile(step)
+                if step % self.write_out_interval == 0:
+                    self.write_outfile(step)
 
-            self._re_step += 1
-
-        self.gcmc.finalize_run()
+                self._re_step += 1
+        finally:
+            self.gcmc.finalize_run()
+            if self._outfile_handle is not None:
+                try:
+                    self._outfile_handle.close()
+                except OSError:
+                    self.logger.exception("Error closing %s", self._outfile)
+                self._outfile_handle = None
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
@@ -188,10 +182,6 @@ class ReplicaExchange:
                                  f"Mu: {state['mu']}")
 
     def initialize_run(self):
-        """
-        Initializes the Replica Exchange Monte Carlo simulation.
-        Prepares logging and prints the simulation parameters.
-        """
         self.logger.info("+-------------------------------------------------+")
         self.logger.info("| Replica Exchange Monte Carlo Simulation         |")
         self.logger.info("+-------------------------------------------------+")
@@ -199,7 +189,6 @@ class ReplicaExchange:
         self.logger.info(f"Total GCMC steps: {self.gcmc_steps}")
         self.logger.info(f"Exchange interval (steps): {self.exchange_interval}")
 
-        # Log atom count if available in GCMC state
         atom_count = len(self.gcmc.get_state()['atoms'])
         self.logger.info(f"Number of atoms in initial configuration: {atom_count}")
 
@@ -220,15 +209,6 @@ class ReplicaExchange:
         self.logger.info("-" * 140)
 
     def summarize_states(self, step):
-        """
-        Gathers and summarizes the state of all GCMC instances across ranks.
-
-        Args:
-            step (int): Current simulation step.
-
-        Returns:
-            dict: A dictionary containing summarized state information for all ranks.
-        """
         states = self.comm.gather(self.gcmc.get_state(), root=0)
         summary = {}
 
@@ -237,7 +217,7 @@ class ReplicaExchange:
                 gcmc_step = state.get('step', 'N/A')
                 energy = state.get('energy', 'N/A')
                 temperature = state.get('temperature', 'N/A')
-                atoms = state.get('atoms', None)  # Atoms object from ase
+                atoms = state.get('atoms', None)
                 exchange_attempts = state.get('exchange_attempts', 0)
                 exchange_successes = state.get('exchange_successes', 0)
                 chemical_potential = state.get('mu', None)
@@ -256,7 +236,6 @@ class ReplicaExchange:
                 else:
                     accepted_percentage = 0.0
 
-                # Format chemical potential
                 if chemical_potential is not None:
                     chemical_potential_str = ', '.join(
                         [f"{species}: {mu:.3f}" for species, mu in chemical_potential.items()]
@@ -264,7 +243,6 @@ class ReplicaExchange:
                 else:
                     chemical_potential_str = "Not specified"
 
-                # Store the summarized state information in the dictionary
                 summary[i] = {
                     "step": gcmc_step,
                     "atom_count_by_species": atom_count_by_species,
@@ -278,11 +256,11 @@ class ReplicaExchange:
                     temperature, accepted_percentage
                 ))
         return summary
-    
+
     def initialize_outfile(self):
-        """
-        Initialize the output file for writing the summarized states.
-        """
+        """Open the RE outfile and keep the handle for reuse."""
+        if self._outfile is None:
+            return
         try:
             with open(self._outfile, 'w') as outfile:
                 outfile.write("+-------------------------------------------------+\n")
@@ -292,7 +270,6 @@ class ReplicaExchange:
                 outfile.write(f"Total GCMC steps: {self.gcmc_steps}\n")
                 outfile.write(f"Exchange interval (steps): {self.exchange_interval}\n")
 
-                # Log atom count if available in GCMC state
                 atom_count = len(self.gcmc.get_state()['atoms'])
                 outfile.write(f"Number of atoms in initial configuration: {atom_count}\n")
 
@@ -311,28 +288,29 @@ class ReplicaExchange:
                     "Chemical Potentials (eV)", "Temperature (K)", "Accepted Exchange (%)"
                 ))
                 outfile.write("-" * 140 + "\n")
-        except IOError:
+            self._outfile_handle = open(self._outfile, 'a')
+        except OSError:
             self.logger.exception("Error opening output file %s", self._outfile)
+            raise
 
     def write_outfile(self, step: int) -> None:
-        """
-        Write the summarized states to the output file.
-
-        Args:
-            step (int): The current step.
-        """
+        """Append a summary block for ``step`` to the RE outfile."""
         summary = self.summarize_states(step)
+        if self._outfile_handle is None:
+            return
         try:
-            with open(self._outfile, 'a') as outfile:
-                for rank, state in summary.items():
-                    outfile.write("{:<5} {:<10} {:<25} {:<15.6f} "
-                                  "{:<35} {:<20} {:<25.2f}\n".format(
-                                            rank, state["step"],
-                                            state["atom_count_by_species"],
-                                            state["energy"],
-                                            state["chemical_potential"],
-                                            state["temperature"],
-                                            state["accepted_percentage"]
-                                            ))
-        except IOError:
+            for rank, state in summary.items():
+                self._outfile_handle.write(
+                    "{:<5} {:<10} {:<25} {:<15.6f} "
+                    "{:<35} {:<20} {:<25.2f}\n".format(
+                        rank, state["step"],
+                        state["atom_count_by_species"],
+                        state["energy"],
+                        state["chemical_potential"],
+                        state["temperature"],
+                        state["accepted_percentage"]
+                    )
+                )
+            self._outfile_handle.flush()
+        except (OSError, AttributeError):
             self.logger.exception("Error writing summary to file %s", self._outfile)

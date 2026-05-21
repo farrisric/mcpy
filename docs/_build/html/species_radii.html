@@ -1,0 +1,259 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calibrating species_radii &mdash; mcpy 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Ensembles" href="ensembles.html" />
+    <link rel="prev" title="Cells" href="cells.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            mcpy
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Calibrating <cite>species_radii</cite></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#idea">Idea</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#free-volume-estimate-recap">Free-volume estimate (recap)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reference-workflow-o-on-ag">Reference workflow: O on Ag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mapping-pair-distances-to-element-wise-radii">Mapping pair distances to element-wise radii</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#automated-calibration-with-compute-radii-py">Automated calibration with <cite>compute_radii.py</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#inputs">Inputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs-one-set-per-inserted-species">Outputs (one set per inserted species)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#run">Run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#interpretation">Interpretation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">mcpy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Calibrating <cite>species_radii</cite></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/species_radii.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="calibrating-species-radii">
+<h1>Calibrating <cite>species_radii</cite><a class="headerlink" href="#calibrating-species-radii" title="Link to this heading"></a></h1>
+<p><cite>species_radii</cite> is the element-wise dictionary that controls how the free-volume Monte Carlo
+estimator decides whether a sampled point is occupied. Because <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> enters
+the GCMC insertion and deletion acceptance terms directly (see <a class="reference internal" href="ensembles.html#free-volume"><span class="std std-ref">Free volume and species_radii</span></a>), the
+quality of these radii is a sensitive input – not a tuning knob to leave at default values.</p>
+<p>This page describes how to choose them in a reproducible way.</p>
+<section id="idea">
+<h2>Idea<a class="headerlink" href="#idea" title="Link to this heading"></a></h2>
+<p>The exclusion radius for a host species should reflect the <strong>shortest adsorbate-host distance
+that survives a local relaxation</strong> with the calculator used in production. In the thesis
+that motivates this library, this radius is denoted <span class="math notranslate nohighlight">\(r_{\mathrm{relax}}\)</span> and is
+identified as the position of the first maximum in the radial distribution function (RDF) of
+the adsorbate around host atoms, taken over an ensemble of relaxed insertion trials.</p>
+<p>In other words: every value of <cite>species_radii</cite> should be tied to the specific
+calculator and relaxation settings used during production. Re-calibrate if either changes.</p>
+</section>
+<section id="free-volume-estimate-recap">
+<h2>Free-volume estimate (recap)<a class="headerlink" href="#free-volume-estimate-recap" title="Link to this heading"></a></h2>
+<p>For completeness, the estimator used by every cell object in <cite>mcpy</cite> is:</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}I_k =
+\begin{cases}
+1, &amp; \exists\, a\ \text{such that}\ \|\mathbf{x}_k-\mathbf{r}_a\|^2 \le r_{\mathrm{species}(a)}^2,\\
+0, &amp; \text{otherwise,}
+\end{cases}
+\qquad
+V_{\mathrm{free}} = V_{\mathrm{cell}}\,\bigl(1 - \tfrac{1}{N_{\mathrm{MC}}}\textstyle\sum_k I_k\bigr).\end{split}\]</div>
+<p>See <a class="reference internal" href="ensembles.html#free-volume"><span class="std std-ref">Free volume and species_radii</span></a> for the role of <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> in the GCMC acceptance terms.</p>
+<p>The insertion region itself is chosen to focus sampling on chemically relevant volumes:</p>
+<ul class="simple">
+<li><p><strong>Surface slabs</strong> – a sub-region spanning the full <span class="math notranslate nohighlight">\((x, y)\)</span> extent of the cell and
+a finite thickness along <span class="math notranslate nohighlight">\(z\)</span> (e.g. ~5.5 Å) covering the topmost atomic layer and a
+thin vacuum gap.</p></li>
+<li><p><strong>Nanoparticles</strong> – a sphere centred on the particle, with a small vacuum margin
+(e.g. ~3 Å) between the outermost atom and the boundary so insertions stay close to the
+surface.</p></li>
+</ul>
+</section>
+<section id="reference-workflow-o-on-ag">
+<h2>Reference workflow: O on Ag<a class="headerlink" href="#reference-workflow-o-on-ag" title="Link to this heading"></a></h2>
+<p>For oxygen insertions on silver surfaces the recommended workflow is:</p>
+<ol class="arabic simple">
+<li><p>Build representative Ag slabs covering the facets and coverages relevant to your study.</p></li>
+<li><p>Place a single O atom at many candidate sites (top, bridge, hollow, plus randomised
+lateral positions and heights).</p></li>
+<li><p>Relax each structure with the <em>same</em> calculator and convergence settings used in
+production.</p></li>
+<li><p>For every relaxed structure, record the nearest O-Ag distance.</p></li>
+<li><p>Aggregate the distribution and read off a conservative minimum stable O-Ag distance –
+for example, the first peak of the RDF or the lower edge of its dominant mode.</p></li>
+</ol>
+<p>The resulting distance defines the O/Ag exclusion scale used in <cite>species_radii</cite>.</p>
+</section>
+<section id="mapping-pair-distances-to-element-wise-radii">
+<h2>Mapping pair distances to element-wise radii<a class="headerlink" href="#mapping-pair-distances-to-element-wise-radii" title="Link to this heading"></a></h2>
+<p><cite>species_radii</cite> stores per-element radii, while the measurement above produces a <em>pair</em>
+distance. Either of the following conventions is used in the reference application; just be
+consistent across a project:</p>
+<ul>
+<li><p><strong>All on the host species</strong> – put the full pair distance on the host and zero on the
+adsorbate. For O on Ag:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">species_radii</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="n">d_min_O_Ag</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Split between species</strong> – divide the pair distance equally:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">species_radii</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">d_min_O_Ag</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">d_min_O_Ag</span><span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>Regardless of choice, validate the calibration with a short pilot run before launching
+production: monitor the insertion-move acceptance ratio and the reported
+<span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> – both should be stable and non-degenerate.</p>
+</section>
+<section id="automated-calibration-with-compute-radii-py">
+<h2>Automated calibration with <cite>compute_radii.py</cite><a class="headerlink" href="#automated-calibration-with-compute-radii-py" title="Link to this heading"></a></h2>
+<p>The script <cite>mcpy/utils/compute_radii.py</cite> automates the workflow above for FCC(111) hosts:</p>
+<ul class="simple">
+<li><p>builds a periodic FCC(111) slab of the chosen metal,</p></li>
+<li><p>repeatedly inserts a trial atom into a <cite>CustomCell</cite> placed over the surface,</p></li>
+<li><p>relaxes each insertion with the supplied MACE model,</p></li>
+<li><p>records the nearest-neighbour distance before and after relaxation,</p></li>
+<li><p>saves the distance pairs and writes a histogram/KDE plot for visual inspection.</p></li>
+</ul>
+<section id="inputs">
+<h3>Inputs<a class="headerlink" href="#inputs" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>a path to a trained MACE model (passed as the single command-line argument).</p></li>
+</ul>
+</section>
+<section id="outputs-one-set-per-inserted-species">
+<h3>Outputs (one set per inserted species)<a class="headerlink" href="#outputs-one-set-per-inserted-species" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;species&gt;_distances.npy</span></code> – pairs of <code class="docutils literal notranslate"><span class="pre">(d_insertion,</span> <span class="pre">d_relaxed)</span></code> nearest-neighbour
+distances.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dist_hist.png</span></code> – histogram and KDE of the relaxed distances, used to pick a
+conservative exclusion distance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">insertion.log</span></code> – progress and per-trial diagnostics.</p></li>
+</ul>
+</section>
+<section id="configuration">
+<h3>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h3>
+<p>Edit the top of <cite>compute_radii.py</cite> to match your system before running:</p>
+<ul class="simple">
+<li><p><cite>metal_species</cite> (e.g. <cite>“Ag”</cite>),</p></li>
+<li><p><cite>gas_species</cite> (e.g. <cite>“O”</cite>),</p></li>
+<li><p><cite>lattice_param</cite>,</p></li>
+<li><p><cite>cell_bottom</cite>, <cite>cell_height</cite> – defines the rectangular insertion sub-slab,</p></li>
+<li><p><cite>n_trials</cite>,</p></li>
+<li><p><cite>relax_max_steps</cite>, <cite>relax_fmax</cite> – relaxation convergence.</p></li>
+</ul>
+</section>
+<section id="run">
+<h3>Run<a class="headerlink" href="#run" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>mcpy/utils/compute_radii.py<span class="w"> </span>/path/to/your_mace_model.model
+</pre></div>
+</div>
+</section>
+<section id="interpretation">
+<h3>Interpretation<a class="headerlink" href="#interpretation" title="Link to this heading"></a></h3>
+<p>Inspect <code class="docutils literal notranslate"><span class="pre">&lt;species&gt;_distances.npy</span></code> and <code class="docutils literal notranslate"><span class="pre">dist_hist.png</span></code>. Identify the first peak of the
+relaxed distribution – that is your <span class="math notranslate nohighlight">\(r_{\mathrm{relax}}\)</span>. Then translate it into
+element-wise radii using one of the conventions above:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">species_radii</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="n">d_min_O_Ag</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The same script and procedure apply to other host/adsorbate pairs by changing
+<cite>metal_species</cite> and <cite>gas_species</cite>.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="cells.html" class="btn btn-neutral float-left" title="Cells" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ensembles.html" class="btn btn-neutral float-right" title="Ensembles" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Riccardo Farris, Emanuele Telari.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

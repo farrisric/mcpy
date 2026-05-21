@@ -1,0 +1,313 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ensembles &mdash; mcpy 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Moves" href="moves.html" />
+    <link rel="prev" title="Calibrating species_radii" href="species_radii.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            mcpy
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
+<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Ensembles</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#baseensemble"><cite>BaseEnsemble</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#canonicalensemble"><cite>CanonicalEnsemble</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grandcanonicalensemble"><cite>GrandCanonicalEnsemble</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#acceptance-rules">Acceptance rules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#free-volume-and-species-radii">Free volume and <cite>species_radii</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#with-or-without-relaxation">With or without relaxation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#replicaexchange"><cite>ReplicaExchange</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#choosing-the-right-ensemble">Choosing the right ensemble</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">mcpy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Ensembles</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/ensembles.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ensembles">
+<h1>Ensembles<a class="headerlink" href="#ensembles" title="Link to this heading"></a></h1>
+<p>An <em>ensemble</em> in <cite>mcpy</cite> is the object that owns the Monte Carlo loop. It holds the atomic
+configuration, the energy calculator, the set of cells used for free-volume estimation, and
+the <cite>MoveSelector</cite> that proposes trial configurations. It then evaluates the appropriate
+acceptance rule and writes the trajectory and log.</p>
+<p>Three ensembles are available:</p>
+<ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">CanonicalEnsemble</span></code> – fixed composition (NVT) Metropolis sampling.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">GrandCanonicalEnsemble</span></code> – variable composition at fixed <span class="math notranslate nohighlight">\((\mu, V, T)\)</span>.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ReplicaExchange</span></code> – a wrapper that runs several GCMC replicas at different
+temperatures or chemical potentials and periodically attempts exchanges between them.</p></li>
+</ul>
+<p>The remainder of this page describes each one, the acceptance criteria they implement, and the
+free-volume estimator used by GCMC insertion/deletion.</p>
+<section id="baseensemble">
+<h2><cite>BaseEnsemble</cite><a class="headerlink" href="#baseensemble" title="Link to this heading"></a></h2>
+<p>Shared infrastructure used by every concrete ensemble:</p>
+<ul class="simple">
+<li><p>storage of <cite>atoms</cite>, <cite>cells</cite>, and the ASE-compatible calculator,</p></li>
+<li><p>single-point energy evaluation (optionally preceded by a local relaxation),</p></li>
+<li><p>trajectory and log writers driven by <cite>trajectory_write_interval</cite> and
+<cite>outfile_write_interval</cite>,</p></li>
+<li><p>initialization, finalization, and step-counter management.</p></li>
+</ul>
+<p><cite>BaseEnsemble</cite> is abstract – you instantiate one of the concrete subclasses below.</p>
+</section>
+<section id="canonicalensemble">
+<h2><cite>CanonicalEnsemble</cite><a class="headerlink" href="#canonicalensemble" title="Link to this heading"></a></h2>
+<p>Samples the canonical (NVT) distribution at fixed composition. Trial moves are proposed by
+the configured <cite>MoveSelector</cite> and accepted with the Metropolis criterion.</p>
+<p>For a configuration <span class="math notranslate nohighlight">\(i\)</span> with energy <span class="math notranslate nohighlight">\(E_i\)</span>, the canonical Boltzmann weight is</p>
+<div class="math notranslate nohighlight">
+\[P_i = \frac{e^{-\beta E_i}}{Z},
+\qquad
+Z = \sum_j e^{-\beta E_j},\]</div>
+<p>with <span class="math notranslate nohighlight">\(\beta = 1/(k_B T)\)</span>. The acceptance probability for a trial move
+<span class="math notranslate nohighlight">\(i \rightarrow j\)</span> reduces to the symmetric Metropolis form</p>
+<div class="math notranslate nohighlight">
+\[P_{ij}^{\mathrm{acc}} = \min\!\left(1,\; e^{-\beta (E_j - E_i)}\right).\]</div>
+<p>Typical use: structural optimization or thermal sampling at fixed stoichiometry.</p>
+</section>
+<section id="grandcanonicalensemble">
+<h2><cite>GrandCanonicalEnsemble</cite><a class="headerlink" href="#grandcanonicalensemble" title="Link to this heading"></a></h2>
+<p>Samples adsorption/desorption equilibria where the number of selected species fluctuates in
+contact with a reservoir at fixed chemical potentials.</p>
+<p>In a grand-canonical run, the user fixes:</p>
+<ul class="simple">
+<li><p><cite>temperature</cite> – sets <span class="math notranslate nohighlight">\(\beta = 1/(k_B T)\)</span>,</p></li>
+<li><p><cite>mu</cite> – a dictionary mapping each chemical species to its reservoir chemical potential,</p></li>
+<li><p><cite>species</cite> – the chemical symbols that the move set is allowed to insert or delete,</p></li>
+<li><p><cite>cells</cite> – one or more cell objects defining the insertion region and providing the
+accessible (free) volume,</p></li>
+<li><p><cite>move_selector</cite> – the weighted collection of trial moves.</p></li>
+</ul>
+<section id="acceptance-rules">
+<h3>Acceptance rules<a class="headerlink" href="#acceptance-rules" title="Link to this heading"></a></h3>
+<p>For a number-conserving move (e.g. displacement, permutation), <cite>GrandCanonicalEnsemble</cite> falls
+back to the Metropolis criterion above. For number-changing moves, the de-Broglie factors
+appear:</p>
+<p>Deletion <span class="math notranslate nohighlight">\((N \rightarrow N-1)\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[P_{ij}^{\,N \rightarrow N-1} =
+\min\!\left(1,\; \frac{N\,\Lambda^3}{z\,V_{\mathrm{free}}}
+\,e^{-\beta (E_j - E_i)}\right).\]</div>
+<p>Insertion <span class="math notranslate nohighlight">\((N \rightarrow N+1)\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[P_{ij}^{\,N \rightarrow N+1} =
+\min\!\left(1,\; \frac{z\,V_{\mathrm{free}}}{(N+1)\,\Lambda^3}
+\,e^{-\beta (E_j - E_i)}\right).\]</div>
+<p>Here <span class="math notranslate nohighlight">\(z = e^{\beta \mu}\)</span> is the species activity, and</p>
+<div class="math notranslate nohighlight">
+\[\Lambda = \frac{h}{\sqrt{2\pi m\, k_B T}}\]</div>
+<p>is the thermal de Broglie wavelength. The geometric volume <span class="math notranslate nohighlight">\(V\)</span> of the textbook
+formulation is replaced by the accessible free volume <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> returned by
+the configured cell – see <a class="reference internal" href="#free-volume"><span class="std std-ref">Free volume and species_radii</span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.ensembles.grand_canonical_ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">GrandCanonicalEnsemble</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.moves</span><span class="w"> </span><span class="kn">import</span> <span class="n">MoveSelector</span>
+
+<span class="n">gcmc</span> <span class="o">=</span> <span class="n">GrandCanonicalEnsemble</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="o">=</span><span class="n">atoms</span><span class="p">,</span>
+    <span class="n">cells</span><span class="o">=</span><span class="p">[</span><span class="n">cell</span><span class="p">],</span>
+    <span class="n">calculator</span><span class="o">=</span><span class="n">calculator</span><span class="p">,</span>
+    <span class="n">mu</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">5.0</span><span class="p">,</span> <span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mf">2.9</span><span class="p">},</span>
+    <span class="n">units_type</span><span class="o">=</span><span class="s2">&quot;metal&quot;</span><span class="p">,</span>
+    <span class="n">species</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;O&quot;</span><span class="p">],</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+    <span class="n">move_selector</span><span class="o">=</span><span class="n">move_selector</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">gcmc</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">10000</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>A trajectory is appended to <cite>traj_file</cite> (extended XYZ, with <cite>energy=</cite> and
+<cite>Lattice=</cite> on the comment line) every <cite>trajectory_write_interval</cite> steps.</p></li>
+<li><p>A human-readable log is written to <cite>outfile</cite> every <cite>outfile_write_interval</cite> steps,
+containing the step index, particle count, current energy, and the per-interval
+acceptance ratio of each registered move. The interval counters are reset after every
+write; cumulative ratios are reported at the end of the run.</p></li>
+</ul>
+</section>
+</section>
+<section id="free-volume-and-species-radii">
+<span id="free-volume"></span><h2>Free volume and <cite>species_radii</cite><a class="headerlink" href="#free-volume-and-species-radii" title="Link to this heading"></a></h2>
+<p>In the textbook GCMC equations, <span class="math notranslate nohighlight">\(V\)</span> is the geometric volume of the simulation box. In
+practice, dense atomistic systems leave only a fraction of that volume actually accessible
+to a new particle. <cite>mcpy</cite> follows the hybrid scheme of Senftle et al.: every cell object
+estimates an accessible volume <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> by Monte Carlo sampling and that
+quantity is used in the acceptance rules above.</p>
+<p>Let <span class="math notranslate nohighlight">\(V_{\mathrm{cell}}\)</span> be the geometric volume of the insertion region and
+<span class="math notranslate nohighlight">\(N_{\mathrm{MC}}\)</span> the number of random sample points <span class="math notranslate nohighlight">\(\mathbf{x}_k\)</span>. Each sample
+point is classified by an indicator that tests whether it falls inside the exclusion sphere
+of any atom <span class="math notranslate nohighlight">\(a\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}I_k =
+\begin{cases}
+1, &amp; \exists\, a\ \text{such that}\ \|\mathbf{x}_k-\mathbf{r}_a\|^2 \le r_{\mathrm{species}(a)}^2,\\
+0, &amp; \text{otherwise.}
+\end{cases}\end{split}\]</div>
+<p>The occupied fraction and the resulting free volume are</p>
+<div class="math notranslate nohighlight">
+\[f_{\mathrm{occ}} = \frac{1}{N_{\mathrm{MC}}}\sum_{k=1}^{N_{\mathrm{MC}}} I_k,
+\qquad
+V_{\mathrm{free}} = V_{\mathrm{cell}}\,(1 - f_{\mathrm{occ}}).\]</div>
+<p>Two parameters control this estimator on every cell:</p>
+<ul class="simple">
+<li><p><cite>species_radii</cite> – an element-wise mapping from chemical species to an exclusion radius.
+Physically meaningful values are critical: if the radii are too small, GCMC will spend
+most of its time proposing overlapping insertions; if they are too large, the accessible
+volume collapses and insertions become impossible. See <a class="reference internal" href="species_radii.html"><span class="doc">Calibrating species_radii</span></a> for a
+reproducible workflow to calibrate them from short relaxation trials.</p></li>
+<li><p><cite>mc_sample_points</cite> – number of random points used in the estimate. More points reduce
+statistical noise on <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> at the cost of a single up-front sweep per
+configuration change.</p></li>
+</ul>
+<section id="with-or-without-relaxation">
+<h3>With or without relaxation<a class="headerlink" href="#with-or-without-relaxation" title="Link to this heading"></a></h3>
+<p>GCMC workflows in <cite>mcpy</cite> are typically run in one of two styles:</p>
+<ul class="simple">
+<li><p><strong>No relaxation</strong> – propose, evaluate the trial energy, accept/reject. Fast per step,
+but acceptance is dominated by overlap rejections in dense regions.</p></li>
+<li><p><strong>With relaxation</strong> – propose, run a short local optimization on the trial structure,
+then accept/reject using the relaxed energy. This is the workflow used in the
+reference application: relaxation absorbs unphysical overlaps and lets the system reach
+stable acceptance behaviour in roughly an order of magnitude fewer steps.</p></li>
+</ul>
+<p>In both cases the free-volume estimate enters the insertion/deletion acceptance, so good
+<cite>species_radii</cite> calibration pays off either way.</p>
+</section>
+</section>
+<section id="replicaexchange">
+<h2><cite>ReplicaExchange</cite><a class="headerlink" href="#replicaexchange" title="Link to this heading"></a></h2>
+<p><cite>ReplicaExchange</cite> parallelises sampling by running several GCMC replicas at different
+temperatures <em>or</em> different chemical potentials, one per MPI rank, and periodically
+attempting to swap their configurations. It requires <cite>mpi4py</cite> and a user-supplied factory
+that constructs the rank-local <cite>GrandCanonicalEnsemble</cite>.</p>
+<p>The exchange between two neighbouring replicas in temperature ladders is accepted with the
+standard parallel-tempering criterion</p>
+<div class="math notranslate nohighlight">
+\[P_{\mathrm{exch}} = \min\!\left(1,\; e^{(\beta_2 - \beta_1)(E_2 - E_1)}\right),\]</div>
+<p>and an analogous expression involving <span class="math notranslate nohighlight">\(\beta\mu \Delta N\)</span> is used when replicas
+differ in chemical potentials. After acceptance, replicas swap their configurations and
+energies; partner selection alternates between even and odd ranks on consecutive exchange
+attempts to ensure every replica eventually mixes with both neighbours.</p>
+<p>Notes:</p>
+<ul class="simple">
+<li><p>the ensemble factory must produce per-rank output filenames (e.g. by including <cite>rank</cite> in
+the trajectory and log paths) so that ranks do not race on the same files;</p></li>
+<li><p>one MPI rank corresponds to one replica.</p></li>
+</ul>
+</section>
+<section id="choosing-the-right-ensemble">
+<h2>Choosing the right ensemble<a class="headerlink" href="#choosing-the-right-ensemble" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">CanonicalEnsemble</span></code> – fixed-composition sampling, structural relaxation, or
+thermal annealing.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">GrandCanonicalEnsemble</span></code> – variable-composition adsorption/desorption studies at
+fixed <span class="math notranslate nohighlight">\((\mu, T)\)</span>, e.g. oxidation phase diagrams.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ReplicaExchange</span></code> – when a single GCMC trajectory is prone to getting trapped in
+a single basin and broader thermodynamic coverage is needed.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="species_radii.html" class="btn btn-neutral float-left" title="Calibrating species_radii" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="moves.html" class="btn btn-neutral float-right" title="Moves" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Riccardo Farris, Emanuele Telari.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

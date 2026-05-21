@@ -62,7 +62,6 @@ def main():
 
     # number of trials and logging
     n_trials = 10000
-    log_file = 'insertion.log'
     log_freq = 500
 
     calculator = MACE_F_Calculator(
@@ -73,25 +72,18 @@ def main():
         device=device,
     )
 
-    with open(log_file, 'w') as f:
-        f.write('### Insertion log ###\n')
-        f.write('\n---------------------------------------\n')
-        f.write(f'System: {metal_species}-{gas_species}\n')
-        f.write(f'{metal_species} lattice parameter: {lattice_param:.4f}\n')
-        f.write(f'MACE model used: {model_path}\n')
-        f.write(f'MACE model device: {device}\n')
-        f.write(f'Species to insert: {species_to_insert}\n')
-        f.write(f'Num. trials per inserted species = {n_trials}\n')
-        f.write('---------------------------------------\n')
-        f.write('###### Starting insertions ######\n')
+    logger.info("### Insertion run ###")
+    logger.info("System: %s-%s", metal_species, gas_species)
+    logger.info("%s lattice parameter: %.4f", metal_species, lattice_param)
+    logger.info("MACE model: %s (device=%s)", model_path, device)
+    logger.info("Species to insert: %s", species_to_insert)
+    logger.info("Trials per species: %d", n_trials)
+    logger.info("Starting insertions")
 
     for insert_species in species_to_insert:
         relaxed_distances = []
         insertion_distances = []
-        with open(log_file, 'a') as f:
-            f.write('---------------------------------------\n')
-            f.write(f'Starting insertion of {insert_species}\n')
-            f.write('---------------------------------------\n')
+        logger.info("Starting insertion of %s", insert_species)
         for i in range(n_trials):
             if i % log_freq == 0:
                 logger.info('Insertion %d / %d', i, n_trials)
@@ -110,9 +102,7 @@ def main():
         np.save(f'{insert_species}_distances.npy',
                 np.vstack((insertion_distances, relaxed_distances)).T)
 
-    with open(log_file, 'a') as f:
-        f.write('---------------------------------------\n')
-        f.write('###### Insertions completed ######')
+    logger.info("Insertions completed")
 
     # plot results
     plt.rcParams.update({

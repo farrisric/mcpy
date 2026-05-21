@@ -1,157 +1,140 @@
-from ase.build import fcc110,fcc111,fcc211,fcc100, bulk, molecule
-from ase.constraints import FixAtoms
-from mcpy.moves import DeletionMove
-from mcpy.moves import InsertionMove
-from mcpy.moves.move_selector import MoveSelector
-from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-from mcpy.calculators import MACE_F_Calculator
-from mcpy.cell import CustomCell as Cell
-from mcpy.ensembles import ReplicaExchange
+"""GCMC of metal + gas adsorption on a generic fcc surface with two CustomCell regions.
+
+Supports fcc(111), fcc(100), fcc(110), fcc(211) terminations.
+"""
+import argparse
+import os
+
 import numpy as np
-import sys
+from ase.build import fcc100, fcc111
+from ase.constraints import FixAtoms
+
+from mcpy.utils.logging import configure as configure_logging
+
+configure_logging()
+
+from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
+from mcpy.moves.move_selector import MoveSelector  # noqa: E402
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
+from mcpy.calculators import MACE_F_Calculator  # noqa: E402
+from mcpy.cell import CustomCell as Cell  # noqa: E402
 
 
-#### initial system parameters
-metal_species = 'Au'
-metal_lattice_param = 4.1755
-gas_species = 'O'
-species = [metal_species, gas_species]
-
-### surface generation parametrs
-surface_type = '111' # implemented surfaces: 111, 100, 110, 211 all are created with last layer fixed, only 110 has the last two layers fixed --> better to create it with at least 4-5 layers 
-surface_size = (4,4,3)
-vacuum = 8
-
-### insertion parameters
-metal_insertion_radii = {metal_species: 2.75, gas_species: 0.0}
-gas_insertion_radii = {metal_species: 2.11, gas_species: 0.0}
-min_insert = 0.5 # Angstrom, threshold below which insertion will be rejected and tried again
-same_cell = True # True if insertion cells are the same for both elements
-
-if same_cell:
-    cell_height = 5
-    cell_bottom_pos = 10.411
-    metal_cell_height = gas_cell_height = cell_height
-    metal_cell_bottom_pos = gas_cell_bottom_pos = cell_bottom_pos
-else:
-    metal_cell_height = 4
-    metal_cell_bottom_pos = 10.411
-    gas_cell_height = 5
-    gas_cell_bottom_pos = 10.411
-
-
-### MACE model parameters
-
-model_path = sys.argv[1] # path to mace model
-device = sys.argv[3]
-rel_max_steps = 40
-rel_f_max = 0.1
-
-### Simulation parameters
-
-mu_metal = -3.26999 # bulk metal DFT energy
-delta_mu_metal = -0.16 # correction term due to the temperature not equal to 0 K
-mu_gas = -4.91 # DFT energy of gas molecule, for biatomic molecule 1/2 DFT energy
-delta_mu_gas = float(sys.argv[2]) # delta_mu_O
-
-Temp = 500 # simulation temperature
-
-num_metal_del_moves = num_metal_ins_moves = 25 # number for both insertion and delition moves of the metal atoms
-num_gas_del_moves = num_gas_ins_moves = 25 # number of both insertion and delition moves of gas atoms
-moves_num_list = [num_metal_del_moves, num_gas_del_moves, num_metal_ins_moves, num_gas_ins_moves] # the sum of all the moves number will define a gcmc step  
-gcmc_steps = 200 # number of gcmc steps to perform, every steps perform the number of moves set in move_num_lis, then total number of moves = gcmc_steps*sum(moves_num_list)
-write_out_interval = 1
-
-### Create starting configuration
-
-if surface_type == '111':
-    atoms = fcc111(metal_species, a= metal_lattice_param, size=surface_size, periodic=True, vacuum=vacuum)
-    bottom_layer = [a.index for a in atoms if a.tag == surface_size[-1]]
-    constraint = FixAtoms(indices=bottom_layer)
-    atoms.set_constraint(constraint)
-elif surface_type == '100':
-    atoms = fcc100(metal_species, a= metal_lattice_param, size=surface_size, periodic=True, vacuum=vacuum)
-    bottom_layer = [a.index for a in atoms if a.tag == surface_size[-1]]
-    constraint = FixAtoms(indices=bottom_layer)
-    atoms.set_constraint(constraint)
-elif surface_type == '110':
-    atoms = fcc100(metal_species, a= metal_lattice_param, size=surface_size, periodic=True, vacuum=vacuum)
-    bottom_layer = [a.index for a in atoms if a.tag == surface_size[-1] or a.tag == surface_size[-1]-1]
-    constraint = FixAtoms(indices=bottom_layer)
-    atoms.set_constraint(constraint)
-elif surface_type == '211':
-    atoms = fcc100(metal_species, a= metal_lattice_param, size=surface_size, periodic=True, vacuum=vacuum)
-    layer_size = surface_size[0]*surface_size[1]
-    bottom_layer = list(range(len(atoms)))[-layer_size:]
-    constraint = FixAtoms(indices=bottom_layer)
-    atoms.set_constraint(constraint)
-else:
-    raise RuntimeError("Invalid surface type selected")
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--model-path', required=True, help='Path to the MACE model file')
+    p.add_argument('--delta-mu-gas', type=float, required=True, help='Shift applied to mu_gas (eV)')
+    p.add_argument('--device', default='cuda', help='Torch device for MACE')
+    p.add_argument('--metal', default='Au', help='Metal species symbol')
+    p.add_argument('--gas', default='O', help='Gas species symbol')
+    p.add_argument('--lattice-param', type=float, default=4.1755, help='fcc lattice constant (Å)')
+    p.add_argument('--surface-type', default='111', choices=['111', '100', '110', '211'])
+    p.add_argument('--surface-size', type=int, nargs=3, default=[4, 4, 3])
+    p.add_argument('--vacuum', type=float, default=8.0, help='Vacuum spacing (Å)')
+    p.add_argument('--T', type=float, default=500.0, help='Temperature (K)')
+    p.add_argument('--mu-metal', type=float, default=-3.26999, help='Bulk metal DFT energy (eV)')
+    p.add_argument('--delta-mu-metal', type=float, default=-0.16, help='Shift to mu_metal (eV)')
+    p.add_argument('--mu-gas', type=float, default=-4.91, help='Reference mu_gas (eV)')
+    p.add_argument('--moves-per-step', type=int, default=25,
+                   help='Insertion+deletion moves per species per GCMC step')
+    p.add_argument('--gcmc-steps', type=int, default=200, help='Number of GCMC steps')
+    p.add_argument('--write-interval', type=int, default=1, help='Outfile/traj write interval')
+    p.add_argument('--min-insert', type=float, default=0.5,
+                   help='Min insertion distance to existing atoms (Å)')
+    p.add_argument('--cell-height', type=float, default=5.0, help='Insertion cell height (Å)')
+    p.add_argument('--cell-bottom-z', type=float, default=10.411, help='Cell bottom z (Å)')
+    p.add_argument('--metal-radius', type=float, default=2.75)
+    p.add_argument('--gas-radius', type=float, default=2.11)
+    p.add_argument('--rel-max-steps', type=int, default=40, help='LBFGS relaxation steps')
+    p.add_argument('--rel-fmax', type=float, default=0.1, help='LBFGS force convergence (eV/Å)')
+    p.add_argument('--seed', type=int, default=None, help='Master seed (random if unset)')
+    p.add_argument('--outdir', default='.', help='Output directory')
+    return p.parse_args()
 
 
-### Initialize Cell object for the insertion regions
-cell_metal_gcmc = Cell(atoms, custom_height=metal_cell_height, bottom_z=metal_cell_bottom_pos,
-                  species_radii=metal_insertion_radii) 
+def build_slab(args):
+    size = tuple(args.surface_size)
+    if args.surface_type == '111':
+        atoms = fcc111(args.metal, a=args.lattice_param, size=size,
+                       periodic=True, vacuum=args.vacuum)
+        bottom = [a.index for a in atoms if a.tag == size[-1]]
+    elif args.surface_type == '100':
+        atoms = fcc100(args.metal, a=args.lattice_param, size=size,
+                       periodic=True, vacuum=args.vacuum)
+        bottom = [a.index for a in atoms if a.tag == size[-1]]
+    elif args.surface_type == '110':
+        # 110 termination: fix last two layers
+        atoms = fcc100(args.metal, a=args.lattice_param, size=size,
+                       periodic=True, vacuum=args.vacuum)
+        bottom = [a.index for a in atoms if a.tag in (size[-1], size[-1] - 1)]
+    elif args.surface_type == '211':
+        atoms = fcc100(args.metal, a=args.lattice_param, size=size,
+                       periodic=True, vacuum=args.vacuum)
+        layer = size[0] * size[1]
+        bottom = list(range(len(atoms)))[-layer:]
+    else:
+        raise ValueError(f'Invalid surface type: {args.surface_type}')
+    atoms.set_constraint(FixAtoms(indices=bottom))
+    return atoms
 
-cell_gas_gcmc = Cell(atoms, custom_height=gas_cell_height, bottom_z=gas_cell_bottom_pos,
-                 species_radii=gas_insertion_radii) 
+
+def main():
+    args = parse_args()
+    os.makedirs(args.outdir, exist_ok=True)
+
+    ss = np.random.SeedSequence(args.seed)
+    seeds = [int(s) for s in ss.generate_state(4, dtype=np.uint32)]
+
+    atoms = build_slab(args)
+
+    metal_radii = {args.metal: args.metal_radius, args.gas: 0.0}
+    gas_radii = {args.metal: args.gas_radius, args.gas: 0.0}
+
+    cell_metal = Cell(atoms, custom_height=args.cell_height, bottom_z=args.cell_bottom_z,
+                      species_radii=metal_radii)
+    cell_gas = Cell(atoms, custom_height=args.cell_height, bottom_z=args.cell_bottom_z,
+                    species_radii=gas_radii)
+
+    calculator = MACE_F_Calculator(
+        model_paths=args.model_path,
+        steps=args.rel_max_steps,
+        fmax=args.rel_fmax,
+        cueq=False,
+        device=args.device,
+    )
+
+    n = args.moves_per_step
+    move_selector = MoveSelector(
+        [n, n, n, n],
+        [DeletionMove(cell_metal, species=[args.metal], seed=seeds[0]),
+         DeletionMove(cell_gas, species=[args.metal], seed=seeds[1]),
+         InsertionMove(cell_metal, species=[args.metal], min_insert=args.min_insert, seed=seeds[2]),
+         InsertionMove(cell_gas, species=[args.gas], min_insert=args.min_insert, seed=seeds[3])],
+    )
+
+    mus = {
+        args.metal: args.mu_metal + args.delta_mu_metal,
+        args.gas: args.mu_gas + args.delta_mu_gas,
+    }
+
+    tag = f'{atoms.get_chemical_formula()}_{args.gas}_dmu_{args.delta_mu_gas}'
+    gcmc = GrandCanonicalEnsemble(
+        atoms=atoms,
+        cells=[cell_metal, cell_gas],
+        calculator=calculator,
+        mu=mus,
+        units_type='metal',
+        species=[args.metal, args.gas],
+        temperature=args.T,
+        move_selector=move_selector,
+        outfile=os.path.join(args.outdir, f'gcmc_relax_{tag}.out'),
+        trajectory_write_interval=args.write_interval,
+        outfile_write_interval=args.write_interval,
+        traj_file=os.path.join(args.outdir, f'gcmc_relax_{tag}.xyz'),
+    )
+
+    gcmc.run(args.gcmc_steps)
 
 
-### Initialize MACE calculator
-calculator = MACE_F_Calculator(
-                model_paths=model_path,
-                steps=rel_max_steps,
-                fmax=rel_f_max,
-                cueq=False,
-                device=device,
-                )
-
-### Generate seeds for MC moves
-seed1=np.random.randint(100_000_000, 1_000_000_000)
-seed2=np.random.randint(100_000_000, 1_000_000_000)
-seed3=np.random.randint(100_000_000, 1_000_000_000)
-seed4=np.random.randint(100_000_000, 1_000_000_000)
-
-### Define the moves of the gcmc simulations
-move_list = [moves_num_list, # probabilities of every move type, sum is total number of moves per mc step 
-             [DeletionMove(cell_metal_gcmc,
-                           species=[metal_species],
-                           seed=seed1),
-              DeletionMove(cell_gas_gcmc,
-                           species=[metal_species],
-                           seed=seed2),
-              InsertionMove(cell_metal_gcmc,
-                            species=[metal_species],
-                            min_insert=min_insert,
-                            seed=seed3),
-              InsertionMove(cell_gas_gcmc,
-                            species=[gas_species],
-                            min_insert=min_insert,
-                            seed=seed4)]]
-
-move_selector = MoveSelector(*move_list)
-
-### Set chemical potentials and relaxation paramters
-mus = {metal_species: mu_metal+delta_mu_metal, gas_species: mu_gas+delta_mu_gas}
-
-calculator.steps = rel_max_steps
-calculator.fmax = rel_f_max
-
-### Initialize GCMC simulation
-gcmc = GrandCanonicalEnsemble(
-                atoms=atoms,
-                cells=[cell_metal_gcmc, cell_gas_gcmc],
-                calculator=calculator,
-                mu=mus,
-                units_type='metal',
-                species=species,
-                temperature=Temp,
-                move_selector=move_selector,
-                outfile=f'gcmc_relax_{atoms.get_chemical_formula()}_{gas_species}_dmu_{delta_mu_gas}.out',
-                trajectory_write_interval=write_out_interval,
-                outfile_write_interval=write_out_interval,
-                traj_file=f'gcmc_relax_{atoms.get_chemical_formula()}_{gas_species}_dmu_{delta_mu_gas}.xyz'
-                )
-
-### Run simulation
-gcmc.run(gcmc_steps)
+if __name__ == '__main__':
+    main()

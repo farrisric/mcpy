@@ -1,51 +1,28 @@
 import logging
-from ase.units import kB as boltzmann_constant
-from ase import Atoms
-import numpy as np
 import random
+
+import numpy as np
+from ase import Atoms
+from ase.units import kB as boltzmann_constant
+
 from .base_ensemble import BaseEnsemble
 
 logger = logging.getLogger(__name__)
 
 
 class CanonicalEnsemble(BaseEnsemble):
-    """
-    Represents a canonical ensemble for Monte Carlo simulations.
+    """Canonical (NVT) ensemble Monte Carlo with relaxation-based moves.
 
-    Args:
-        atoms (Atoms): The initial atomic configuration.
-        calculator (Calculator): The calculator used to compute energies and forces.
-        random_seed (int, optional): The random seed for the PRNG. Defaults to None.
-        optimizer (Optimizer, optional): The optimizer used for relaxation. Defaults to None.
-        fmax (float, optional): The maximum force tolerance for relaxation. Defaults to 0.1.
-        temperature (float, optional): The temperature of the ensemble in Kelvin. Defaults to 300.
-        steps (int, optional): The number of Monte Carlo steps to perform. Defaults to 100.
-        op_list (OperatorList, optional): The list of operators for mutations. Defaults to None.
-        constraints (Constraints, optional): The constraints applied to the system. Defaults to
-        None.
-        traj_file (str, optional): The trajectory file name. Defaults to 'traj_test.traj'.
-        outfile (str, optional): The output file name. Defaults to 'outfile.out'.
-        outfile_write_interval (int, optional): The interval at which to write to the output file.
-        Defaults to 10.
-
-    Attributes:
-        lowest_energy (float): The lowest potential energy found during the simulation.
-        atoms (Atoms): The current atomic configuration.
-        constraints (Constraints): The constraints applied to the system.
-        _temperature (float): The temperature of the ensemble in Kelvin.
-        _calculator (Calculator): The calculator used to compute energies and forces.
-        _optimizer (Optimizer): The optimizer used for relaxation.
-        _fmax (float): The maximum force tolerance for relaxation.
-        _steps (int): The number of Monte Carlo steps to perform.
-        _op_list (OperatorList): The list of operators for mutations.
-        _step (int): The current step number.
-        _accepted_trials (int): The number of accepted trials.
-
+    The configuration is mutated by an operator from ``op_list`` (an ASE
+    GA-style operator list), then relaxed with ``optimizer``. Acceptance is
+    Metropolis at ``temperature`` on the relaxed potential energies.
     """
 
     def __init__(self,
                  atoms,
                  calculator,
+                 cells=None,
+                 units_type: str = 'metal',
                  random_seed=None,
                  optimizer=None,
                  fmax=0.1,
@@ -53,48 +30,31 @@ class CanonicalEnsemble(BaseEnsemble):
                  op_list=None,
                  constraints=None,
                  p=1,
-                 traj_file: str = 'traj_test.traj',
+                 traj_file: str = 'trajectory.xyz',
+                 traj_mode: str = 'w',
                  outfile: str = 'outfile.out',
-                 outfile_write_interval: int = 10) -> None:
-        """
-        Initializes a CanonicalEnsemble object.
-
-        Args:
-            atoms (Atoms): The initial atomic configuration.
-            calculator (Calculator): The calculator used to compute energies and forces.
-            random_seed (int, optional): The random seed for the PRNG. Defaults to None.
-            optimizer (Optimizer, optional): The optimizer used for relaxation. Defaults to None.
-            fmax (float, optional): The maximum force tolerance for relaxation. Defaults to 0.1.
-            temperature (float, optional): The temperature of the ensemble in Kelvin.
-            Defaults to 300.
-            steps (int, optional): The number of Monte Carlo steps to perform. Defaults to 100.
-            op_list (OperatorList, optional): The list of operators for mutations. Defaults to None.
-            constraints (Constraints, optional): The constraints applied to the system. Defaults to
-            None.
-            traj_file (str, optional): The trajectory file name. Defaults to 'traj_test.traj'.
-            outfile (str, optional): The output file name. Defaults to 'outfile.out'.
-            outfile_write_interval (int, optional): The interval at which to write to the output
-            file. Defaults to 10.
-
-        Returns:
-            None
-        """
-
-        super().__init__(structure=atoms,
+                 outfile_mode: str = 'w',
+                 outfile_write_interval: int = 10,
+                 trajectory_write_interval: int = 1) -> None:
+        super().__init__(atoms=atoms,
+                         cells=cells if cells is not None else [],
+                         units_type=units_type,
                          calculator=calculator,
                          random_seed=random_seed,
                          traj_file=traj_file,
+                         traj_mode=traj_mode,
+                         trajectory_write_interval=trajectory_write_interval,
                          outfile=outfile,
+                         outfile_mode=outfile_mode,
                          outfile_write_interval=outfile_write_interval)
 
         if random_seed is not None:
             random.seed(random_seed)
 
-        self.lowest_energy = float('inf')  # Initialize to positive infinity
+        self.lowest_energy = float('inf')
         self.atoms = atoms
         self.constraints = constraints
         self._temperature = temperature
-        self._calculator = calculator
         self._optimizer = optimizer
         self._fmax = fmax
         self._op_list = op_list
@@ -104,47 +64,14 @@ class CanonicalEnsemble(BaseEnsemble):
         self._accepted_trials = 0
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
-        """
-        Determines whether to accept a trial move based on the potential energy difference and
-        temperature.
-
-        Args:
-            potential_diff (float): The potential energy difference between the current and new
-            configurations.
-
-        Returns:
-            bool: True if the trial move is accepted, False otherwise.
-        """
-
         if potential_diff <= 0:
             return True
-        elif self._temperature <= 1e-16:
+        if self._temperature <= 1e-16:
             return False
-        else:
-            p = np.exp(-potential_diff / (boltzmann_constant * self._temperature))
-            return p > self._next_random_number()
-
-    def _next_random_number(self) -> float:
-        """
-        Returns the next random number from the PRNG.
-
-        Returns:
-            float: The next random number.
-        """
-
-        return random.random()
+        p = np.exp(-potential_diff / (boltzmann_constant * self._temperature))
+        return p > random.random()
 
     def relax(self, atoms) -> Atoms:
-        """
-        Relaxes the atomic configuration using the specified optimizer.
-
-        Args:
-            atoms (Atoms): The atomic configuration to relax.
-
-        Returns:
-            Atoms: The relaxed atomic configuration.
-        """
-
         atoms.info['key_value_pairs'] = {}
         atoms.calc = self._calculator
         opt = self._optimizer(atoms, logfile=None)
@@ -155,13 +82,6 @@ class CanonicalEnsemble(BaseEnsemble):
         return atoms
 
     def do_mutation(self):
-        """
-        Performs mutations on the current atomic configuration.
-
-        Returns:
-            Atoms: The mutated atomic configuration.
-        """
-
         new_atoms = self.atoms.copy()
         new_atoms.info['data'] = {'tag': None}
         new_atoms.info['confid'] = 1
@@ -172,13 +92,6 @@ class CanonicalEnsemble(BaseEnsemble):
         return new_atoms
 
     def trial_step(self):
-        """
-        Performs a trial step in the Monte Carlo simulation.
-
-        Returns:
-            int: 1 if the trial move is accepted, 0 otherwise.
-        """
-
         num_mutations = np.random.geometric(self.p)
         new_atoms = self.atoms.copy()
         for _ in range(num_mutations):
@@ -195,36 +108,29 @@ class CanonicalEnsemble(BaseEnsemble):
             if new_atoms.info['key_value_pairs']['potential_energy'] < self.lowest_energy:
                 self.lowest_energy = new_atoms.info['key_value_pairs']['potential_energy']
             self.atoms = new_atoms
-            self.write_traj_file(self.atoms)
+            self.write_coordinates(self.atoms, self.lowest_energy)
             return 1
         return 0
 
-    def run(self, steps: int = 100):
-        """
-        Runs the Monte Carlo simulation.
-
-        Returns:
-            None
-        """
-        logger.info('+---------------------------------+')
-        logger.info('| Canonical Ensemble Monte Carlo  |')
-        logger.info('+---------------------------------+')
-        logger.info('Starting simulation...')
-        logger.info('Temperature: {}'.format(self._temperature))
-        logger.info('Number of steps: {}'.format(steps))
+    def initialize_run(self) -> None:
+        if self._initialized:
+            return
+        super().initialize_run()
+        self.initialize_outfile()
+        self.logger.info("Canonical Ensemble Monte Carlo starting "
+                         "(T=%s K, outfile=%s)", self._temperature, self._outfile)
 
         self.relax(self.atoms)
-        self.write_traj_file(self.atoms)
-        self.write_outfile(self._step, self.lowest_energy)
         self.lowest_energy = self.atoms.get_potential_energy()
+        self.write_coordinates(self.atoms, self.lowest_energy)
+        self.write_outfile(self._step, self.lowest_energy)
 
-        for _ in range(steps):
-            accepted = self.trial_step()
-            self._step += 1
-            self._accepted_trials += accepted
+    def _run(self) -> None:
+        accepted = self.trial_step()
+        self._step += 1
+        self._accepted_trials += accepted
 
-            if self._step % self._outfile_write_interval == 0:
-                self.write_outfile(self._step, self.lowest_energy)
-                logger.info('Step: {}'.format(self._step))
-                logger.info('Lowest energy: {}'.format(self.lowest_energy))
-                logger.info('Accepted trials: {}'.format(self._accepted_trials))
+        if self._step % self._outfile_write_interval == 0:
+            self.write_outfile(self._step, self.lowest_energy)
+            self.logger.debug("step=%d lowest_E=%s accepted=%d",
+                              self._step, self.lowest_energy, self._accepted_trials)

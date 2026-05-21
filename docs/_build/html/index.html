@@ -1,74 +1,160 @@
+
+
 <!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<html lang="en" data-content_root="./">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mcpy &mdash; mcpy 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
-    <title>mcpy &#8212; mcpy 0.1.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
-    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
-    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
-    <script src="_static/documentation_options.js?v=01f34227"></script>
-    <script src="_static/doctools.js?v=9bcbadda"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Installation" href="installation.html" />
-   
-  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
-  
+    <link rel="next" title="Installation" href="installation.html" /> 
+</head>
 
-  
-  
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
 
-  </head><body>
-  
-
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
           
+          
+          <a href="#" class="icon icon-home">
+            mcpy
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a></li>
+<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
 
-          <div class="body" role="main">
-            
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">mcpy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">mcpy</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
   <section id="mcpy">
-<h1>mcpy<a class="headerlink" href="#mcpy" title="Link to this heading">¶</a></h1>
+<h1>mcpy<a class="headerlink" href="#mcpy" title="Link to this heading"></a></h1>
 <section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
-<p><cite>mcpy</cite> is a Python library designed for performing <strong>Replica-Exchange Grand Canonical Monte Carlo (RE-GCMC)</strong> simulations using <strong>state-of-the-art machine learning interatomic potentials (MLIPs)</strong>.
-It provides a flexible and modular framework to explore the <strong>thermodynamic stability and compositional phase space</strong> of nanoparticles and surfaces under realistic reaction conditions.</p>
-<p>Developed for computational materials science and catalysis research, <cite>mcpy</cite> enables users to efficiently sample atomic configurations and construct phase diagrams based on chemical potential, temperature, and pressure conditions.
-The library integrates seamlessly with existing tools in the <strong>Atomic Simulation Environment (ASE)</strong> ecosystem and supports potentials from modern frameworks such as <strong>MACE</strong>, <strong>NequIP</strong>, and <strong>ACE</strong>.</p>
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p><cite>mcpy</cite> is a Python library for <strong>Grand Canonical Monte Carlo (GCMC)</strong> simulations of atomistic
+systems, with native support for <strong>Replica-Exchange GCMC (RE-GCMC)</strong> and modern
+<strong>machine-learning interatomic potentials (MLIPs)</strong> such as MACE.</p>
+<p>It targets computational materials science and heterogeneous catalysis, where the goal is often
+to predict the thermodynamic stability and composition of surfaces and nanoparticles under
+realistic temperature and chemical-potential conditions. The library is built on the
+<strong>Atomic Simulation Environment (ASE)</strong>, so any ASE-compatible calculator – DFT, classical
+potentials, or MLIPs – can drive the sampling.</p>
+<p>The implementation follows the hybrid GCMC scheme of Senftle et al., in which trial
+insertions/deletions are paired with a short local relaxation. This makes acceptance
+realistic in densely packed metallic systems and is a prerequisite for the workflow used to
+build oxidation phase diagrams of Ag surfaces and nanoparticles in our reference application.</p>
 </section>
 <section id="features">
-<h2>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h2>
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><strong>Grand Canonical Monte Carlo (GCMC)</strong> and <strong>Replica-Exchange</strong> algorithms for enhanced sampling.</p></li>
-<li><p>Full compatibility with <strong>machine learning interatomic potentials</strong> (MACE, NequIP, ACE, etc.).</p></li>
-<li><p>Support for <strong>adsorption–desorption processes</strong> on surfaces and nanoparticles.</p></li>
-<li><p><strong>Flexible ensemble definitions</strong> (canonical, grand canonical, and replica-exchange).</p></li>
-<li><p>Efficient <strong>trial move selection</strong> framework (e.g., adsorption, desorption, translation, exchange).</p></li>
-<li><p>Integration with <strong>ASE</strong> for structure management, input/output, and visualization.</p></li>
-<li><p>Built-in tools for <strong>phase diagram generation</strong>, <strong>thermodynamic analysis</strong>, and <strong>logging</strong>.</p></li>
-<li><p>Modular architecture for easy extension and reproducible workflows.</p></li>
+<li><p>GCMC and Replica-Exchange GCMC in a single, modular run loop.</p></li>
+<li><p>Free-volume estimation via Monte Carlo sampling, with element-wise exclusion radii
+(<cite>species_radii</cite>) that can be calibrated from relaxed structures.</p></li>
+<li><p>Canonical (NVT) sampling for fixed-composition runs.</p></li>
+<li><p>Multiple cell geometries: full periodic box, rectangular sub-slab, and spherical region
+around a nanoparticle.</p></li>
+<li><p>Trial-move framework with insertion, deletion, displacement, permutation, shake, and short
+Brownian (Velocity-Verlet) moves, mixed through a weighted <cite>MoveSelector</cite>.</p></li>
+<li><p>Per-step output and XYZ trajectory writers with per-move acceptance statistics.</p></li>
+<li><p>Phase-diagram utilities for post-processing GCMC ensembles.</p></li>
 </ul>
-<p>—</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#requirements">Requirements</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#from-pypi-recommended">From PyPI (recommended)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#from-pypi">From PyPI</a></li>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#from-source">From source</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-installation">Verify installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#optional-backends">Optional backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verify-the-installation">Verify the installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#mlip-backends">MLIP backends</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#mpi-for-replica-exchange">MPI for Replica Exchange</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cells.html">Cells</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#choosing-exclusion-radii-species-radii">Choosing exclusion radii (<cite>species_radii</cite>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#sampling-resolution-mc-sample-points">Sampling resolution (<cite>mc_sample_points</cite>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#cell-full-periodic-simulation-box"><cite>Cell</cite> – full periodic simulation box</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#customcell-rectangular-sub-slab"><cite>CustomCell</cite> – rectangular sub-slab</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#sphericalcell-nanoparticle-centred-region"><cite>SphericalCell</cite> – nanoparticle-centred region</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#nullcell-placeholder"><cite>NullCell</cite> – placeholder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cells.html#choosing-the-right-cell">Choosing the right cell</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="species_radii.html#idea">Idea</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_radii.html#free-volume-estimate-recap">Free-volume estimate (recap)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_radii.html#reference-workflow-o-on-ag">Reference workflow: O on Ag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_radii.html#mapping-pair-distances-to-element-wise-radii">Mapping pair distances to element-wise radii</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_radii.html#automated-calibration-with-compute-radii-py">Automated calibration with <cite>compute_radii.py</cite></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#baseensemble"><cite>BaseEnsemble</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#canonicalensemble"><cite>CanonicalEnsemble</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#grandcanonicalensemble"><cite>GrandCanonicalEnsemble</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#free-volume-and-species-radii">Free volume and <cite>species_radii</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#replicaexchange"><cite>ReplicaExchange</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ensembles.html#choosing-the-right-ensemble">Choosing the right ensemble</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="moves.html#moveselector"><cite>MoveSelector</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="moves.html#built-in-moves">Built-in moves</a></li>
+<li class="toctree-l2"><a class="reference internal" href="moves.html#experimental-moves">Experimental moves</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#canonical-monte-carlo-mc">Canonical Monte Carlo (MC)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#grand-canonical-monte-carlo-gcmc">Grand Canonical Monte Carlo (GCMC)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples.html#replica-exchange-grand-canonical-monte-carlo-re-gcmc">Replica-Exchange Grand Canonical Monte Carlo (RE-GCMC)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#acceptance-rules">Acceptance rules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#phase-diagrams-from-gcmc-ensembles">Phase diagrams from GCMC ensembles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples.html#examples-by-workflow">Examples by workflow</a></li>
 </ul>
 </li>
 </ul>
@@ -77,71 +163,33 @@ The library integrates seamlessly with existing tools in the <strong>Atomic Simu
 </section>
 
 
+           </div>
           </div>
-          
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Riccardo Farris, Emanuele Telari.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="Main">
-        <div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="#">mcpy</a></h1>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
 
-
-
-
-
-
-
-
-
-<search id="searchbox" style="display: none" role="search">
-    <div class="searchformwrapper">
-    <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
-      <input type="submit" value="Go" />
-    </form>
-    </div>
-</search>
-<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
-</ul>
-
-<div class="relations">
-<h3>Related Topics</h3>
-<ul>
-  <li><a href="#">Documentation overview</a><ul>
-      <li>Next: <a href="installation.html" title="next chapter">Installation</a></li>
-  </ul></li>
-</ul>
-</div>
-
-
-
-
-
-
-
-
-        </div>
-      </div>
-      <div class="clearer"></div>
-    </div>
-    <div class="footer">
-      &#169;2025, Riccardo Farris, Emanuele Telari.
-      
-      |
-      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
-      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
-      
-      |
-      <a href="_sources/index.rst.txt"
-          rel="nofollow">Page source</a>
-    </div>
-
-    
-
-    
-  </body>
+</body>
 </html>

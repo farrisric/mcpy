@@ -14,6 +14,9 @@ wheels/
 *.xyz
 *.log
 
+# Benchmark outputs (local only)
+benchmark/benchmark_results/
+
 # Jupyter Notebook output
 .ipynb_checkpoints/
 

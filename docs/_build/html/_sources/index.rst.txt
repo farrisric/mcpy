@@ -1,40 +1,45 @@
 mcpy
-===========================
+====
 
 Overview
 --------
 
-`mcpy` is a Python library designed for performing **Replica-Exchange Grand Canonical Monte Carlo (RE-GCMC)** simulations using **state-of-the-art machine learning interatomic potentials (MLIPs)**.  
-It provides a flexible and modular framework to explore the **thermodynamic stability and compositional phase space** of nanoparticles and surfaces under realistic reaction conditions.
+`mcpy` is a Python library for **Grand Canonical Monte Carlo (GCMC)** simulations of atomistic
+systems, with native support for **Replica-Exchange GCMC (RE-GCMC)** and modern
+**machine-learning interatomic potentials (MLIPs)** such as MACE.
 
-Developed for computational materials science and catalysis research, `mcpy` enables users to efficiently sample atomic configurations and construct phase diagrams based on chemical potential, temperature, and pressure conditions.  
-The library integrates seamlessly with existing tools in the **Atomic Simulation Environment (ASE)** ecosystem and supports potentials from modern frameworks such as **MACE**, **NequIP**, and **ACE**.
+It targets computational materials science and heterogeneous catalysis, where the goal is often
+to predict the thermodynamic stability and composition of surfaces and nanoparticles under
+realistic temperature and chemical-potential conditions. The library is built on the
+**Atomic Simulation Environment (ASE)**, so any ASE-compatible calculator -- DFT, classical
+potentials, or MLIPs -- can drive the sampling.
+
+The implementation follows the hybrid GCMC scheme of Senftle et al., in which trial
+insertions/deletions are paired with a short local relaxation. This makes acceptance
+realistic in densely packed metallic systems and is a prerequisite for the workflow used to
+build oxidation phase diagrams of Ag surfaces and nanoparticles in our reference application.
 
 Features
 --------
 
-- **Grand Canonical Monte Carlo (GCMC)** and **Replica-Exchange** algorithms for enhanced sampling.  
-- Full compatibility with **machine learning interatomic potentials** (MACE, NequIP, ACE, etc.).  
-- Support for **adsorption–desorption processes** on surfaces and nanoparticles.  
-- **Flexible ensemble definitions** (canonical, grand canonical, and replica-exchange).  
-- Efficient **trial move selection** framework (e.g., adsorption, desorption, translation, exchange).  
-- Integration with **ASE** for structure management, input/output, and visualization.  
-- Built-in tools for **phase diagram generation**, **thermodynamic analysis**, and **logging**.  
-- Modular architecture for easy extension and reproducible workflows.  
-
----
+- GCMC and Replica-Exchange GCMC in a single, modular run loop.
+- Free-volume estimation via Monte Carlo sampling, with element-wise exclusion radii
+  (`species_radii`) that can be calibrated from relaxed structures.
+- Canonical (NVT) sampling for fixed-composition runs.
+- Multiple cell geometries: full periodic box, rectangular sub-slab, and spherical region
+  around a nanoparticle.
+- Trial-move framework with insertion, deletion, displacement, permutation, shake, and short
+  Brownian (Velocity-Verlet) moves, mixed through a weighted `MoveSelector`.
+- Per-step output and XYZ trajectory writers with per-move acceptance statistics.
+- Phase-diagram utilities for post-processing GCMC ensembles.
 
 .. toctree::
    :caption: Contents:
    :maxdepth: 2
 
    installation
+   cells
+   species_radii
+   ensembles
+   moves
    examples
-   api
-   contributing
-   license
-
-
-   
-
-

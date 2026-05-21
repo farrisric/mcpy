@@ -1,0 +1,237 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cells &mdash; mcpy 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Calibrating species_radii" href="species_radii.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            mcpy
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Cells</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#choosing-exclusion-radii-species-radii">Choosing exclusion radii (<cite>species_radii</cite>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sampling-resolution-mc-sample-points">Sampling resolution (<cite>mc_sample_points</cite>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cell-full-periodic-simulation-box"><cite>Cell</cite> – full periodic simulation box</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#customcell-rectangular-sub-slab"><cite>CustomCell</cite> – rectangular sub-slab</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sphericalcell-nanoparticle-centred-region"><cite>SphericalCell</cite> – nanoparticle-centred region</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#nullcell-placeholder"><cite>NullCell</cite> – placeholder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#choosing-the-right-cell">Choosing the right cell</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="species_radii.html">Calibrating <cite>species_radii</cite></a></li>
+<li class="toctree-l1"><a class="reference internal" href="ensembles.html">Ensembles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="moves.html">Moves</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">mcpy</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Cells</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/cells.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cells">
+<h1>Cells<a class="headerlink" href="#cells" title="Link to this heading"></a></h1>
+<p>Cell objects in <cite>mcpy</cite> define <strong>where</strong> Monte Carlo moves act and <strong>how much free volume</strong> is
+available for insertions. They are the geometric counterpart of the move set: every cell
+provides random points for insertion, classifies atoms as “inside” the active region, and
+returns the accessible volume <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> used by the GCMC acceptance rules
+(see <a class="reference internal" href="ensembles.html#free-volume"><span class="std std-ref">Free volume and species_radii</span></a>).</p>
+<p>Four cell types are exported from <cite>mcpy.cell</cite>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cell</span><span class="p">,</span> <span class="n">CustomCell</span><span class="p">,</span> <span class="n">SphericalCell</span><span class="p">,</span> <span class="n">NullCell</span>
+</pre></div>
+</div>
+<section id="choosing-exclusion-radii-species-radii">
+<h2>Choosing exclusion radii (<cite>species_radii</cite>)<a class="headerlink" href="#choosing-exclusion-radii-species-radii" title="Link to this heading"></a></h2>
+<p>Every non-trivial cell takes a <cite>species_radii</cite> argument: an element-wise dictionary of
+exclusion radii. These radii control how the free-volume Monte Carlo estimator labels each
+sampled point as occupied or free, and therefore directly determine the
+<span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> that appears in the GCMC acceptance terms.</p>
+<p>The thesis underlying this library calls this quantity <span class="math notranslate nohighlight">\(r_{\mathrm{relax}}\)</span> and defines
+it operationally as the position of the first maximum in the radial distribution function of
+the adsorbate around the host atoms, calibrated on relaxed structures with the <em>same</em>
+calculator used in production. Using values that are too small inflates insertion attempts
+into atomic cores; using values that are too large collapses <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> and
+freezes the chemistry. See <a class="reference internal" href="species_radii.html"><span class="doc">Calibrating species_radii</span></a> for a complete, reproducible workflow
+(including a ready-to-use script for O on Ag) and the recommended conventions for mapping
+pair distances onto element-wise radii.</p>
+</section>
+<section id="sampling-resolution-mc-sample-points">
+<h2>Sampling resolution (<cite>mc_sample_points</cite>)<a class="headerlink" href="#sampling-resolution-mc-sample-points" title="Link to this heading"></a></h2>
+<p><cite>mc_sample_points</cite> sets the number of random points used in the free-volume estimate.
+Larger values reduce statistical noise on <span class="math notranslate nohighlight">\(V_{\mathrm{free}}\)</span> at the cost of one
+up-front sweep per configuration change. In practice, <span class="math notranslate nohighlight">\(10^5\)</span> points is a good default
+for nanoparticle- and slab-sized systems. The cached estimate is reused until the atom count
+changes, so the cost is amortised over many trial moves of equal <span class="math notranslate nohighlight">\(N\)</span>.</p>
+</section>
+<section id="cell-full-periodic-simulation-box">
+<h2><cite>Cell</cite> – full periodic simulation box<a class="headerlink" href="#cell-full-periodic-simulation-box" title="Link to this heading"></a></h2>
+<p><cite>Cell</cite> uses the full ASE simulation cell (<cite>atoms.cell</cite>) as the active MC region. Random
+points are sampled uniformly in fractional coordinates and mapped to Cartesian space.</p>
+<p>Use this when the active region is simply the entire periodic box.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cell</span>
+
+<span class="n">cell</span> <span class="o">=</span> <span class="n">Cell</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="mf">2.947</span><span class="p">})</span>
+<span class="n">cell</span><span class="o">.</span><span class="n">calculate_volume</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+<span class="n">V</span> <span class="o">=</span> <span class="n">cell</span><span class="o">.</span><span class="n">get_volume</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="customcell-rectangular-sub-slab">
+<h2><cite>CustomCell</cite> – rectangular sub-slab<a class="headerlink" href="#customcell-rectangular-sub-slab" title="Link to this heading"></a></h2>
+<p><cite>CustomCell</cite> carves out a sub-volume that spans the full <span class="math notranslate nohighlight">\(x\)</span> and <span class="math notranslate nohighlight">\(y\)</span> extent of
+the simulation box but has a finite thickness along <span class="math notranslate nohighlight">\(z\)</span>. This is the standard
+construction for surface slabs, where insertions should be limited to the topmost layers
+and a slice of vacuum above them.</p>
+<p>Key parameters:</p>
+<ul class="simple">
+<li><p><cite>custom_height</cite> – thickness of the active region along <span class="math notranslate nohighlight">\(z\)</span>,</p></li>
+<li><p><cite>bottom_z</cite> – <span class="math notranslate nohighlight">\(z\)</span>-coordinate of its lower face,</p></li>
+<li><p><cite>species_radii</cite> – per-element exclusion radii,</p></li>
+<li><p><cite>mc_sample_points</cite> – free-volume sampling resolution.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">CustomCell</span>
+
+<span class="n">custom_cell</span> <span class="o">=</span> <span class="n">CustomCell</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="p">,</span>
+    <span class="n">custom_height</span><span class="o">=</span><span class="mf">5.5</span><span class="p">,</span>
+    <span class="n">bottom_z</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+    <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="mf">2.947</span><span class="p">},</span>
+    <span class="n">mc_sample_points</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">custom_cell</span><span class="o">.</span><span class="n">calculate_volume</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="sphericalcell-nanoparticle-centred-region">
+<h2><cite>SphericalCell</cite> – nanoparticle-centred region<a class="headerlink" href="#sphericalcell-nanoparticle-centred-region" title="Link to this heading"></a></h2>
+<p><cite>SphericalCell</cite> is designed for finite clusters. On construction it centres the structure on
+the origin and defines a spherical active region of radius</p>
+<div class="math notranslate nohighlight">
+\[R = \max_a \|\mathbf{r}_a - \mathbf{r}_{\mathrm{c}}\| + \mathrm{vacuum},\]</div>
+<p>i.e. the distance from the centre to the outermost atom plus a user-specified vacuum gap.
+Insertions outside this radius are automatically rejected, so the sampling stays close to
+the particle surface without wasting moves in pure vacuum.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">SphericalCell</span>
+
+<span class="n">spherical_cell</span> <span class="o">=</span> <span class="n">SphericalCell</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="p">,</span>
+    <span class="n">vacuum</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+    <span class="n">species_radii</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="mf">2.947</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">},</span>
+    <span class="n">mc_sample_points</span><span class="o">=</span><span class="mi">100_000</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">spherical_cell</span><span class="o">.</span><span class="n">calculate_volume</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="nullcell-placeholder">
+<h2><cite>NullCell</cite> – placeholder<a class="headerlink" href="#nullcell-placeholder" title="Link to this heading"></a></h2>
+<p><cite>NullCell</cite> is a no-op cell. Its volume is zero and it provides no insertion points. Use it
+as a placeholder where the API requires a cell-like object but no insertion region is
+needed (e.g. a pure-displacement canonical run).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.cell</span><span class="w"> </span><span class="kn">import</span> <span class="n">NullCell</span>
+
+<span class="n">null_cell</span> <span class="o">=</span> <span class="n">NullCell</span><span class="p">()</span>
+<span class="n">V</span> <span class="o">=</span> <span class="n">null_cell</span><span class="o">.</span><span class="n">get_volume</span><span class="p">()</span>  <span class="c1"># 0</span>
+</pre></div>
+</div>
+</section>
+<section id="choosing-the-right-cell">
+<h2>Choosing the right cell<a class="headerlink" href="#choosing-the-right-cell" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><cite>Cell</cite> – bulk periodic systems where the whole box is active.</p></li>
+<li><p><cite>CustomCell</cite> – slab/surface windows inside a periodic box.</p></li>
+<li><p><cite>SphericalCell</cite> – isolated clusters and nanoparticles.</p></li>
+<li><p><cite>NullCell</cite> – placeholder for runs that need no insertion region.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="species_radii.html" class="btn btn-neutral float-right" title="Calibrating species_radii" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Riccardo Farris, Emanuele Telari.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
