@@ -14,6 +14,11 @@ wheels/
 *.xyz
 *.log
 
+# ML model checkpoints
+*.model
+*.pt
+*.pth
+
 # Benchmark outputs (local only)
 benchmark/benchmark_results/
 
