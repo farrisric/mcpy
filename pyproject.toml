@@ -11,6 +11,15 @@ dependencies = [
     "scikit-learn>=1.6.1",
 ]
 
+[project.optional-dependencies]
+# NVIDIA Alchemi (nvalchemi-toolkit) — GPU-native MACE evaluation + dynamics.
+# Recommended for systems >= ~500 atoms on CUDA (see NVALCHEMI_NOTES.md).
+# Requires CUDA toolkit and a compatible PyTorch build; install with:
+#   pip install -e .[alchemi]
+alchemi = [
+    "nvalchemi-toolkit[mace]>=0.1.0",
+]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"

@@ -26,6 +26,9 @@
 - Grand Canonical Monte Carlo simulations
 - Integration with ASE for atomic simulations
 - Support for MACE calculator potential and other calculators
+- **Optional NVIDIA Alchemi backend** (`nvalchemi-toolkit`) for GPU-native MACE
+  evaluation and FIRE relaxation — **3.08x speedup on 586-atom GCMC**
+  (20 steps, MACE+LBFGS vs Alchemi+FIRE, RTX 5090)
 - Configurable simulation parameters and logging
 
 ## Installation
@@ -42,7 +45,22 @@ Alternatively, you can install the package in editable mode:
 pip install -e .
 ```
 
-Please note that `mpi4py` should be installed using conda:
+### Optional: NVIDIA Alchemi backend (large systems on CUDA)
+
+For GPU-native MACE evaluation on systems with ≥500 atoms, install the optional
+`alchemi` extra:
+
+```sh
+pip install -e .[alchemi]
+```
+
+This pulls in `nvalchemi-toolkit[mace]`. Requires a CUDA-enabled PyTorch build.
+See `NVALCHEMI_NOTES.md` for tuning details (`compile_model=False` and `dt=1.0`
+are required for GCMC).
+
+### MPI for replica exchange
+
+`mpi4py` is not pulled in automatically — install it with conda:
 
 ```sh
 conda install mpi4py
@@ -50,11 +68,16 @@ conda install mpi4py
 
 ## Dependencies
 
-The package requires the following dependencies:
+Core:
 
 - `ase>=3.23.0`
 - `mace-torch>=0.3.9`
-- `mpi4py>=4.0.1`
+- `scikit-learn>=1.6.1`
+
+Optional:
+
+- `nvalchemi-toolkit[mace]>=0.1.0` — GPU-native MACE (install via `.[alchemi]`)
+- `mpi4py>=4.0.1` — replica exchange (install via conda)
 
 ## Usage
 
@@ -69,6 +92,8 @@ from mcpy.moves import InsertionMove
 from mcpy.moves.move_selector import MoveSelector
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.calculators import MACE_F_Calculator
+# For large systems on GPU, use AlchemiFCalculator instead:
+# from mcpy.calculators import AlchemiFCalculator
 from mcpy.cell import SphericalCell
 
 
