@@ -33,6 +33,10 @@ private_thesis/
 # JOSS submission (private)
 joss/
 
+# scratch
+
+scratch/
+
 # Claude files
 CLAUDE.md
 .claude/
