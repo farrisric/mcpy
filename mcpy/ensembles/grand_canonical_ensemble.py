@@ -272,8 +272,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile()
-            self.logger.debug("step=%d N=%d E=%.6f",
-                              self._step, self.n_atoms, self.E_old)
+            self.logger.info("step=%d N=%d E=%.6f",
+                             self._step, self.n_atoms, self.E_old)
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms, self.E_old)

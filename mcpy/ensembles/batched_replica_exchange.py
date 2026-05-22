@@ -1,0 +1,266 @@
+"""
+BatchedReplicaExchange — single-process replica exchange GCMC with batched
+energy evaluation across replicas.
+
+Why this exists
+---------------
+The MPI ReplicaExchange assumes one process per replica, which on a single GPU
+either oversubscribes or serializes through one CUDA context. This class holds
+all replicas in one process and evaluates every replica's trial-move energy in
+a single batched forward pass — one kernel launch per layer instead of N.
+
+The MC loop itself stays sequential per replica (moves depend on the previous
+accepted state). The batching is across replicas at the same logical step.
+
+Factory requirements
+--------------------
+``gcmc_factory(T, rank)`` must return a fresh ``GrandCanonicalEnsemble`` with
+its own ``cells``, ``move_selector`` and atoms object. Sharing cells or a
+move_selector across replicas will corrupt per-replica state (cell volumes,
+acceptance counters, RNG streams). See ``examples/re_gcmc_batched.py``.
+
+The shared ``calculator`` must implement ``get_potential_energies(atoms_list)``
+returning an ndarray of energies. ``AlchemiCalculator`` provides this.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import Counter
+from typing import Callable, Dict, List, Optional
+
+import numpy as np
+
+from ..utils.random_number_generator import RandomNumberGenerator
+
+logger = logging.getLogger(__name__)
+
+
+class BatchedReplicaExchange:
+    def __init__(
+        self,
+        gcmc_factory: Callable,
+        calculator,
+        temperatures: Optional[List[float]] = None,
+        mus: Optional[List[Dict[str, float]]] = None,
+        gcmc_steps: int = 100,
+        exchange_interval: int = 10,
+        outfile: str = 'replica_exchange.log',
+        write_out_interval: int = 20,
+        seed: int = 31,
+    ) -> None:
+        if temperatures is None and mus is None:
+            raise ValueError("Provide either temperatures or mus (one per replica).")
+        if temperatures is not None and mus is not None:
+            raise ValueError("Pass temperatures OR mus, not both.")
+
+        if temperatures is not None:
+            self.temperatures = list(temperatures)
+            self.mus = None
+            self.n_replicas = len(self.temperatures)
+            self.replicas = [
+                gcmc_factory(T=T, rank=i) for i, T in enumerate(self.temperatures)
+            ]
+        else:
+            self.mus = list(mus)
+            self.temperatures = None
+            self.n_replicas = len(self.mus)
+            self.replicas = [
+                gcmc_factory(mu=mu, rank=i) for i, mu in enumerate(self.mus)
+            ]
+
+        if not hasattr(calculator, 'get_potential_energies'):
+            raise TypeError(
+                "calculator must implement get_potential_energies(atoms_list). "
+                "Use AlchemiCalculator or wrap your calculator."
+            )
+        self.calculator = calculator
+
+        self.gcmc_steps = gcmc_steps
+        self.exchange_interval = exchange_interval
+        self.write_out_interval = write_out_interval
+
+        self._re_step = 0
+        self.rng = RandomNumberGenerator(seed=seed)
+        self.logger = logger
+
+        self.exchange_attempts = [0] * self.n_replicas
+        self.exchange_successes = [0] * self.n_replicas
+
+        self._outfile = outfile
+        self._outfile_handle = None
+
+    # ------------------------------------------------------------------ run
+
+    def run(self) -> None:
+        for r in self.replicas:
+            r.initialize_run()
+        self._initialize_outfile()
+        self._rebatch_initial_energies()
+
+        try:
+            for step in range(self.gcmc_steps):
+                self._batched_gcmc_step()
+
+                if step > 0 and step % self.exchange_interval == 0:
+                    self._attempt_exchanges()
+
+                if step % self.write_out_interval == 0:
+                    self._write_outfile(step)
+
+                self._re_step += 1
+        finally:
+            for r in self.replicas:
+                r.finalize_run()
+            if self._outfile_handle is not None:
+                try:
+                    self._outfile_handle.close()
+                except OSError:
+                    self.logger.exception("Error closing %s", self._outfile)
+                self._outfile_handle = None
+
+    def _rebatch_initial_energies(self) -> None:
+        """Re-evaluate replica energies as one batch so all replicas start
+        from energies computed by the shared calculator (and so the GPU sees
+        a warm batched path before the loop)."""
+        atoms_list = [r.atoms for r in self.replicas]
+        energies = self.calculator.get_potential_energies(atoms_list)
+        for r, E in zip(self.replicas, energies):
+            r.E_old = float(E)
+
+    # ----------------------------------------------------------- batched MC
+
+    def _batched_gcmc_step(self) -> None:
+        """
+        One GCMC step across all replicas:
+          1. propose a trial move on each replica (in place, with snapshot)
+          2. batched energy eval over all replicas with viable trials
+          3. per-replica Metropolis accept/reject
+        """
+        snapshots: List[Dict] = [None] * self.n_replicas
+        trial_meta: List[Optional[tuple]] = [None] * self.n_replicas
+
+        for i, r in enumerate(self.replicas):
+            snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
+            result = r.move_selector.do_trial_move(r.atoms)
+            atoms_new, delta_particles, species = (
+                result if isinstance(result, tuple) else (result, 0, None)
+            )
+            if atoms_new:
+                trial_meta[i] = (delta_particles, species)
+            # else: move couldn't propose — atoms unchanged, snapshot harmless
+
+        viable = [i for i, m in enumerate(trial_meta) if m is not None]
+        if viable:
+            atoms_list = [self.replicas[i].atoms for i in viable]
+            energies = self.calculator.get_potential_energies(atoms_list)
+            for i, E_new in zip(viable, energies):
+                r = self.replicas[i]
+                delta_particles, species = trial_meta[i]
+                delta_E = float(E_new) - r.E_old
+                volume = r.move_selector.get_volume()
+                if r._acceptance_condition(delta_E, delta_particles, volume, species):
+                    if r._wrap_on_accept:
+                        r.atoms.wrap()
+                    r.n_atoms = len(r.atoms)
+                    r.E_old = float(E_new)
+                    r.move_selector.acceptance_counter()
+                    r.calculate_cells_volume(r.atoms)
+                else:
+                    r.atoms.arrays = snapshots[i]
+
+        for r in self.replicas:
+            r._step += 1
+            if r._step % r._outfile_write_interval == 0:
+                r.write_outfile()
+            if r._step % r._trajectory_write_interval == 0:
+                r.write_coordinates(r.atoms, r.E_old)
+
+    # --------------------------------------------------------- exchange
+
+    def _exchange_pairs(self, offset: int) -> List[tuple]:
+        """Pairs (i, i+1) starting from ``offset`` ∈ {0, 1}."""
+        return [(i, i + 1) for i in range(offset, self.n_replicas - 1, 2)]
+
+    def _attempt_exchanges(self) -> None:
+        offset = 0 if self.rng.get_uniform() < 0.5 else 1
+        for i, j in self._exchange_pairs(offset):
+            self.exchange_attempts[i] += 1
+            self.exchange_attempts[j] += 1
+            if self._accept_swap(i, j):
+                self._swap_states(i, j)
+                self.exchange_successes[i] += 1
+                self.exchange_successes[j] += 1
+
+    def _accept_swap(self, i: int, j: int) -> bool:
+        """Standard temperature-RE Metropolis: P = exp((β_j - β_i)(E_j - E_i))."""
+        ri, rj = self.replicas[i], self.replicas[j]
+        beta_i, beta_j = ri.units.beta, rj.units.beta
+        E_i, E_j = ri.E_old, rj.E_old
+        delta = (beta_j - beta_i) * (E_j - E_i)
+        p = min(1.0, float(np.exp(delta)))
+        self.logger.debug(
+            "swap %d<->%d: beta_i=%.3e beta_j=%.3e E_i=%.3f E_j=%.3f delta=%.3f p=%.3f",
+            i, j, beta_i, beta_j, E_i, E_j, delta, p,
+        )
+        return self.rng.get_uniform() < p
+
+    def _swap_states(self, i: int, j: int) -> None:
+        """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to
+        the replica slot. Cell volume tracking gets refreshed for both."""
+        ri, rj = self.replicas[i], self.replicas[j]
+        ri_atoms, rj_atoms = ri.atoms, rj.atoms
+        ri.atoms, rj.atoms = rj_atoms, ri_atoms
+        ri.E_old, rj.E_old = rj.E_old, ri.E_old
+        ri.n_atoms, rj.n_atoms = rj.n_atoms, ri.n_atoms
+        ri.calculate_cells_volume(ri.atoms)
+        rj.calculate_cells_volume(rj.atoms)
+
+    # ----------------------------------------------------------- output
+
+    def _initialize_outfile(self) -> None:
+        if self._outfile is None:
+            return
+        try:
+            with open(self._outfile, 'w') as fh:
+                fh.write("+-------------------------------------------------+\n")
+                fh.write("| Batched Replica Exchange (single-GPU) GCMC      |\n")
+                fh.write("+-------------------------------------------------+\n")
+                fh.write(f"Total GCMC steps: {self.gcmc_steps}\n")
+                fh.write(f"Exchange interval (steps): {self.exchange_interval}\n")
+                fh.write(f"Number of replicas: {self.n_replicas}\n")
+                if self.temperatures is not None:
+                    fh.write(f"Temperatures (K): {self.temperatures}\n")
+                if self.mus is not None:
+                    for k, mu in enumerate(self.mus):
+                        fh.write(f"Chemical potentials replica {k}: {mu}\n")
+                fh.write("{:<8} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}\n".format(
+                    "Replica", "Step", "Atom Count (by species)", "Energy (eV)",
+                    "Chemical Potentials (eV)", "Temperature (K)",
+                    "Accepted Exchange (%)",
+                ))
+                fh.write("-" * 140 + "\n")
+            self._outfile_handle = open(self._outfile, 'a')
+        except OSError:
+            self.logger.exception("Error opening output file %s", self._outfile)
+            raise
+
+    def _write_outfile(self, step: int) -> None:
+        if self._outfile_handle is None:
+            return
+        try:
+            for i, r in enumerate(self.replicas):
+                symbols = r.atoms.get_chemical_symbols()
+                count_str = ', '.join(f"{s}: {c}" for s, c in Counter(symbols).items())
+                mu_str = ', '.join(f"{s}: {v:.3f}" for s, v in r._mu.items())
+                attempts = self.exchange_attempts[i]
+                pct = (self.exchange_successes[i] / attempts * 100) if attempts else 0.0
+                self._outfile_handle.write(
+                    "{:<8} {:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}\n".format(
+                        i, r._step, count_str, r.E_old, mu_str,
+                        r._temperature, pct,
+                    )
+                )
+            self._outfile_handle.flush()
+        except (OSError, AttributeError):
+            self.logger.exception("Error writing to %s", self._outfile)
