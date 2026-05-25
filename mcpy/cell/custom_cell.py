@@ -26,7 +26,7 @@ class CustomCell(Cell):
         self.species_radii = species_radii if species_radii else {}
         self.cell_volume = float(abs(np.linalg.det(self.dimensions)))
         self.mc_sample_points = int(mc_sample_points)
-        self._dim_diag = self.dimensions.diagonal().copy()
+        self._dim_inv = np.linalg.inv(self.dimensions)
         self.volume = self.cell_volume
 
     def get_custom_height_cell(self, custom_height, bottom_z):
@@ -98,16 +98,16 @@ class CustomCell(Cell):
         else:
             species_list = list(specie)
         species_mask = np.isin(symbols, species_list)
-        rel = atoms.positions - self.offset
-        inside = np.all(rel >= 0.0, axis=1) & np.all(rel <= self._dim_diag, axis=1)
+        frac = (atoms.positions - self.offset) @ self._dim_inv
+        inside = np.all((frac >= 0.0) & (frac < 1.0), axis=1)
         return np.where(species_mask & inside)[0]
 
     def is_point_inside(self, point):
         """
         Check if a given point is inside the custom cell.
         """
-        rel = point - self.offset
-        return bool(np.all(rel >= 0.0) and np.all(rel <= self._dim_diag))
+        frac = (point - self.offset) @ self._dim_inv
+        return bool(np.all((frac >= 0.0) & (frac < 1.0)))
 
     def get_species(self):
         """

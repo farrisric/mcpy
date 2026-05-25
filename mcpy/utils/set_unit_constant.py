@@ -56,6 +56,11 @@ class SetUnits:
 
     def de_broglie_insertion(self, volume, n_atoms, specie: str) -> float:
         """Calculate the de Broglie wavelength for insertion."""
+        if n_atoms < 0:
+            raise ValueError(
+                f"n_atoms={n_atoms} < 0 for insertion of '{specie}'; the "
+                "pre-move species count cannot be negative"
+            )
         return (volume / ((n_atoms+1)*self.lambda_dbs[specie]**3))
 
     def de_broglie_deletion(self, volume, n_atoms, specie: str) -> float:
