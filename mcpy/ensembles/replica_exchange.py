@@ -48,6 +48,11 @@ class ReplicaExchange:
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
 
+        # Select the exchange acceptance rule based on which ladder was given.
+        # A mu-ladder shares one temperature, so the T-criterion would reduce to
+        # delta=0 (always accept) and must not be used here.
+        self._exchange_prob = self._exchange_prob_mu if mus else self._exchange_prob_T
+
         self._re_step = 0
 
         self.rng = RandomNumberGenerator(seed=seed)
@@ -58,14 +63,21 @@ class ReplicaExchange:
         self.write_out_interval = write_out_interval
 
     def get_partner_rank(self, global_random):
+        # Two alternating, symmetric pairings so that A->B implies B->A (else
+        # one rank blocks forever on sendrecv). Any rank whose partner falls
+        # outside [0, size) sits the round out — this covers both ends and any
+        # odd-sized ensemble.
         if global_random > 0.5:
-            if self.rank == 0 or self.rank == self.size - 1:
-                return None
-            return self.rank - 1 if self.rank % 2 == 0 else self.rank + 1
+            # Odd pairing: (1,2), (3,4), ...
+            partner = self.rank + 1 if self.rank % 2 else self.rank - 1
         else:
-            return self.rank + 1 if self.rank % 2 == 0 else self.rank - 1
+            # Even pairing: (0,1), (2,3), ...
+            partner = self.rank - 1 if self.rank % 2 else self.rank + 1
+        if partner < 0 or partner >= self.size:
+            return None
+        return partner
 
-    def _acceptance_condition_T(self, state1, state2):
+    def _exchange_prob_T(self, state1, state2):
         energy1 = state1['energy']
         beta1 = state1['beta']
         energy2 = state2['energy']
@@ -77,9 +89,9 @@ class ReplicaExchange:
             f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
             f"E2: {energy2:.3f}, Delta {delta:.3f}, "
             f"Rank: {self.rank}")
-        return self.rng.get_uniform() < exchange_prob
+        return exchange_prob
 
-    def _acceptance_condition_mu(self, state1, state2):
+    def _exchange_prob_mu(self, state1, state2):
         state1['n_atoms_species'] = dict()
         state2['n_atoms_species'] = dict()
         exponential_arg = 0
@@ -107,7 +119,7 @@ class ReplicaExchange:
             f"Deltas: {deltas}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
             f"Rank: {self.rank}"
         )
-        return self.rng.get_uniform() < exchange_prob
+        return exchange_prob
 
     def do_exchange(self):
         """Attempt an exchange with a neighboring replica."""
@@ -135,7 +147,23 @@ class ReplicaExchange:
             self.logger.exception("Communication error with rank %s", partner_rank)
             return False
 
-        if self._acceptance_condition_T(rank_state, partner_state):
+        # Both partners compute the same (symmetric) probability, but the
+        # accept/reject random must be shared: the lower-rank partner draws it
+        # and sends it across so both sides reach an identical decision.
+        # Drawing independently would let the per-rank RNGs (which drift out of
+        # sync) disagree, leaving one config duplicated and the other lost.
+        exchange_prob = self._exchange_prob(rank_state, partner_state)
+        try:
+            if self.rank < partner_rank:
+                u = self.rng.get_uniform()
+                self.comm.send(u, dest=partner_rank)
+            else:
+                u = self.comm.recv(source=partner_rank)
+        except Exception:
+            self.logger.exception("Communication error with rank %s", partner_rank)
+            return False
+
+        if u < exchange_prob:
             self.logger.debug(f"Accepted exchange with rank {partner_rank}")
             self.gcmc.set_state(partner_state)
             return True
