@@ -39,12 +39,18 @@ class InsertionMove(BaseMove):
             if len(indices) > 0:
                 positions_bias = atoms.positions[indices]
                 min_sq = self._min_insert_sq
+                placed = False
                 for _ in range(_MAX_INSERT_ATTEMPTS):
                     diff = positions_bias - insert_position
                     d2 = np.einsum('ij,ij->i', diff, diff)
                     if d2.min() >= min_sq:
+                        placed = True
                         break
                     insert_position = self.cell.get_random_point()
+                # Cell too packed to honour min_insert: report a failed move
+                # rather than insert a guaranteed overlap (wasted energy eval).
+                if not placed:
+                    return False, 1, selected_species
 
         atoms += Atoms(selected_species, positions=[insert_position])
         return atoms, 1, selected_species
