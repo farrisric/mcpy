@@ -152,9 +152,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                               potential_diff: float,
                               delta_particles: int,
                               volume: float,
-                              species: str) -> bool:
+                              species: str,
+                              n_atoms_species: int = None) -> bool:
         """Metropolis / de-Broglie acceptance test for displacement, insertion,
-        and deletion moves."""
+        and deletion moves. ``n_atoms_species`` is the per-species exchangeable
+        count before the move (required for insertion/deletion)."""
         if delta_particles == 0:
             if potential_diff <= 0:
                 return True
@@ -162,7 +164,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             return p > self.rng_acceptance.get_uniform()
 
         if delta_particles == 1:  # insertion
-            db_term = self.units.de_broglie_insertion(volume, self.n_atoms, species)
+            db_term = self.units.de_broglie_insertion(volume, n_atoms_species, species)
             exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -171,7 +173,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.units.lambda_dbs[species], p, self.units.beta, exp_term,
                 potential_diff - self._mu[species], potential_diff, delta_particles)
         elif delta_particles == -1:  # deletion
-            db_term = self.units.de_broglie_deletion(volume, self.n_atoms, species)
+            db_term = self.units.de_broglie_deletion(volume, n_atoms_species, species)
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
@@ -206,10 +208,21 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 # failure so it won't depress the acceptance ratio.
                 continue
 
+            # Per-species exchangeable count before the move, for the de Broglie
+            # factor. The move already mutated atoms in place, so subtract
+            # delta_particles. Read it now, before compute_energy relaxes the
+            # geometry and can nudge the new atom out of the cell region.
+            n_species_before = None
+            if delta_particles != 0:
+                n_species_before = len(
+                    self.move_selector.get_atoms_specie_inside_cell(atoms, species)
+                ) - delta_particles
+
             E_new = self.compute_energy(atoms)
             delta_E = E_new - self.E_old
             volume = self.move_selector.get_volume()
-            if self._acceptance_condition(delta_E, delta_particles, volume, species):
+            if self._acceptance_condition(delta_E, delta_particles, volume, species,
+                                          n_species_before):
                 if self._wrap_on_accept:
                     atoms.wrap()
                 self.n_atoms = len(atoms)
