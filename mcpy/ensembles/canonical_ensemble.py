@@ -50,8 +50,12 @@ class CanonicalEnsemble(BaseEnsemble):
 
         if random_seed is not None:
             random.seed(random_seed)
+        # Dedicated generator for the mutation-count draw so runs are
+        # reproducible from random_seed (np.random global was never seeded).
+        self._np_rng = np.random.default_rng(random_seed)
 
         self.lowest_energy = float('inf')
+        self._current_energy = None
         self.atoms = atoms
         self.constraints = constraints
         self._temperature = temperature
@@ -92,7 +96,7 @@ class CanonicalEnsemble(BaseEnsemble):
         return new_atoms
 
     def trial_step(self):
-        num_mutations = np.random.geometric(self.p)
+        num_mutations = self._np_rng.geometric(self.p)
         new_atoms = self.atoms.copy()
         for _ in range(num_mutations):
             new_atoms = self.do_mutation()
@@ -105,10 +109,12 @@ class CanonicalEnsemble(BaseEnsemble):
         potential_diff = potential_f - potential_i
 
         if self._acceptance_condition(potential_diff):
-            if new_atoms.info['key_value_pairs']['potential_energy'] < self.lowest_energy:
-                self.lowest_energy = new_atoms.info['key_value_pairs']['potential_energy']
+            if potential_f < self.lowest_energy:
+                self.lowest_energy = potential_f
             self.atoms = new_atoms
-            self.write_coordinates(self.atoms, self.lowest_energy)
+            self._current_energy = potential_f
+            # Log the accepted configuration's energy, not the running minimum.
+            self.write_coordinates(self.atoms, self._current_energy)
             return 1
         return 0
 
@@ -121,9 +127,10 @@ class CanonicalEnsemble(BaseEnsemble):
                          "(T=%s K, outfile=%s)", self._temperature, self._outfile)
 
         self.relax(self.atoms)
-        self.lowest_energy = self.atoms.get_potential_energy()
-        self.write_coordinates(self.atoms, self.lowest_energy)
-        self.write_outfile(self._step, self.lowest_energy)
+        self._current_energy = self.atoms.get_potential_energy()
+        self.lowest_energy = self._current_energy
+        self.write_coordinates(self.atoms, self._current_energy)
+        self.write_outfile(self._step, self._current_energy)
 
     def _run(self) -> None:
         accepted = self.trial_step()
@@ -131,6 +138,7 @@ class CanonicalEnsemble(BaseEnsemble):
         self._accepted_trials += accepted
 
         if self._step % self._outfile_write_interval == 0:
-            self.write_outfile(self._step, self.lowest_energy)
-            self.logger.debug("step=%d lowest_E=%s accepted=%d",
-                              self._step, self.lowest_energy, self._accepted_trials)
+            self.write_outfile(self._step, self._current_energy)
+            self.logger.debug("step=%d E=%s lowest_E=%s accepted=%d",
+                              self._step, self._current_energy, self.lowest_energy,
+                              self._accepted_trials)

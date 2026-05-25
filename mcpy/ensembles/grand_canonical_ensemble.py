@@ -36,7 +36,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         super().__init__(atoms=atoms,
                          cells=cells,
-                         units_type='metal',
+                         units_type=units_type,
                          calculator=calculator,
                          random_seed=random_seed,
                          traj_file=traj_file,
