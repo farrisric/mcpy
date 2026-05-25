@@ -50,11 +50,14 @@ class ShakeMove(BaseMove):
 
     def do_trial_move(self, atoms: Atoms) -> Atoms:
         atoms_new = atoms.copy()
-        displacements = self.rng.uniform(-1, 1, size=(len(atoms), 3))
-        norms = np.linalg.norm(displacements, axis=1, keepdims=True)
-        normalized_displacements = displacements / norms
-        radii = self.rng.uniform(0, self.r_max, size=(len(atoms), 1)) ** (1 / 3)
-        new_positions = atoms_new.get_positions() + normalized_displacements * radii
+        n = len(atoms)
+        # Uniform directions on S^2 (Gaussian normalized; a cube-uniform
+        # vector would bias toward diagonals).
+        displacements = self.rng.standard_normal(size=(n, 3))
+        directions = displacements / np.linalg.norm(displacements, axis=1, keepdims=True)
+        # Uniform-in-ball radius: r_max * u^(1/3), u ~ U(0,1).
+        radii = self.r_max * np.cbrt(self.rng.random(size=(n, 1)))
+        new_positions = atoms_new.get_positions() + directions * radii
         atoms_new.set_positions(new_positions)
         return atoms_new, 0, 'X'
 
@@ -96,9 +99,12 @@ class BallMove(BaseMove):
     def do_trial_move(self, atoms: Atoms) -> Atoms:
         atoms_new = atoms.copy()
         i = self.rng.integers(0, len(atoms))
-        displacement = self.rng.normal(size=3)
-        displacement *= self.radius / np.linalg.norm(displacement)
-        atoms_new[i].position += displacement
+        # Uniform inside a ball of radius `self.radius`: uniform direction
+        # times r = radius * u^(1/3).
+        direction = self.rng.normal(size=3)
+        direction /= np.linalg.norm(direction)
+        r = self.radius * np.cbrt(self.rng.random())
+        atoms_new[i].position += direction * r
         return atoms_new, 0, 'X'
 
 
