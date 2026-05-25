@@ -56,6 +56,7 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    :maxdepth: 1
 
    tutorials/oxidation_phase_diagram
+   tutorials/cluster_install_iqtc
 
 .. toctree::
    :caption: Examples
