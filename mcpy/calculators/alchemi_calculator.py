@@ -148,9 +148,11 @@ class AlchemiCalculator:
         dtype: torch.dtype = torch.float32,
         enable_cueq: bool = True,
         compile_model: bool = True,
+        max_neighbors: int | None = None,
     ) -> None:
         self.device = device
         self.dtype = dtype
+        self.max_neighbors = max_neighbors
         self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model)
         self._nl_config = self.model.model_config.neighbor_config
 
@@ -171,7 +173,7 @@ class AlchemiCalculator:
         batch = _make_batch(atoms, self.device, self.dtype)
         # positions must have grad enabled — MACEWrapper always computes forces via autograd
         batch.positions.requires_grad_(True)
-        nl_hook = NeighborListHook(self._nl_config)
+        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         _build_nl(batch, nl_hook)
         out = self.model(batch)
         return float(out['energy'].sum().item())
@@ -197,7 +199,7 @@ class AlchemiCalculator:
             return np.empty(0, dtype=np.float64)
         batch = _make_multi_batch(atoms_list, self.device, self.dtype)
         batch.positions.requires_grad_(True)
-        nl_hook = NeighborListHook(self._nl_config)
+        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         _build_nl(batch, nl_hook)
         out = self.model(batch)
         return _per_graph_energies(out['energy'], len(atoms_list))
@@ -246,12 +248,14 @@ class AlchemiFCalculator:
         compile_model: bool = True,
         dt: float = 1.0,
         optimizer: str = 'fire',
+        max_neighbors: int | None = None,
     ) -> None:
         self.steps = steps
         self.fmax = fmax
         self.device = device
         self.dtype = dtype
         self.dt = dt
+        self.max_neighbors = max_neighbors
         self.last_relax_steps = 0
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
@@ -283,7 +287,7 @@ class AlchemiFCalculator:
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(1, 1, device=self.device, dtype=self.dtype)
 
-        nl_hook = NeighborListHook(self._nl_config)
+        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         opt = self._optimizer_cls(
             model=self.model,
             dt=self.dt,
@@ -330,7 +334,7 @@ class AlchemiFCalculator:
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(n_graphs, 1, device=self.device, dtype=self.dtype)
 
-        nl_hook = NeighborListHook(self._nl_config)
+        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         opt = self._optimizer_cls(
             model=self.model,
             dt=self.dt,
