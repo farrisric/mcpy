@@ -1,8 +1,7 @@
-<!-- [![GitHub release](https://img.shields.io/github/release/yourusername/npl.svg)](https://GitHub.com/yourusername/npl/releases/) -->
-
-[![License](https://img.shields.io/badge/License-MIT%202.0-blue.svg)](https://opensource.org/licenses/mit)
-[![GitHub issues](https://img.shields.io/github/issues/farrisric/npl.svg)](https://GitHub.com/farrisric/mcpy/issues)
-[![Documentation Status](https://readthedocs.org/projects/nplib/badge/)](https://mc-py.readthedocs.io/en/latest/index.html)
+[![Tests](https://github.com/farrisric/mcpy/actions/workflows/tests.yml/badge.svg)](https://github.com/farrisric/mcpy/actions/workflows/tests.yml)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/mit)
+[![GitHub issues](https://img.shields.io/github/issues/farrisric/mcpy.svg)](https://GitHub.com/farrisric/mcpy/issues)
+[![Documentation Status](https://readthedocs.org/projects/mc-py/badge/)](https://mc-py.readthedocs.io/en/latest/index.html)
 
 # <span style="font-size:larger;">mcpy</span>
 
@@ -137,7 +136,17 @@ gcmc.run(1000000)
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository and submit a pull request with your changes.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for
+development setup, how to run the tests, and how to submit changes. Please also
+review our [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature
+requests go to the [issue tracker](https://github.com/farrisric/mcpy/issues).
+
+Run the tests with:
+
+```sh
+pip install -e ".[test]"
+pytest tests/
+```
 
 ## License
 

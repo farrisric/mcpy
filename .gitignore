@@ -40,3 +40,7 @@ scratch/
 # Claude files
 CLAUDE.md
 .claude/
+
+# Tool-generated / planning artifacts (kept local)
+.understand-anything/
+docs/superpowers/

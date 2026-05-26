@@ -131,10 +131,13 @@ class TestInsertionMove:
         n0 = len(self.atoms)
         move = InsertionMove(self.cell, species=['H'], seed=3, min_insert=1e9)
         t0 = time.perf_counter()
-        move.do_trial_move(self.atoms)
+        result, delta_n, _ = move.do_trial_move(self.atoms)
         elapsed = time.perf_counter() - t0
         assert elapsed < 5.0, f"Insertion took too long: {elapsed:.2f}s"
-        assert len(self.atoms) == n0 + 1
+        # min_insert cannot be honoured: the move reports failure and leaves
+        # atoms untouched rather than inserting a guaranteed overlap.
+        assert result is False
+        assert len(self.atoms) == n0
 
 
 # ---------------------------------------------------------------------------

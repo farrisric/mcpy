@@ -1,6 +1,6 @@
 [project]
 name = "mcpy"
-version = "0.1.0"
+version = "1.0.0"
 description = "A python package to run atomistic Monte Carlo simulations"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,7 +19,13 @@ dependencies = [
 alchemi = [
     "nvalchemi-toolkit[mace]>=0.1.0",
 ]
+test = [
+    "pytest>=7.0",
+]
 
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
