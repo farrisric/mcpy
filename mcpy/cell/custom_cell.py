@@ -87,8 +87,16 @@ class CustomCell(Cell):
 
     def get_atoms_specie_inside_cell(self, atoms, specie):
         """
-        Vectorized: indices of atoms with symbol in ``specie`` and position
-        inside the custom cell.
+        Vectorized: indices of atoms with symbol in ``specie`` that are
+        exchangeable with the reservoir.
+
+        In xy an atom must lie within the cell footprint. In z the upper bound
+        is intentionally dropped: atoms at or above the cell floor count as
+        exchangeable, including ones that desorbed and drifted above the cell
+        top (e.g. a recombined H2 floating off the surface). Without this they
+        would never be selected for deletion and would accumulate forever.
+        Atoms below the floor (absorbed into the subsurface layers) stay
+        excluded so they are kept.
         """
         if len(atoms) == 0:
             return np.empty(0, dtype=int)
@@ -99,7 +107,9 @@ class CustomCell(Cell):
             species_list = list(specie)
         species_mask = np.isin(symbols, species_list)
         frac = (atoms.positions - self.offset) @ self._dim_inv
-        inside = np.all((frac >= 0.0) & (frac < 1.0), axis=1)
+        in_xy = np.all((frac[:, :2] >= 0.0) & (frac[:, :2] < 1.0), axis=1)
+        above_floor = frac[:, 2] >= 0.0
+        inside = in_xy & above_floor
         return np.where(species_mask & inside)[0]
 
     def is_point_inside(self, point):
