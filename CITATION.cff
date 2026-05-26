@@ -10,6 +10,8 @@ authors:
     affiliation: "Universitat de Barcelona"
 date-released: "2025-05-01"
 version: "1.0.0"
+# TODO(release): 10.5072 is the Zenodo *sandbox* DOI. Replace with the real
+# DOI minted by the production Zenodo deposit before JOSS acceptance.
 doi: "10.5072/zenodo.262131"
 url: "https://github.com/farrisric/mcpy"
 license: "MIT"
