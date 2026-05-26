@@ -137,9 +137,9 @@ gcmc.run(1000000)
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for
-development setup, how to run the tests, and how to submit changes. Please also
-review our [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature
-requests go to the [issue tracker](https://github.com/farrisric/mcpy/issues).
+development setup, how to run the tests, and how to submit changes. Bug reports
+and feature requests go to the
+[issue tracker](https://github.com/farrisric/mcpy/issues).
 
 Run the tests with:
 
