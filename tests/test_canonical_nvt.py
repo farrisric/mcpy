@@ -1,9 +1,11 @@
 from collections import Counter
 
 import numpy as np
+import pytest
 from ase.cluster import Octahedron
 from ase.calculators.emt import EMT
 from ase.optimize import LBFGS
+from ase.units import kB
 
 from mcpy.ensembles.canonical_ensemble import CanonicalEnsemble
 from mcpy.moves.move_selector import MoveSelector
@@ -39,3 +41,24 @@ def test_nvt_permutation_conserves_composition(tmp_path):
     after = Counter(mc.atoms.get_chemical_symbols())
     assert before == after
     assert np.isfinite(mc._current_energy)
+
+
+def test_get_set_state_roundtrip(tmp_path):
+    mc = _make_ensemble(tmp_path, temperature=600.0, seed=2)
+    mc.initialize_run()  # relaxes initial config, sets _current_energy
+    try:
+        state = mc.get_state()
+        assert state['beta'] == pytest.approx(1.0 / (kB * 600.0))
+        assert 'energy' in state and 'atoms' in state
+        assert 'mu' not in state
+
+        saved_energy = state['energy']
+        mc._current_energy = 999.0
+        mc.atoms = _make_cluster()  # a different Atoms object
+
+        mc.set_state(state)
+        assert mc._current_energy == saved_energy
+        kvp = mc.atoms.info['key_value_pairs']['potential_energy']
+        assert kvp == saved_energy
+    finally:
+        mc.finalize_run()

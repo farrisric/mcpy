@@ -67,6 +67,31 @@ class CanonicalEnsemble(BaseEnsemble):
         self._step = 0
         self._accepted_trials = 0
 
+    def get_state(self):
+        return {
+            "atoms": self.atoms,
+            "energy": self._current_energy,
+            "temperature": self._temperature,
+            "beta": self._beta,
+            "step": self._step,
+            "exchange_attempts": self.exchange_attempts,
+            "exchange_successes": self.exchange_successes,
+        }
+
+    def set_state(self, state):
+        self.atoms = state["atoms"]
+        self._current_energy = state["energy"]
+        # Guarantee the next trial_step reads a valid energy baseline after a
+        # config swap, without relying on the pickled .info surviving MPI.
+        self.atoms.info.setdefault("key_value_pairs", {})
+        self.atoms.info["key_value_pairs"]["potential_energy"] = state["energy"]
+        if "step" in state:
+            self._step = state["step"]
+        if "exchange_attempts" in state:
+            self.exchange_attempts = state["exchange_attempts"]
+        if "exchange_successes" in state:
+            self.exchange_successes = state["exchange_successes"]
+
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:
             return True
