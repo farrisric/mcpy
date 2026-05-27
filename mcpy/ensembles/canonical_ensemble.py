@@ -59,7 +59,7 @@ class CanonicalEnsemble(BaseEnsemble):
         self._temperature = temperature
         self._optimizer = optimizer
         self._fmax = fmax
-        self._move_selector = move_selector
+        self.move_selector = move_selector
         self._beta = 1.0 / (boltzmann_constant * temperature)
         self.exchange_attempts = 0
         self.exchange_successes = 0
@@ -87,7 +87,7 @@ class CanonicalEnsemble(BaseEnsemble):
 
     def do_mutation(self):
         new_atoms = self.atoms.copy()
-        result = self._move_selector.do_trial_move(new_atoms)
+        result = self.move_selector.do_trial_move(new_atoms)
         mutated = result[0] if isinstance(result, tuple) else result
         if not mutated:
             return None
@@ -111,7 +111,7 @@ class CanonicalEnsemble(BaseEnsemble):
                 self.lowest_energy = potential_f
             self.atoms = new_atoms
             self._current_energy = potential_f
-            self._move_selector.acceptance_counter()
+            self.move_selector.acceptance_counter()
             # Log the accepted configuration's energy, not the running minimum.
             self.write_coordinates(self.atoms, self._current_energy)
             return 1
