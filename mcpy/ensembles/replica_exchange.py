@@ -207,7 +207,7 @@ class ReplicaExchange:
             for i, state in enumerate(final_states):
                 self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
                                  f"Energy: {state['energy']:.3f}, "
-                                 f"Mu: {state['mu']}")
+                                 f"Mu: {state.get('mu', 'N/A')}")
 
     def initialize_run(self):
         self.logger.info("+-------------------------------------------------+")
