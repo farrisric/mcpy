@@ -13,9 +13,11 @@ logger = logging.getLogger(__name__)
 class CanonicalEnsemble(BaseEnsemble):
     """Canonical (NVT) ensemble Monte Carlo with relaxation-based moves.
 
-    The configuration is mutated by an operator from ``op_list`` (an ASE
-    GA-style operator list), then relaxed with ``optimizer``. Acceptance is
-    Metropolis at ``temperature`` on the relaxed potential energies.
+    Each step copies the current configuration, applies one move from an mcpy
+    ``MoveSelector`` (e.g. ``PermutationMove``), relaxes it with ``optimizer``,
+    and accepts via the Metropolis rule at ``temperature``. Exposes
+    ``get_state``/``set_state`` so it can be driven by ``ReplicaExchange`` as a
+    temperature ladder.
     """
 
     def __init__(self,
@@ -27,9 +29,8 @@ class CanonicalEnsemble(BaseEnsemble):
                  optimizer=None,
                  fmax=0.1,
                  temperature=300,
-                 op_list=None,
+                 move_selector=None,
                  constraints=None,
-                 p=1,
                  traj_file: str = 'trajectory.xyz',
                  traj_mode: str = 'w',
                  outfile: str = 'outfile.out',
@@ -50,9 +51,6 @@ class CanonicalEnsemble(BaseEnsemble):
 
         if random_seed is not None:
             random.seed(random_seed)
-        # Dedicated generator for the mutation-count draw so runs are
-        # reproducible from random_seed (np.random global was never seeded).
-        self._np_rng = np.random.default_rng(random_seed)
 
         self.lowest_energy = float('inf')
         self._current_energy = None
@@ -61,8 +59,10 @@ class CanonicalEnsemble(BaseEnsemble):
         self._temperature = temperature
         self._optimizer = optimizer
         self._fmax = fmax
-        self._op_list = op_list
-        self.p = p
+        self._move_selector = move_selector
+        self._beta = 1.0 / (boltzmann_constant * temperature)
+        self.exchange_attempts = 0
+        self.exchange_successes = 0
 
         self._step = 0
         self._accepted_trials = 0
@@ -87,25 +87,23 @@ class CanonicalEnsemble(BaseEnsemble):
 
     def do_mutation(self):
         new_atoms = self.atoms.copy()
-        new_atoms.info['data'] = {'tag': None}
-        new_atoms.info['confid'] = 1
-        operation = self._op_list.get_operator()
-        new_atoms, _ = operation.get_new_individual([new_atoms])
+        result = self._move_selector.do_trial_move(new_atoms)
+        mutated = result[0] if isinstance(result, tuple) else result
+        if not mutated:
+            return None
         if self.constraints:
-            new_atoms.set_constraint(self.constraints)
-        return new_atoms
+            mutated.set_constraint(self.constraints)
+        return mutated
 
     def trial_step(self):
-        num_mutations = self._np_rng.geometric(self.p)
-        new_atoms = self.atoms.copy()
-        for _ in range(num_mutations):
-            new_atoms = self.do_mutation()
+        new_atoms = self.do_mutation()
+        if new_atoms is None:
+            return 0
 
         new_atoms = self.relax(new_atoms)
 
         potential_i = self.atoms.info['key_value_pairs']['potential_energy']
         potential_f = new_atoms.info['key_value_pairs']['potential_energy']
-
         potential_diff = potential_f - potential_i
 
         if self._acceptance_condition(potential_diff):
@@ -113,6 +111,7 @@ class CanonicalEnsemble(BaseEnsemble):
                 self.lowest_energy = potential_f
             self.atoms = new_atoms
             self._current_energy = potential_f
+            self._move_selector.acceptance_counter()
             # Log the accepted configuration's energy, not the running minimum.
             self.write_coordinates(self.atoms, self._current_energy)
             return 1
