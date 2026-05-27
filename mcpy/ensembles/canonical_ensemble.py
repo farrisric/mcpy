@@ -79,6 +79,9 @@ class CanonicalEnsemble(BaseEnsemble):
         }
 
     def set_state(self, state):
+        # Swap the configuration only. Each replica keeps its own temperature
+        # (and thus _beta) across an exchange; restoring them would collapse
+        # the temperature ladder.
         self.atoms = state["atoms"]
         self._current_energy = state["energy"]
         # Guarantee the next trial_step reads a valid energy baseline after a
