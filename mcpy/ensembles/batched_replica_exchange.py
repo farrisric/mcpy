@@ -32,6 +32,7 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 
 from ..utils.random_number_generator import RandomNumberGenerator
+from .base_ensemble import write_xyz
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class BatchedReplicaExchange:
         outfile: str = 'replica_exchange.log',
         write_out_interval: int = 20,
         seed: int = 31,
+        global_minimum_file: Optional[str] = 'global_minimum.xyz',
     ) -> None:
         if temperatures is None and mus is None:
             raise ValueError("Provide either temperatures or mus (one per replica).")
@@ -89,6 +91,7 @@ class BatchedReplicaExchange:
 
         self._outfile = outfile
         self._outfile_handle = None
+        self._global_minimum_file = global_minimum_file
 
     # ------------------------------------------------------------------ run
 
@@ -118,6 +121,28 @@ class BatchedReplicaExchange:
                 except OSError:
                     self.logger.exception("Error closing %s", self._outfile)
                 self._outfile_handle = None
+            self._write_global_minimum()
+
+    def _write_global_minimum(self) -> None:
+        """Pick the lowest-score minimum across all replicas and write it as a
+        single XYZ frame. No-op if disabled or no replica saw any minimum."""
+        if self._global_minimum_file is None:
+            return
+        candidates = [r for r in self.replicas if r._best_atoms is not None]
+        if not candidates:
+            return
+        best = min(candidates, key=lambda r: r._best_score)
+        rank = self.replicas.index(best)
+        try:
+            with open(self._global_minimum_file, 'w') as fh:
+                write_xyz(
+                    best._best_atoms, best._best_energy, fh,
+                    extra=f'rank={rank} score={best._best_score:.6f}',
+                )
+        except OSError:
+            self.logger.exception(
+                "Error writing global minimum to %s", self._global_minimum_file
+            )
 
     def _rebatch_initial_energies(self) -> None:
         """Re-evaluate replica energies as one batch so all replicas start
@@ -172,6 +197,7 @@ class BatchedReplicaExchange:
                     r.E_old = float(E_new)
                     r.move_selector.acceptance_counter()
                     r.calculate_cells_volume(r.atoms)
+                    r._record_minimum(r.atoms, r.E_old)
                 else:
                     r.atoms.arrays = snapshots[i]
 

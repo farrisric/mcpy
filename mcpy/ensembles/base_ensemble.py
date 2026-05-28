@@ -27,7 +27,9 @@ class BaseEnsemble(ABC):
                  trajectory_write_interval: int = 1,
                  outfile: Optional[str] = 'outfile.out',
                  outfile_mode: str = 'w',
-                 outfile_write_interval: int = 1) -> None:
+                 outfile_write_interval: int = 1,
+                 minima_file: Optional[str] = None,
+                 minima_mode: str = 'a') -> None:
         """
         Base class for ensembles in Monte Carlo simulations.
 
@@ -36,6 +38,11 @@ class BaseEnsemble(ABC):
         :meth:`run`. Pass ``traj_file=None`` or ``outfile=None`` to disable
         either output channel. Use ``traj_mode='a'`` / ``outfile_mode='a'``
         to append to existing files (e.g. for restart).
+
+        ``minima_file`` (off by default) enables basin-hopping-style output:
+        a frame is written every time a new strictly-lower score is observed
+        (see :meth:`_minimum_score`). ``minima_mode='a'`` appends a history of
+        improving minima; ``'w'`` keeps only the current running best.
         """
         self.logger = logger
 
@@ -57,6 +64,13 @@ class BaseEnsemble(ABC):
         self._traj_handle = None
         self._outfile_handle = None
         self._initialized = False
+
+        self._minima_file = minima_file
+        self._minima_mode = minima_mode
+        self._minima_handle = None
+        self._best_score = float('inf')
+        self._best_energy = float('inf')
+        self._best_atoms = None
 
         # Seed source for derived generators (moves, acceptance test). We do
         # not touch the global ``random`` module: moves carry their own RNG.
@@ -115,6 +129,35 @@ class BaseEnsemble(ABC):
         except (OSError, AttributeError):
             self.logger.exception("Error writing to trajectory file %s", self._traj_file)
 
+    def _minimum_score(self, atoms: Atoms, energy: float) -> float:
+        """Score used to compare configurations for the running minimum.
+
+        Default is the potential energy. ``GrandCanonicalEnsemble`` overrides
+        this to return the grand potential ``E - Σ μ_i N_i`` so the comparison
+        is meaningful across configurations with different particle counts.
+        """
+        return energy
+
+    def _record_minimum(self, atoms: Atoms, energy: float) -> None:
+        """If ``atoms``/``energy`` improves the running best, snapshot it and
+        write to ``minima_file`` (no-op when ``minima_file`` is disabled)."""
+        score = self._minimum_score(atoms, energy)
+        if score >= self._best_score:
+            return
+        self._best_score = score
+        self._best_energy = energy
+        self._best_atoms = atoms.copy()
+        if self._minima_file is None or self._minima_handle is None:
+            return
+        try:
+            if self._minima_mode == 'w':
+                self._minima_handle.seek(0)
+                self._minima_handle.truncate()
+            extra = f'step={self._step} score={score:.6f}'
+            write_xyz(atoms, energy, self._minima_handle, extra=extra)
+        except (OSError, AttributeError):
+            self.logger.exception("Error writing to minima file %s", self._minima_file)
+
     def close_files(self) -> None:
         if self._traj_handle is not None:
             try:
@@ -128,6 +171,12 @@ class BaseEnsemble(ABC):
             except OSError:
                 self.logger.exception("Error closing outfile %s", self._outfile)
             self._outfile_handle = None
+        if self._minima_handle is not None:
+            try:
+                self._minima_handle.close()
+            except OSError:
+                self.logger.exception("Error closing minima file %s", self._minima_file)
+            self._minima_handle = None
 
     def __del__(self):
         # Safety net only. Deterministic cleanup goes through finalize_run /
@@ -163,6 +212,15 @@ class BaseEnsemble(ABC):
                 self._traj_handle = open(self._traj_file, self._traj_mode)
             except OSError:
                 self.logger.exception("Failed to open trajectory file '%s'", self._traj_file)
+                raise
+        if self._minima_file is not None and self._minima_handle is None:
+            try:
+                # 'w' opens read+write so we can truncate on each improvement
+                # without losing the handle (single-best mode).
+                mode = 'w+' if self._minima_mode == 'w' else 'a'
+                self._minima_handle = open(self._minima_file, mode)
+            except OSError:
+                self.logger.exception("Failed to open minima file '%s'", self._minima_file)
                 raise
         self._initialized = True
 
@@ -205,10 +263,13 @@ class BaseEnsemble(ABC):
             self.finalize_run()
 
 
-def write_xyz(atoms, energy, file_or_path):
+def write_xyz(atoms, energy, file_or_path, extra: str = ''):
     """
     Write an XYZ frame to an open file handle or a path (append mode).
     Single-string build; avoids the per-frame ``np.savetxt`` overhead.
+
+    ``extra`` is inserted into the comment line between ``energy=`` and the
+    ``Lattice=`` field (e.g. ``"step=42 score=-1.234"``).
     """
     cell = np.asarray(atoms.get_cell())
     positions = atoms.positions
@@ -216,7 +277,11 @@ def write_xyz(atoms, energy, file_or_path):
     num_atoms = len(atoms)
     cell_str = " ".join(f"{v:.8f}" for v in cell.ravel())
 
-    parts = [f"{num_atoms}\n", f'energy={energy:.6f} Lattice="{cell_str}"\n']
+    comment = f'energy={energy:.6f}'
+    if extra:
+        comment += f' {extra}'
+    comment += f' Lattice="{cell_str}"\n'
+    parts = [f"{num_atoms}\n", comment]
     for s, p in zip(symbols, positions):
         parts.append(f"{s} {p[0]} {p[1]} {p[2]}\n")
     text = "".join(parts)

@@ -32,7 +32,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  trajectory_write_interval: Optional[int] = 1,
                  outfile: Optional[str] = 'outfile.out',
                  outfile_mode: str = 'w',
-                 outfile_write_interval: Optional[int] = 1) -> None:
+                 outfile_write_interval: Optional[int] = 1,
+                 minima_file: Optional[str] = None,
+                 minima_mode: str = 'a') -> None:
 
         super().__init__(atoms=atoms,
                          cells=cells,
@@ -44,7 +46,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                          trajectory_write_interval=trajectory_write_interval,
                          outfile=outfile,
                          outfile_mode=outfile_mode,
-                         outfile_write_interval=outfile_write_interval)
+                         outfile_write_interval=outfile_write_interval,
+                         minima_file=minima_file,
+                         minima_mode=minima_mode)
 
         self.E_old = self.compute_energy(self.atoms)
 
@@ -148,6 +152,15 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         except (OSError, AttributeError):
             self.logger.exception("Error writing to file %s", self._outfile)
 
+    def _minimum_score(self, atoms: Atoms, energy: float) -> float:
+        """Grand potential Ω = E − Σ μ_i N_i. Comparing raw E across moves
+        that change N is not meaningful in the grand canonical ensemble."""
+        score = energy
+        symbols = atoms.get_chemical_symbols()
+        for specie, mu in self._mu.items():
+            score -= mu * symbols.count(specie)
+        return score
+
     def _acceptance_condition(self,
                               potential_diff: float,
                               delta_particles: int,
@@ -229,6 +242,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self.E_old = E_new
                 self.move_selector.acceptance_counter()
                 self.calculate_cells_volume(atoms)
+                self._record_minimum(atoms, self.E_old)
 
                 self.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
                                   volume, delta_particles, species)
@@ -249,6 +263,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         # logged sequence is symmetric and the starting state is recoverable.
         self._write_initial_row()
         self.write_coordinates(self.atoms, self.E_old)
+        self._record_minimum(self.atoms, self.E_old)
 
     def _write_initial_row(self) -> None:
         if self._outfile is None or self._outfile_handle is None:

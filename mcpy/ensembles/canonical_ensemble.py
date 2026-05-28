@@ -36,7 +36,9 @@ class CanonicalEnsemble(BaseEnsemble):
                  outfile: str = 'outfile.out',
                  outfile_mode: str = 'w',
                  outfile_write_interval: int = 10,
-                 trajectory_write_interval: int = 1) -> None:
+                 trajectory_write_interval: int = 1,
+                 minima_file: str = None,
+                 minima_mode: str = 'a') -> None:
         super().__init__(atoms=atoms,
                          cells=cells if cells is not None else [],
                          units_type=units_type,
@@ -47,7 +49,9 @@ class CanonicalEnsemble(BaseEnsemble):
                          trajectory_write_interval=trajectory_write_interval,
                          outfile=outfile,
                          outfile_mode=outfile_mode,
-                         outfile_write_interval=outfile_write_interval)
+                         outfile_write_interval=outfile_write_interval,
+                         minima_file=minima_file,
+                         minima_mode=minima_mode)
 
         if random_seed is not None:
             random.seed(random_seed)
@@ -142,6 +146,7 @@ class CanonicalEnsemble(BaseEnsemble):
             self.move_selector.acceptance_counter()
             # Log the accepted configuration's energy, not the running minimum.
             self.write_coordinates(self.atoms, self._current_energy)
+            self._record_minimum(self.atoms, self._current_energy)
             return 1
         return 0
 
@@ -158,6 +163,7 @@ class CanonicalEnsemble(BaseEnsemble):
         self.lowest_energy = self._current_energy
         self.write_coordinates(self.atoms, self._current_energy)
         self.write_outfile(self._step, self._current_energy)
+        self._record_minimum(self.atoms, self._current_energy)
 
     def _run(self) -> None:
         accepted = self.trial_step()

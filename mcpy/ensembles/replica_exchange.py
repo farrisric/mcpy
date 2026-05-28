@@ -8,6 +8,7 @@ except ImportError:
     MPI = None
 
 from ..utils import RandomNumberGenerator
+from .base_ensemble import write_xyz
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ class ReplicaExchange:
                  exchange_interval=10,
                  outfile="replica_exchange.log",
                  write_out_interval=20,
-                 seed=31):
+                 seed=31,
+                 global_minimum_file="global_minimum.xyz"):
         """ReplicaExchange for GCMC.
 
         ``gcmc_factory`` must produce per-rank unique output filenames (e.g.
@@ -61,6 +63,7 @@ class ReplicaExchange:
         self._outfile = outfile
         self._outfile_handle = None
         self.write_out_interval = write_out_interval
+        self._global_minimum_file = global_minimum_file
 
     def get_partner_rank(self, global_random):
         # Two alternating, symmetric pairings so that A->B implies B->A (else
@@ -200,6 +203,7 @@ class ReplicaExchange:
                 except OSError:
                     self.logger.exception("Error closing %s", self._outfile)
                 self._outfile_handle = None
+            self._write_global_minimum()
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
@@ -208,6 +212,32 @@ class ReplicaExchange:
                 self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
                                  f"Energy: {state['energy']:.3f}, "
                                  f"Mu: {state.get('mu', 'N/A')}")
+
+    def _write_global_minimum(self) -> None:
+        """Gather each rank's running best, write the lowest one as a single
+        XYZ frame on rank 0. No-op if disabled or no replica saw any minimum.
+        """
+        if self._global_minimum_file is None:
+            return
+        local = None
+        if self.gcmc._best_atoms is not None:
+            local = (self.gcmc._best_score, self.gcmc._best_energy,
+                     self.gcmc._best_atoms)
+        gathered = self.comm.gather(local, root=0)
+        if self.rank != 0:
+            return
+        candidates = [(i, item) for i, item in enumerate(gathered) if item is not None]
+        if not candidates:
+            return
+        rank, (score, energy, atoms) = min(candidates, key=lambda kv: kv[1][0])
+        try:
+            with open(self._global_minimum_file, 'w') as fh:
+                write_xyz(atoms, energy, fh,
+                          extra=f'rank={rank} score={score:.6f}')
+        except OSError:
+            self.logger.exception(
+                "Error writing global minimum to %s", self._global_minimum_file
+            )
 
     def initialize_run(self):
         self.logger.info("+-------------------------------------------------+")
