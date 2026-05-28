@@ -15,12 +15,16 @@ class DisplacementMove(BaseMove):
                  species: list[str],
                  seed: int,
                  constraints: list = None,
-                 max_displacement: float = 0.1
+                 max_displacement: float = 0.1,
+                 n_steps: int = 1,
                  ) -> None:
+        if n_steps < 1:
+            raise ValueError(f"n_steps must be >= 1, got {n_steps}")
         cell = NullCell()
         super().__init__(cell, species, seed)
         self.max_displacement = max_displacement
         self.constraints = np.asarray(constraints, dtype=int) if constraints else np.empty(0, int)
+        self.n_steps = int(n_steps)
         self._cached_to_move = None
         self._cached_natoms = -1
 
@@ -39,22 +43,35 @@ class DisplacementMove(BaseMove):
 
     def do_trial_move(self, atoms):
         """
-        Displace a random atom by a random vector within ``max_displacement``.
+        Displace ``self.n_steps`` distinct random atoms by a random vector
+        within ``max_displacement``. With ``n_steps=1`` (default) this is the
+        classic single-atom displacement; larger values bundle several
+        displacements into a single trial for basin-hopping-style sampling.
         """
         n = len(atoms)
         if n == 0:
             raise ValueError("No atoms to displace.")
         to_move = self._movable_indices(n)
-        atom_index = int(self.rng.random.choice(to_move))
+        if self.n_steps > to_move.size:
+            raise ValueError(
+                f"n_steps={self.n_steps} exceeds movable atom count {to_move.size}"
+            )
+        if self.n_steps == 1:
+            selected = (int(self.rng.random.choice(to_move)),)
+        else:
+            selected = tuple(int(i) for i in self.rng.random.sample(
+                list(to_move), self.n_steps,
+            ))
 
-        rsq = 1.1
-        while rsq > 1.0:
-            rx = 2.0 * self.rng.get_uniform() - 1.0
-            ry = 2.0 * self.rng.get_uniform() - 1.0
-            rz = 2.0 * self.rng.get_uniform() - 1.0
-            rsq = rx * rx + ry * ry + rz * rz
+        for atom_index in selected:
+            rsq = 1.1
+            while rsq > 1.0:
+                rx = 2.0 * self.rng.get_uniform() - 1.0
+                ry = 2.0 * self.rng.get_uniform() - 1.0
+                rz = 2.0 * self.rng.get_uniform() - 1.0
+                rsq = rx * rx + ry * ry + rz * rz
 
-        atoms.positions[atom_index, 0] += rx * self.max_displacement
-        atoms.positions[atom_index, 1] += ry * self.max_displacement
-        atoms.positions[atom_index, 2] += rz * self.max_displacement
+            atoms.positions[atom_index, 0] += rx * self.max_displacement
+            atoms.positions[atom_index, 1] += ry * self.max_displacement
+            atoms.positions[atom_index, 2] += rz * self.max_displacement
         return atoms, 0, 'X'
