@@ -77,12 +77,13 @@ def total_volume_with_overlap(spheres, positions):
             total_vol -= overlap_volume(spheres[i], spheres[j], d)
     return total_vol
 
+
 def get_p_at_support(support: Atoms, particle: Atoms,
                      contact_surface: str = '100', gap: float = 2.0,
                      vacuum_z: float = 10.0) -> Atoms:
     """
     Place an Ag truncated octahedron on top of a support.
-    
+
     Parameters
     ----------
     support : Atoms
@@ -95,7 +96,7 @@ def get_p_at_support(support: Atoms, particle: Atoms,
         Which facet should contact the support.
     gap : float
         Vertical clearance between support top z and particle bottom z (Å).
-        
+
     Returns
     -------
     Atoms
