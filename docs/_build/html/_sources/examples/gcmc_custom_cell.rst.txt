@@ -1,5 +1,5 @@
 Grand Canonical Monte Carlo on a small Ag(111) surface with a custom simulation cell
-===================================================================================
+====================================================================================
 
 This tutorial demonstrates **Grand Canonical Monte Carlo (GCMC)** on an Ag(111) slab where
 adsorbate insertion/deletion is restricted to a prescribed volume above the surface via a
@@ -23,7 +23,7 @@ Relaxation-style GCMC acceptance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 In dense metals, raw insertions often clash with nearby atoms, producing very low acceptance.
 To reduce this effect, evaluate acceptance using a briefly relaxed trial configuration
-(``energy relaxation step``; Senftle et al., 2013).
+(``energy relaxation step``; Senftle et al., 2014).
 This is especially important when insertions/deletions are restricted to a constrained region
 above the surface (Wexler et al., 2019).
 

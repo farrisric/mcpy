@@ -138,3 +138,83 @@ You can still run the same analysis script directly:
    python -m mcpy.utils.phase_diagram relaxed_structures.xyz \
        --idx-ref 2400 --output lines_phases_mace.png
 
+General adsorbate phase diagrams from multiple trajectories
+===========================================================
+
+``analyze_phase_diagram_results`` above is tailored to oxygen-on-silver surfaces
+(it embeds the oxide formation-enthalpy correction and a single input
+trajectory). For a generic single-adsorbate system that was sampled across a
+range of chemical potentials and split across many trajectory files, use
+:func:`mcpy.utils.plot_phase_diagram` instead.
+
+One call builds the diagram for **one configuration** (e.g. a single surface
+facet or a single nanoparticle size). You pass the in-memory frames belonging to
+that configuration; the function merges them, picks the lowest-energy
+adsorbate-free frame as the reference, and selects the stable phase at each
+:math:`\Delta\mu`. Both extended surfaces (normalized per surface area,
+meV/Å²) and nanoparticles (normalized per metal atom, meV/atom) are supported.
+
+.. code-block:: python
+
+   import glob
+   from ase.io import read
+   from mcpy.utils import plot_phase_diagram
+
+   # All trajectory files for ONE configuration (here a PdAg(111) surface,
+   # sweeping the H chemical potential across several runs/ranks).
+   files = sorted(glob.glob("results/regcmc_surface_111/PdAg_111_dmu_*_rank_*.xyz"))
+   frames = [read(f, ":") for f in files]   # list of trajectories, flattened internally
+
+   result = plot_phase_diagram(
+       frames,
+       adsorbate="H",
+       metal_symbols=("Pd", "Ag"),
+       mu_ref=-3.05,            # reference adsorbate chemical potential, e.g. 1/2 E(H2)
+       kind="surface",          # "surface" -> meV/Å²; "nano" -> meV/atom
+       T=300.0,
+       dmu_range=(-1.0, 0.0),
+       system_label="surface_111",
+       outfile="figures/phase_surface_111.png",
+   )
+
+   print("Transitions (delta mu):", result["transitions"])
+   print("Stable phases (H counts):", [result["stoich"][i] for i in result["phase_order"]])
+
+To process several configurations, call the function once per configuration with
+the kwargs that differ between systems (the trajectory list, ``kind``,
+``metal_symbols``/``adsorbate``, ``system_label``, ``outfile``):
+
+.. code-block:: python
+
+   systems = {
+       "surface_111": dict(glob="results/regcmc_surface_111/PdAg_111_dmu_*_rank_*.xyz",
+                           kind="surface"),
+       "nano_small":  dict(glob="results/regcmc_nano_small/PdAg_nano_small_dmu_*_rank_*.xyz",
+                           kind="nano"),
+   }
+   for name, cfg in systems.items():
+       frames = [read(f, ":") for f in sorted(glob.glob(cfg["glob"]))]
+       plot_phase_diagram(frames, adsorbate="H", metal_symbols=("Pd", "Ag"),
+                          mu_ref=-3.05, kind=cfg["kind"], system_label=name,
+                          outfile=f"figures/phase_{name}.png")
+
+Key parameters
+--------------
+
+- ``frames``: a flat list of ``ase.Atoms`` or a list of trajectories (each a list
+  of frames); the latter is flattened automatically.
+- ``adsorbate``: symbol whose count defines the stoichiometry (e.g. ``"H"``).
+- ``metal_symbols``: host species, used for per-atom normalization and the
+  structure-thumbnail labels.
+- ``mu_ref``: reference chemical potential of the adsorbate [eV].
+- ``kind``: ``"surface"`` or ``"nano"`` (selects the normalization).
+- ``min_phase_width``: phases narrower than this :math:`\Delta\mu` width are
+  merged into a neighbor, suppressing spurious slivers.
+- ``show_structures``: render the per-phase structure thumbnails (default
+  ``True``; requires ``ase.visualize.plot``). Set ``False`` for the plot panel
+  only.
+
+Returns a dictionary with ``dmu_grid``, ``free``, ``stoich``, ``stable_idx``,
+``min_gamma``, ``transitions``, ``phase_order``, ``phase_ratios``, ``unit`` and
+``plot_path``.
+

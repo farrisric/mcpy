@@ -6,15 +6,21 @@ configuration, the energy calculator, the set of cells used for free-volume esti
 the `MoveSelector` that proposes trial configurations. It then evaluates the appropriate
 acceptance rule and writes the trajectory and log.
 
-Three ensembles are available:
+Four ensembles are available:
 
 - :class:`CanonicalEnsemble` -- fixed composition (NVT) Metropolis sampling.
 - :class:`GrandCanonicalEnsemble` -- variable composition at fixed :math:`(\mu, V, T)`.
-- :class:`ReplicaExchange` -- a wrapper that runs several GCMC replicas at different
+- :class:`ReplicaExchange` -- an MPI wrapper that runs several GCMC replicas at different
   temperatures or chemical potentials and periodically attempts exchanges between them.
+- :class:`BatchedReplicaExchange` -- single-process variant that batches every replica's
+  trial-move energy into a single forward pass (one GPU context, one kernel launch per layer).
 
-The remainder of this page describes each one, the acceptance criteria they implement, and the
-free-volume estimator used by GCMC insertion/deletion.
+All ensembles share a basin-hopping-style *running minimum* output: whenever a strictly
+lower-score configuration is observed, it is appended to (or overwrites) a dedicated
+``minima_file`` independent of the per-step sampling trajectory.
+
+The remainder of this page describes each one, the acceptance criteria they implement, the
+free-volume estimator used by GCMC insertion/deletion, and the running-minimum output.
 
 
 `BaseEnsemble`
@@ -26,7 +32,9 @@ Shared infrastructure used by every concrete ensemble:
 - single-point energy evaluation (optionally preceded by a local relaxation),
 - trajectory and log writers driven by `trajectory_write_interval` and
   `outfile_write_interval`,
-- initialization, finalization, and step-counter management.
+- initialization, finalization, and step-counter management,
+- a running-minimum hook (``_record_minimum``) that snapshots the best-so-far configuration
+  and optionally writes it to ``minima_file`` -- see :ref:`running-minima`.
 
 `BaseEnsemble` is abstract -- you instantiate one of the concrete subclasses below.
 
@@ -131,6 +139,80 @@ Outputs
   write; cumulative ratios are reported at the end of the run.
 
 
+.. _running-minima:
+
+Running minima and basin-hopping output
+---------------------------------------
+
+When the trial move is followed by a local relaxation, the Metropolis loop is, by
+construction, a basin-hopping sampler: each accepted move corresponds to a local minimum of
+the potential energy surface. Two output channels coexist:
+
+- ``traj_file`` (extended XYZ) -- the **sampling** trajectory, written every
+  ``trajectory_write_interval`` accepted steps. Use this for thermodynamic averages and
+  visualisation.
+- ``minima_file`` (extended XYZ, off by default) -- the **basin-hopping** output. A frame is
+  written only when the score of the just-accepted configuration is strictly lower than every
+  previous score observed in the run.
+
+Either channel can be disabled independently by passing ``None``. The four useful combinations:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 25 50
+
+   * - ``traj_file``
+     - ``minima_file``
+     - What you get
+   * - ``'traj.xyz'``
+     - ``None``
+     - Standard sampling (default).
+   * - ``None``
+     - ``'minima.xyz'``
+     - Pure basin hopping -- only improving minima are persisted.
+   * - ``'traj.xyz'``
+     - ``'minima.xyz'``
+     - Both sampling and the basin-hopping history.
+   * - ``None``
+     - ``None``
+     - No XYZ output (energies still go to ``outfile``).
+
+``minima_mode`` controls the policy of the minima file:
+
+- ``'a'`` (default) -- append every new minimum, building a history of improving structures.
+  The last frame of the file is always the running best.
+- ``'w'`` -- overwrite, keeping a single frame with the current best configuration.
+
+Each minima frame carries ``step=`` and ``score=`` in its comment line, so the improvement
+trace can be reconstructed from the file alone.
+
+Score function
+~~~~~~~~~~~~~~
+
+The quantity compared across configurations is the *score*, returned by ``_minimum_score``.
+Defaults:
+
+- :class:`CanonicalEnsemble` -- the potential energy :math:`E`.
+- :class:`GrandCanonicalEnsemble` -- the grand potential
+
+  .. math::
+
+     \Omega = E - \sum_i \mu_i N_i,
+
+  which is the meaningful comparison across moves that change particle counts. Subclasses
+  may override ``_minimum_score`` to introduce custom criteria (e.g. order parameters).
+
+Global minimum across replicas
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both :class:`ReplicaExchange` and :class:`BatchedReplicaExchange` accept a
+``global_minimum_file`` argument. After all replicas finalise, the lowest-score
+configuration observed across the whole ladder is written as a single XYZ frame to that
+file. The MPI variant gathers per-rank bests to rank 0; the batched variant minimises
+over the in-process replicas. The per-replica ``minima_file`` history is independent of
+this and continues to live in the per-rank outputs (e.g. ``minima_rank_3.xyz``).
+
+
 .. _free-volume:
 
 Free volume and `species_radii`
@@ -213,8 +295,33 @@ attempts to ensure every replica eventually mixes with both neighbours.
 Notes:
 
 - the ensemble factory must produce per-rank output filenames (e.g. by including `rank` in
-  the trajectory and log paths) so that ranks do not race on the same files;
-- one MPI rank corresponds to one replica.
+  the trajectory, log, and minima paths) so that ranks do not race on the same files;
+- one MPI rank corresponds to one replica;
+- at the end of the run, rank 0 collects each replica's running best (via ``comm.gather``)
+  and writes the global minimum as a single XYZ frame to ``global_minimum_file``
+  (default ``"global_minimum.xyz"``; pass ``None`` to disable). See :ref:`running-minima`.
+
+
+`BatchedReplicaExchange`
+------------------------
+
+`BatchedReplicaExchange` runs every replica in a single Python process and evaluates the
+trial-move energy of all replicas in one batched calculator call. The accept/reject step is
+still sequential per replica -- the batching is over replicas at the same logical step. This
+is the right choice on a single GPU, where MPI-based replica exchange would either
+oversubscribe one CUDA context or serialise through it.
+
+Requirements:
+
+- the calculator must implement ``get_potential_energies(atoms_list) -> ndarray`` -- the
+  optional ``AlchemiCalculator`` does;
+- ``gcmc_factory(T=..., rank=i)`` (or ``mu=..., rank=i`` for chemical-potential ladders) must
+  return a fresh, independently-seeded :class:`GrandCanonicalEnsemble` with its own cells and
+  move selector.
+
+Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
+``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
+written from ``min(replicas, key=best_score)`` after the run completes.
 
 
 Choosing the right ensemble
@@ -224,5 +331,7 @@ Choosing the right ensemble
   thermal annealing.
 - :class:`GrandCanonicalEnsemble` -- variable-composition adsorption/desorption studies at
   fixed :math:`(\mu, T)`, e.g. oxidation phase diagrams.
-- :class:`ReplicaExchange` -- when a single GCMC trajectory is prone to getting trapped in
-  a single basin and broader thermodynamic coverage is needed.
+- :class:`ReplicaExchange` -- multi-node MPI runs, when a single GCMC trajectory is prone to
+  getting trapped in a single basin and broader thermodynamic coverage is needed.
+- :class:`BatchedReplicaExchange` -- single-GPU runs, where batching trial energies across
+  replicas is faster than launching one CUDA context per replica.

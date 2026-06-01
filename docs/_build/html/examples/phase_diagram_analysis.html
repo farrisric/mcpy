@@ -58,6 +58,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/cluster_install_iqtc.html">Cluster install: IQTC portal (mcpy + Alchemi on Ubuntu GPU nodes)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="current">
@@ -70,6 +71,7 @@
 <li class="toctree-l3 current"><a class="reference internal" href="../examples.html#replica-exchange-gcmc-re-gcmc">Replica-Exchange GCMC (RE-GCMC)</a><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="replica_exchange_simulations.html">Replica-Exchange GCMC across a temperature ladder</a></li>
 <li class="toctree-l4 current"><a class="current reference internal" href="#">Phase diagram analysis from relaxed trajectories</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#general-adsorbate-phase-diagrams-from-multiple-trajectories">General adsorbate phase diagrams from multiple trajectories</a></li>
 </ul>
 </li>
 </ul>
@@ -233,6 +235,81 @@ offset that shifts the whole phase diagram line).</p></li>
 <span class="w">    </span>--idx-ref<span class="w"> </span><span class="m">2400</span><span class="w"> </span>--output<span class="w"> </span>lines_phases_mace.png
 </pre></div>
 </div>
+</section>
+</section>
+<section id="general-adsorbate-phase-diagrams-from-multiple-trajectories">
+<h1>General adsorbate phase diagrams from multiple trajectories<a class="headerlink" href="#general-adsorbate-phase-diagrams-from-multiple-trajectories" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">analyze_phase_diagram_results</span></code> above is tailored to oxygen-on-silver surfaces
+(it embeds the oxide formation-enthalpy correction and a single input
+trajectory). For a generic single-adsorbate system that was sampled across a
+range of chemical potentials and split across many trajectory files, use
+<code class="xref py py-func docutils literal notranslate"><span class="pre">mcpy.utils.plot_phase_diagram()</span></code> instead.</p>
+<p>One call builds the diagram for <strong>one configuration</strong> (e.g. a single surface
+facet or a single nanoparticle size). You pass the in-memory frames belonging to
+that configuration; the function merges them, picks the lowest-energy
+adsorbate-free frame as the reference, and selects the stable phase at each
+<span class="math notranslate nohighlight">\(\Delta\mu\)</span>. Both extended surfaces (normalized per surface area,
+meV/Å²) and nanoparticles (normalized per metal atom, meV/atom) are supported.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">read</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mcpy.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_phase_diagram</span>
+
+<span class="c1"># All trajectory files for ONE configuration (here a PdAg(111) surface,</span>
+<span class="c1"># sweeping the H chemical potential across several runs/ranks).</span>
+<span class="n">files</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;results/regcmc_surface_111/PdAg_111_dmu_*_rank_*.xyz&quot;</span><span class="p">))</span>
+<span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">read</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">&quot;:&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">]</span>   <span class="c1"># list of trajectories, flattened internally</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">plot_phase_diagram</span><span class="p">(</span>
+    <span class="n">frames</span><span class="p">,</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;H&quot;</span><span class="p">,</span>
+    <span class="n">metal_symbols</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Pd&quot;</span><span class="p">,</span> <span class="s2">&quot;Ag&quot;</span><span class="p">),</span>
+    <span class="n">mu_ref</span><span class="o">=-</span><span class="mf">3.05</span><span class="p">,</span>            <span class="c1"># reference adsorbate chemical potential, e.g. 1/2 E(H2)</span>
+    <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;surface&quot;</span><span class="p">,</span>          <span class="c1"># &quot;surface&quot; -&gt; meV/Å²; &quot;nano&quot; -&gt; meV/atom</span>
+    <span class="n">T</span><span class="o">=</span><span class="mf">300.0</span><span class="p">,</span>
+    <span class="n">dmu_range</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="n">system_label</span><span class="o">=</span><span class="s2">&quot;surface_111&quot;</span><span class="p">,</span>
+    <span class="n">outfile</span><span class="o">=</span><span class="s2">&quot;figures/phase_surface_111.png&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Transitions (delta mu):&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;transitions&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Stable phases (H counts):&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;stoich&quot;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;phase_order&quot;</span><span class="p">]])</span>
+</pre></div>
+</div>
+<p>To process several configurations, call the function once per configuration with
+the kwargs that differ between systems (the trajectory list, <code class="docutils literal notranslate"><span class="pre">kind</span></code>,
+<code class="docutils literal notranslate"><span class="pre">metal_symbols</span></code>/<code class="docutils literal notranslate"><span class="pre">adsorbate</span></code>, <code class="docutils literal notranslate"><span class="pre">system_label</span></code>, <code class="docutils literal notranslate"><span class="pre">outfile</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">systems</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;surface_111&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">glob</span><span class="o">=</span><span class="s2">&quot;results/regcmc_surface_111/PdAg_111_dmu_*_rank_*.xyz&quot;</span><span class="p">,</span>
+                        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;surface&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;nano_small&quot;</span><span class="p">:</span>  <span class="nb">dict</span><span class="p">(</span><span class="n">glob</span><span class="o">=</span><span class="s2">&quot;results/regcmc_nano_small/PdAg_nano_small_dmu_*_rank_*.xyz&quot;</span><span class="p">,</span>
+                        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;nano&quot;</span><span class="p">),</span>
+<span class="p">}</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="n">systems</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">read</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">&quot;:&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">cfg</span><span class="p">[</span><span class="s2">&quot;glob&quot;</span><span class="p">]))]</span>
+    <span class="n">plot_phase_diagram</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;H&quot;</span><span class="p">,</span> <span class="n">metal_symbols</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Pd&quot;</span><span class="p">,</span> <span class="s2">&quot;Ag&quot;</span><span class="p">),</span>
+                       <span class="n">mu_ref</span><span class="o">=-</span><span class="mf">3.05</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="n">cfg</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">],</span> <span class="n">system_label</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                       <span class="n">outfile</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;figures/phase_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="key-parameters">
+<h2>Key parameters<a class="headerlink" href="#key-parameters" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">frames</span></code>: a flat list of <code class="docutils literal notranslate"><span class="pre">ase.Atoms</span></code> or a list of trajectories (each a list
+of frames); the latter is flattened automatically.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">adsorbate</span></code>: symbol whose count defines the stoichiometry (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;H&quot;</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metal_symbols</span></code>: host species, used for per-atom normalization and the
+structure-thumbnail labels.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mu_ref</span></code>: reference chemical potential of the adsorbate [eV].</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kind</span></code>: <code class="docutils literal notranslate"><span class="pre">&quot;surface&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;nano&quot;</span></code> (selects the normalization).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_phase_width</span></code>: phases narrower than this <span class="math notranslate nohighlight">\(\Delta\mu\)</span> width are
+merged into a neighbor, suppressing spurious slivers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_structures</span></code>: render the per-phase structure thumbnails (default
+<code class="docutils literal notranslate"><span class="pre">True</span></code>; requires <code class="docutils literal notranslate"><span class="pre">ase.visualize.plot</span></code>). Set <code class="docutils literal notranslate"><span class="pre">False</span></code> for the plot panel
+only.</p></li>
+</ul>
+<p>Returns a dictionary with <code class="docutils literal notranslate"><span class="pre">dmu_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">free</span></code>, <code class="docutils literal notranslate"><span class="pre">stoich</span></code>, <code class="docutils literal notranslate"><span class="pre">stable_idx</span></code>,
+<code class="docutils literal notranslate"><span class="pre">min_gamma</span></code>, <code class="docutils literal notranslate"><span class="pre">transitions</span></code>, <code class="docutils literal notranslate"><span class="pre">phase_order</span></code>, <code class="docutils literal notranslate"><span class="pre">phase_ratios</span></code>, <code class="docutils literal notranslate"><span class="pre">unit</span></code> and
+<code class="docutils literal notranslate"><span class="pre">plot_path</span></code>.</p>
 </section>
 </section>
 

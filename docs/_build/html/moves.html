@@ -16,6 +16,7 @@
       <script src="_static/documentation_options.js?v=01f34227"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -70,6 +71,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/cluster_install_iqtc.html">Cluster install: IQTC portal (mcpy + Alchemi on Ubuntu GPU nodes)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
@@ -162,12 +164,25 @@ rejection.</p>
 <h3><cite>DisplacementMove</cite><a class="headerlink" href="#displacementmove" title="Link to this heading"></a></h3>
 <p>Displaces one randomly selected atom by a random vector with magnitude up to
 <cite>max_displacement</cite>. Particle count is preserved (<cite>delta_particles = 0</cite>).</p>
+<p>The optional <code class="docutils literal notranslate"><span class="pre">n_steps</span></code> parameter (default <code class="docutils literal notranslate"><span class="pre">1</span></code>) bundles <code class="docutils literal notranslate"><span class="pre">n_steps</span></code> <em>distinct</em> atom
+displacements into a single trial – the energy is evaluated once, after all displacements,
+and the whole compound perturbation is accepted or rejected together. This is the building
+block of basin-hopping with displacement moves: a one-atom step usually relaxes back into the
+same basin, so a meaningful escape requires several atoms to move at once. Setting
+<code class="docutils literal notranslate"><span class="pre">n_steps</span></code> larger than the number of movable atoms raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
 </section>
 <section id="permutationmove">
 <h3><cite>PermutationMove</cite><a class="headerlink" href="#permutationmove" title="Link to this heading"></a></h3>
 <p>Swaps the species labels of two atoms drawn from different species groups. Useful for
 sampling compositional ordering (homotop space) in multi-component systems at fixed
 stoichiometry.</p>
+<p>The optional <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> parameter (default <code class="docutils literal notranslate"><span class="pre">1</span></code>) applies <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> independent pair swaps
+in a single trial – one energy evaluation, one accept/reject. For basin-hopping on alloy
+ordering, a single swap is typically too gentle (relaxation returns to a near-identical
+basin); a perturbation of order <span class="math notranslate nohighlight">\(\sim 1\text{--}5\%\)</span> of the atom count per trial is a
+sensible default. In a replica-exchange run, scaling <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> with replica temperature –
+small <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> for cold refiners, large <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> for hot explorers – keeps acceptance
+ratios balanced across the ladder.</p>
 </section>
 <section id="shakemove">
 <h3><cite>ShakeMove</cite><a class="headerlink" href="#shakemove" title="Link to this heading"></a></h3>

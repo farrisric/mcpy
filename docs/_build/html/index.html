@@ -56,6 +56,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/cluster_install_iqtc.html">Cluster install: IQTC portal (mcpy + Alchemi on Ubuntu GPU nodes)</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
@@ -102,16 +103,23 @@ DFT, classical potentials, or MLIPs such as MACE — can drive the sampling.</p>
 <section id="highlights">
 <h2>Highlights<a class="headerlink" href="#highlights" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p><strong>GCMC and Replica-Exchange GCMC</strong> in a single, modular run loop.</p></li>
+<li><p><strong>GCMC, NVT, and Replica-Exchange</strong> in a single, modular run loop,
+including a single-process <code class="docutils literal notranslate"><span class="pre">BatchedReplicaExchange</span></code> for single-GPU runs.</p></li>
 <li><p><strong>Hybrid scheme of Senftle et al.</strong> — every trial insertion/deletion is
 followed by a short local relaxation, which makes acceptance realistic in
 densely packed metallic systems.</p></li>
+<li><p><strong>Basin-hopping output for free</strong> — every ensemble can emit a running
+<code class="docutils literal notranslate"><span class="pre">minima_file</span></code> of strictly improving configurations alongside the
+sampling trajectory, and replica-exchange runs add a global
+<code class="docutils literal notranslate"><span class="pre">global_minimum.xyz</span></code> at the end.</p></li>
 <li><p><strong>Calibratable free volume</strong> via Monte Carlo sampling with element-wise
 exclusion radii.</p></li>
 <li><p><strong>Cell geometries out of the box</strong> — periodic box, rectangular sub-slab,
 spherical region around a nanoparticle, and user-defined custom cells.</p></li>
 <li><p><strong>Modular trial moves</strong> — insertion, deletion, displacement, permutation,
-shake, and Brownian moves, mixed through a weighted <code class="docutils literal notranslate"><span class="pre">MoveSelector</span></code>.</p></li>
+shake, and Brownian moves, mixed through a weighted <code class="docutils literal notranslate"><span class="pre">MoveSelector</span></code>;
+permutation and displacement support compound <code class="docutils literal notranslate"><span class="pre">n_swaps</span></code> / <code class="docutils literal notranslate"><span class="pre">n_steps</span></code>
+perturbations per trial for basin-hopping sampling.</p></li>
 <li><p><strong>MLIP-ready</strong> — MACE, NequIP, ACE, and an optional GPU-native
 NVIDIA Alchemi backend for large systems.</p></li>
 <li><p><strong>Phase-diagram utilities</strong> for post-processing GCMC ensembles into
@@ -142,6 +150,7 @@ the hybrid GCMC method it implements (see <a class="reference internal" href="bi
 <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/oxidation_phase_diagram.html">Oxidation phase diagram of a metallic surface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/cluster_install_iqtc.html">Cluster install: IQTC portal (mcpy + Alchemi on Ubuntu GPU nodes)</a></li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">

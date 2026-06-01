@@ -4,14 +4,18 @@ title: "mcpy: a python package designed to run atomistic Monte Carlo simulations
 authors:
   - family-names: "Farris"
     given-names: "Riccardo"
-    affiliation: "Universitat de Barcelona"
+    orcid: "https://orcid.org/0000-0002-8157-6786"
+    affiliation: "Institut de Química Teòrica i Computacional (IQTCUB), Universitat de Barcelona, Barcelona, Spain; LEITAT Technological Center, Terrassa, Spain"
   - family-names: "Telari"
     given-names: "Emanuele"
-    affiliation: "Universitat de Barcelona"
+    orcid: "https://orcid.org/0009-0009-3296-959X"
+    affiliation: "Institut de Química Teòrica i Computacional (IQTCUB), Universitat de Barcelona, Barcelona, Spain"
+  - family-names: "Bruix"
+    given-names: "Albert"
+    orcid: "https://orcid.org/0000-0003-2585-5542"
+    affiliation: "Institut de Química Teòrica i Computacional (IQTCUB), Universitat de Barcelona, Barcelona, Spain"
 date-released: "2025-05-01"
 version: "1.0.0"
-# TODO(release): 10.5072 is the Zenodo *sandbox* DOI. Replace with the real
-# DOI minted by the production Zenodo deposit before JOSS acceptance.
-doi: "10.5072/zenodo.262131"
+doi: "10.5281/zenodo.20396721"
 url: "https://github.com/farrisric/mcpy"
 license: "MIT"

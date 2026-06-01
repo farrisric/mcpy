@@ -69,12 +69,27 @@ rejection.
 Displaces one randomly selected atom by a random vector with magnitude up to
 `max_displacement`. Particle count is preserved (`delta_particles = 0`).
 
+The optional ``n_steps`` parameter (default ``1``) bundles ``n_steps`` *distinct* atom
+displacements into a single trial -- the energy is evaluated once, after all displacements,
+and the whole compound perturbation is accepted or rejected together. This is the building
+block of basin-hopping with displacement moves: a one-atom step usually relaxes back into the
+same basin, so a meaningful escape requires several atoms to move at once. Setting
+``n_steps`` larger than the number of movable atoms raises ``ValueError``.
+
 `PermutationMove`
 ~~~~~~~~~~~~~~~~~
 
 Swaps the species labels of two atoms drawn from different species groups. Useful for
 sampling compositional ordering (homotop space) in multi-component systems at fixed
 stoichiometry.
+
+The optional ``n_swaps`` parameter (default ``1``) applies ``n_swaps`` independent pair swaps
+in a single trial -- one energy evaluation, one accept/reject. For basin-hopping on alloy
+ordering, a single swap is typically too gentle (relaxation returns to a near-identical
+basin); a perturbation of order :math:`\sim 1\text{--}5\%` of the atom count per trial is a
+sensible default. In a replica-exchange run, scaling ``n_swaps`` with replica temperature --
+small ``n_swaps`` for cold refiners, large ``n_swaps`` for hot explorers -- keeps acceptance
+ratios balanced across the ladder.
 
 `ShakeMove`
 ~~~~~~~~~~~
