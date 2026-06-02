@@ -44,3 +44,6 @@ CLAUDE.md
 # Tool-generated / planning artifacts (kept local)
 .understand-anything/
 docs/superpowers/
+
+# Built docs (rebuilt from source by the docs CI workflow)
+docs/_build/
