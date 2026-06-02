@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Optional, List, Dict
 
 import numpy as np
@@ -295,13 +296,16 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         """One GCMC step plus interval-based writes. Step counter is
         incremented BEFORE the modulo check so the logged step is the number
         of GCMC steps completed."""
+        t0 = time.perf_counter()
         self.do_gcmc_step()
         self._step += 1
+        self._last_step_seconds = time.perf_counter() - t0
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile()
-            self.logger.info("step=%d N=%d E=%.6f",
-                             self._step, self.n_atoms, self.E_old)
+            self.logger.info("step=%d N=%d E=%.6f t=%.2fs",
+                             self._step, self.n_atoms, self.E_old,
+                             self._last_step_seconds)
 
         if self._step % self._trajectory_write_interval == 0:
             self.write_coordinates(self.atoms, self.E_old)

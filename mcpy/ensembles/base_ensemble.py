@@ -48,6 +48,7 @@ class BaseEnsemble(ABC):
 
         self._accepted_trials = 0
         self._step = 0
+        self._last_step_seconds = 0.0
 
         self._atoms = atoms
         self._cells = cells

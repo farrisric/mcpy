@@ -22,6 +22,7 @@ On step 1 the batch has no forces yet, so we must:
 
 from __future__ import annotations
 
+import logging
 from typing import List, Union
 
 import numpy as np
@@ -29,6 +30,7 @@ import torch
 from ase import Atoms
 from ase.constraints import FixAtoms
 
+from nvalchemi._typing import AtomCategory
 from nvalchemi.data import AtomicData
 from nvalchemi.data.batch import Batch
 from nvalchemi.models.mace import MACEWrapper
@@ -36,7 +38,10 @@ from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.hooks._context import HookContext
 from nvalchemi.dynamics import FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2, ConvergenceHook
 from nvalchemi.dynamics.base import DynamicsStage
+from nvalchemi.dynamics.hooks import FreezeAtomsHook
 
+
+logger = logging.getLogger(__name__)
 
 _ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
 
@@ -117,6 +122,30 @@ def _write_back_positions_batched(
             for j in fixed:
                 new_pos[j] = atoms.positions[j]
         atoms.positions = new_pos
+
+
+def _fixed_indices(atoms: Atoms) -> List[int]:
+    """Indices held by ASE ``FixAtoms`` constraints, sorted and de-duplicated."""
+    idx: set[int] = set()
+    for c in atoms.constraints:
+        if isinstance(c, FixAtoms):
+            idx.update(int(i) for i in c.index)
+    return sorted(idx)
+
+
+def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
+    """Tag ``fixed`` batch rows as SPECIAL and return the hook that holds them.
+
+    nvalchemi's FIRE has no notion of ASE ``FixAtoms``; without this the
+    "fixed" atoms relax freely and are only snapped back afterward, leaving the
+    returned energy inconsistent with the stored geometry. Marking them
+    ``AtomCategory.SPECIAL`` and registering :class:`FreezeAtomsHook` zeros their
+    forces/velocities and restores positions every FIRE step.
+    """
+    if not fixed:
+        return None
+    batch.atom_categories[fixed] = AtomCategory.SPECIAL.value
+    return [FreezeAtomsHook()]
 
 
 class AlchemiCalculator:
@@ -287,12 +316,15 @@ class AlchemiFCalculator:
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(1, 1, device=self.device, dtype=self.dtype)
 
+        freeze_hooks = _freeze_hook_for(batch, _fixed_indices(atoms))
+
         nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         opt = self._optimizer_cls(
             model=self.model,
             dt=self.dt,
             convergence_hook=ConvergenceHook.from_fmax(self.fmax),
             n_steps=self.steps,
+            hooks=freeze_hooks,
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
@@ -303,6 +335,8 @@ class AlchemiFCalculator:
         opt.run(batch)
         self.last_relax_steps = int(opt.step_count)
         self.total_relax_steps += self.last_relax_steps
+        logger.debug("FIRE relaxation: %d/%d steps (fmax=%.3g eV/A)",
+                     self.last_relax_steps, self.steps, self.fmax)
         _write_back_positions(atoms, batch)
         return float(batch.energy.sum().item())
 
@@ -334,12 +368,21 @@ class AlchemiFCalculator:
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(n_graphs, 1, device=self.device, dtype=self.dtype)
 
+        # Map each graph's FixAtoms indices into the concatenated batch.
+        fixed: List[int] = []
+        offset = 0
+        for a in atoms_list:
+            fixed.extend(offset + i for i in _fixed_indices(a))
+            offset += len(a)
+        freeze_hooks = _freeze_hook_for(batch, fixed)
+
         nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         opt = self._optimizer_cls(
             model=self.model,
             dt=self.dt,
             convergence_hook=ConvergenceHook.from_fmax(self.fmax),
             n_steps=self.steps,
+            hooks=freeze_hooks,
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
@@ -349,5 +392,7 @@ class AlchemiFCalculator:
 
         self.last_relax_steps = int(opt.step_count)
         self.total_relax_steps += self.last_relax_steps
+        logger.debug("FIRE relaxation (batched, %d graphs): %d/%d steps (fmax=%.3g eV/A)",
+                     n_graphs, self.last_relax_steps, self.steps, self.fmax)
         _write_back_positions_batched(atoms_list, batch)
         return _per_graph_energies(batch.energy, n_graphs)

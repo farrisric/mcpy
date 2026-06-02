@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 
 import numpy as np
 from ase import Atoms
@@ -166,12 +167,14 @@ class CanonicalEnsemble(BaseEnsemble):
         self._record_minimum(self.atoms, self._current_energy)
 
     def _run(self) -> None:
+        t0 = time.perf_counter()
         accepted = self.trial_step()
         self._step += 1
         self._accepted_trials += accepted
+        self._last_step_seconds = time.perf_counter() - t0
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile(self._step, self._current_energy)
-            self.logger.debug("step=%d E=%s lowest_E=%s accepted=%d",
+            self.logger.debug("step=%d E=%s lowest_E=%s accepted=%d t=%.2fs",
                               self._step, self._current_energy, self.lowest_energy,
-                              self._accepted_trials)
+                              self._accepted_trials, self._last_step_seconds)
