@@ -116,6 +116,7 @@ Grand Canonical Monte Carlo (GCMC)
    examples/gcmc_nano.rst
    examples/gcmc_bimet_nano.rst
    examples/gcmc_nano_supported.rst
+   examples/gcmc_dome_supported.rst
    examples/gcmc_simulations.rst
 
 Replica-Exchange GCMC (RE-GCMC)

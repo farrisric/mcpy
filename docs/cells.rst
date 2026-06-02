@@ -7,11 +7,11 @@ provides random points for insertion, classifies atoms as "inside" the active re
 returns the accessible volume :math:`V_{\mathrm{free}}` used by the GCMC acceptance rules
 (see :ref:`free-volume`).
 
-Four cell types are exported from `mcpy.cell`:
+Five cell types are exported from `mcpy.cell`:
 
 .. code-block:: python
 
-   from mcpy.cell import Cell, CustomCell, SphericalCell, NullCell
+   from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell, NullCell
 
 
 Choosing exclusion radii (`species_radii`)
@@ -115,6 +115,52 @@ the particle surface without wasting moves in pure vacuum.
    spherical_cell.calculate_volume(atoms)
 
 
+`DomeCell` -- supported-nanoparticle dome
+-----------------------------------------
+
+`DomeCell` is the supported-particle counterpart of `SphericalCell`. It defines a
+hemispherical ("dome") active region: the ball of radius
+
+.. math::
+
+   R = \max_{a\,\in\,\mathrm{particle}} \|\mathbf{r}_a - \mathbf{r}_{\mathrm{c}}\|
+       + \mathrm{vacuum},
+
+around the particle centroid :math:`\mathbf{r}_{\mathrm{c}}`, truncated at the support
+surface (:math:`z \geq` `bottom_z`). Unlike `SphericalCell` it does **not** translate the
+atoms, and it centres on a chosen *particle species* rather than the whole-system centre of
+mass -- so the dome sits on the nanoparticle instead of somewhere inside the support slab.
+
+Use this for a nanoparticle on a substrate when insertions should stay on and around the
+particle (and its metal-support contact rim) rather than spreading across the bare support,
+which is what a slab-spanning `CustomCell` would otherwise allow.
+
+Key parameters:
+
+- `particle_species` -- symbol (or list of symbols) identifying the nanoparticle, e.g.
+  ``'Ag'``,
+- `bottom_z` -- :math:`z`-coordinate of the support surface; the dome is clipped below it,
+- `vacuum` -- padding added to the particle bounding radius,
+- `species_radii` -- per-element exclusion radii,
+- `mc_sample_points` -- free-volume sampling resolution.
+
+.. code-block:: python
+
+   from mcpy.cell import DomeCell
+
+   dome_cell = DomeCell(
+       atoms,
+       particle_species="Ag",
+       bottom_z=surface_z,
+       vacuum=3.0,
+       species_radii={"Ag": 2.068, "O": 0.0, "Al": 3.0},
+       mc_sample_points=100_000,
+   )
+   dome_cell.calculate_volume(atoms)
+
+A worked end-to-end run is in :doc:`examples/gcmc_dome_supported`.
+
+
 `NullCell` -- placeholder
 -------------------------
 
@@ -136,4 +182,5 @@ Choosing the right cell
 - `Cell` -- bulk periodic systems where the whole box is active.
 - `CustomCell` -- slab/surface windows inside a periodic box.
 - `SphericalCell` -- isolated clusters and nanoparticles.
+- `DomeCell` -- nanoparticles supported on a substrate (keeps insertions on the particle).
 - `NullCell` -- placeholder for runs that need no insertion region.
