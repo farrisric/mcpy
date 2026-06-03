@@ -37,6 +37,7 @@ from nvalchemi.models.mace import MACEWrapper
 from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.hooks._context import HookContext
 from nvalchemi.dynamics import FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2, ConvergenceHook
+from nvalchemi.dynamics import NVTLangevin, initialize_velocities
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook
 
@@ -148,6 +149,64 @@ def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
     return [FreezeAtomsHook()]
 
 
+def _run_langevin_md(
+    model: MACEWrapper,
+    nl_config,
+    atoms: Atoms,
+    *,
+    temperature: float,
+    friction: float,
+    dt: float,
+    steps: int,
+    seed: int,
+    device: str,
+    dtype: torch.dtype,
+    max_neighbors: int | None,
+) -> None:
+    """Run NVT Langevin (BAOAB) MD in place on ``atoms`` using ``model``.
+
+    Mirrors the FIRE bootstrap in :meth:`AlchemiFCalculator.get_potential_energy`:
+    pre-allocate the tensors ``compute()`` writes into, seed velocities from a
+    Maxwell-Boltzmann draw at ``temperature``, build the neighbor list once, then
+    run ``steps`` of Langevin dynamics. ``FixAtoms``-constrained atoms are held
+    every step by :class:`FreezeAtomsHook` and restored on write-back.
+
+    ``dt`` is in fs, ``friction`` in 1/fs, ``temperature`` in K (the integrator
+    converts to internal units). Mutates ``atoms`` in place; returns nothing.
+    """
+    batch = _make_batch(atoms, device, dtype)
+
+    # compute() writes forces/energy via copy_() — pre-allocate the targets.
+    batch.forces = torch.zeros_like(batch.positions)
+    batch.energy = torch.zeros(1, 1, device=device, dtype=dtype)
+    batch.velocities = torch.zeros_like(batch.positions)
+    temp = torch.full((batch.num_graphs,), float(temperature), device=device, dtype=dtype)
+    initialize_velocities(
+        batch.velocities, batch.atomic_masses, temp, batch.batch_idx.int(),
+        random_seed=seed,
+    )
+
+    freeze_hooks = _freeze_hook_for(batch, _fixed_indices(atoms))
+    nl_hook = NeighborListHook(nl_config, max_neighbors=max_neighbors)
+    opt = NVTLangevin(
+        model=model,
+        dt=dt,
+        temperature=temperature,
+        friction=friction,
+        random_seed=seed,
+        n_steps=steps,
+        hooks=freeze_hooks,
+    )
+    opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
+
+    # Bootstrap: build NL and compute initial forces before the MD loop.
+    _build_nl(batch, nl_hook)
+    opt.compute(batch)
+
+    opt.run(batch)
+    _write_back_positions(atoms, batch)
+
+
 class AlchemiCalculator:
     """
     Energy-only Alchemi calculator (no geometry relaxation).
@@ -232,6 +291,29 @@ class AlchemiCalculator:
         _build_nl(batch, nl_hook)
         out = self.model(batch)
         return _per_graph_energies(out['energy'], len(atoms_list))
+
+    def run_md(
+        self,
+        atoms: Atoms,
+        *,
+        temperature: float,
+        friction: float = 0.01,
+        dt: float = 2.0,
+        steps: int = 100,
+        seed: int = 42,
+    ) -> None:
+        """Run NVT Langevin MD in place on ``atoms`` (Maxwell-Boltzmann IC at T).
+
+        Reuses this calculator's model and neighbor-list config, so no second
+        model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
+        in K. ``FixAtoms`` constraints are honored.
+        """
+        _run_langevin_md(
+            self.model, self._nl_config, atoms,
+            temperature=temperature, friction=friction, dt=dt, steps=steps,
+            seed=seed, device=self.device, dtype=self.dtype,
+            max_neighbors=self.max_neighbors,
+        )
 
 
 class AlchemiFCalculator:
@@ -396,3 +478,26 @@ class AlchemiFCalculator:
                      n_graphs, self.last_relax_steps, self.steps, self.fmax)
         _write_back_positions_batched(atoms_list, batch)
         return _per_graph_energies(batch.energy, n_graphs)
+
+    def run_md(
+        self,
+        atoms: Atoms,
+        *,
+        temperature: float,
+        friction: float = 0.01,
+        dt: float = 2.0,
+        steps: int = 100,
+        seed: int = 42,
+    ) -> None:
+        """Run NVT Langevin MD in place on ``atoms`` (Maxwell-Boltzmann IC at T).
+
+        Reuses this calculator's model and neighbor-list config, so no second
+        model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
+        in K. ``FixAtoms`` constraints are honored.
+        """
+        _run_langevin_md(
+            self.model, self._nl_config, atoms,
+            temperature=temperature, friction=friction, dt=dt, steps=steps,
+            seed=seed, device=self.device, dtype=self.dtype,
+            max_neighbors=self.max_neighbors,
+        )
