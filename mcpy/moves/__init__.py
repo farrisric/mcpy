@@ -1,6 +1,7 @@
 from .move_selector import MoveSelector
 from .shake_move import ShakeMove
 from .brownian_move import BrownianMove
+from .alchemi_brownian_move import AlchemiBrownianMove
 from .insertion_move import InsertionMove
 from .deletion_move import DeletionMove
 from .displacement_move import DisplacementMove
@@ -10,6 +11,7 @@ __all__ = [
     "MoveSelector",
     "ShakeMove",
     "BrownianMove",
+    "AlchemiBrownianMove",
     "DeletionMove",
     "DisplacementMove",
     "InsertionMove",
