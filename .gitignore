@@ -47,3 +47,9 @@ docs/superpowers/
 
 # Built docs (rebuilt from source by the docs CI workflow)
 docs/_build/
+
+# Editor settings (kept local)
+.vscode/
+
+# Local figures / scratch images
+supported_np.png
