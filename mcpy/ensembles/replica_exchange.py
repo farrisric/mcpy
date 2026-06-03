@@ -86,6 +86,16 @@ class ReplicaExchange:
         energy2 = state2['energy']
         beta2 = state2['beta']
 
+        # Grand-canonical replicas (fixed mu, fluctuating N) must be compared
+        # through the grand potential Phi = E - sum_s mu_s N_s, not bare energy.
+        # mu rides on each replica's state (a shared-mu T-ladder leaves the
+        # RE-level self.mus None), so read it from there, not from self.mus.
+        mu1, mu2 = state1.get('mu'), state2.get('mu')
+        if mu1 and mu2:
+            for specie in mu1:
+                energy1 -= mu1[specie] * state1['atoms'].symbols.count(specie)
+                energy2 -= mu2[specie] * state2['atoms'].symbols.count(specie)
+
         delta = (beta2 - beta1) * (energy2 - energy1)
         exchange_prob = min(1.0, np.exp(delta))
         self.logger.debug(
@@ -99,7 +109,7 @@ class ReplicaExchange:
         state2['n_atoms_species'] = dict()
         exponential_arg = 0
         deltas = {}
-        for specie in self.gcmc.species:
+        for specie in state1['mu']:
             for state in (state1, state2):
                 state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
 

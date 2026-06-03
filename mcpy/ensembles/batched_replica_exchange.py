@@ -225,17 +225,32 @@ class BatchedReplicaExchange:
                 self.exchange_successes[j] += 1
 
     def _accept_swap(self, i: int, j: int) -> bool:
-        """Standard temperature-RE Metropolis: P = exp((β_j - β_i)(E_j - E_i))."""
+        """Temperature-RE Metropolis: P = exp((β_j - β_i)(Φ_j - Φ_i)).
+
+        Replicas here are grand-canonical (fixed μ, fluctuating N), so configs
+        at different temperatures must be compared through the grand potential
+        Φ = E - Σ_s μ_s N_s rather than bare energy. With no chemical potential
+        this reduces to the standard energy-only swap.
+        """
         ri, rj = self.replicas[i], self.replicas[j]
         beta_i, beta_j = ri.units.beta, rj.units.beta
-        E_i, E_j = ri.E_old, rj.E_old
-        delta = (beta_j - beta_i) * (E_j - E_i)
+        phi_i, phi_j = self._grand_potential(ri), self._grand_potential(rj)
+        delta = (beta_j - beta_i) * (phi_j - phi_i)
         p = min(1.0, float(np.exp(delta)))
         self.logger.debug(
-            "swap %d<->%d: beta_i=%.3e beta_j=%.3e E_i=%.3f E_j=%.3f delta=%.3f p=%.3f",
-            i, j, beta_i, beta_j, E_i, E_j, delta, p,
+            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_i=%.3f Phi_j=%.3f delta=%.3f p=%.3f",
+            i, j, beta_i, beta_j, phi_i, phi_j, delta, p,
         )
         return self.rng.get_uniform() < p
+
+    @staticmethod
+    def _grand_potential(r) -> float:
+        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ."""
+        mu = getattr(r, '_mu', None)
+        if not mu:
+            return r.E_old
+        counts = Counter(r.atoms.get_chemical_symbols())
+        return r.E_old - sum(mu_s * counts[s] for s, mu_s in mu.items())
 
     def _swap_states(self, i: int, j: int) -> None:
         """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to
