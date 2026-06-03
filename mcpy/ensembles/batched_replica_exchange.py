@@ -157,15 +157,43 @@ class BatchedReplicaExchange:
 
     def _batched_gcmc_step(self) -> None:
         """
-        One GCMC step across all replicas:
+        One GCMC step across all replicas. Each replica performs
+        ``move_selector.n_moves`` trial moves, matching the serial
+        ``GrandCanonicalEnsemble.do_gcmc_step``. Moves are sequential within a
+        replica (each depends on the previously accepted state), so a single
+        sub-move is taken across all replicas at once and evaluated in one
+        batched forward pass; this repeats ``n_moves`` times.
+
+        Replicas may declare different ``n_moves``; a replica only participates
+        in sub-move ``k`` while ``k < n_moves`` for that replica.
+        """
+        n_sub_moves = max(r.move_selector.n_moves for r in self.replicas)
+        for k in range(n_sub_moves):
+            active = [
+                i for i, r in enumerate(self.replicas)
+                if k < r.move_selector.n_moves
+            ]
+            self._batched_single_move(active)
+
+        for r in self.replicas:
+            r._step += 1
+            if r._step % r._outfile_write_interval == 0:
+                r.write_outfile()
+            if r._step % r._trajectory_write_interval == 0:
+                r.write_coordinates(r.atoms, r.E_old)
+
+    def _batched_single_move(self, active: List[int]) -> None:
+        """
+        One trial move on each active replica:
           1. propose a trial move on each replica (in place, with snapshot)
-          2. batched energy eval over all replicas with viable trials
+          2. batched energy eval over the replicas with viable trials
           3. per-replica Metropolis accept/reject
         """
-        snapshots: List[Dict] = [None] * self.n_replicas
-        trial_meta: List[Optional[tuple]] = [None] * self.n_replicas
+        snapshots: Dict[int, Dict] = {}
+        trial_meta: Dict[int, tuple] = {}
 
-        for i, r in enumerate(self.replicas):
+        for i in active:
+            r = self.replicas[i]
             snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
             result = r.move_selector.do_trial_move(r.atoms)
             atoms_new, delta_particles, species = (
@@ -180,33 +208,28 @@ class BatchedReplicaExchange:
                 trial_meta[i] = (delta_particles, species, n_species_before)
             # else: move couldn't propose — atoms unchanged, snapshot harmless
 
-        viable = [i for i, m in enumerate(trial_meta) if m is not None]
-        if viable:
-            atoms_list = [self.replicas[i].atoms for i in viable]
-            energies = self.calculator.get_potential_energies(atoms_list)
-            for i, E_new in zip(viable, energies):
-                r = self.replicas[i]
-                delta_particles, species, n_species_before = trial_meta[i]
-                delta_E = float(E_new) - r.E_old
-                volume = r.move_selector.get_volume()
-                if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                           n_species_before):
-                    if r._wrap_on_accept:
-                        r.atoms.wrap()
-                    r.n_atoms = len(r.atoms)
-                    r.E_old = float(E_new)
-                    r.move_selector.acceptance_counter()
-                    r.calculate_cells_volume(r.atoms)
-                    r._record_minimum(r.atoms, r.E_old)
-                else:
-                    r.atoms.arrays = snapshots[i]
+        viable = [i for i in active if i in trial_meta]
+        if not viable:
+            return
 
-        for r in self.replicas:
-            r._step += 1
-            if r._step % r._outfile_write_interval == 0:
-                r.write_outfile()
-            if r._step % r._trajectory_write_interval == 0:
-                r.write_coordinates(r.atoms, r.E_old)
+        atoms_list = [self.replicas[i].atoms for i in viable]
+        energies = self.calculator.get_potential_energies(atoms_list)
+        for i, E_new in zip(viable, energies):
+            r = self.replicas[i]
+            delta_particles, species, n_species_before = trial_meta[i]
+            delta_E = float(E_new) - r.E_old
+            volume = r.move_selector.get_volume()
+            if r._acceptance_condition(delta_E, delta_particles, volume, species,
+                                       n_species_before):
+                if r._wrap_on_accept:
+                    r.atoms.wrap()
+                r.n_atoms = len(r.atoms)
+                r.E_old = float(E_new)
+                r.move_selector.acceptance_counter()
+                r.calculate_cells_volume(r.atoms)
+                r._record_minimum(r.atoms, r.E_old)
+            else:
+                r.atoms.arrays = snapshots[i]
 
     # --------------------------------------------------------- exchange
 
