@@ -139,6 +139,40 @@ Outputs
   write; cumulative ratios are reported at the end of the run.
 
 
+Setting a unit system
+---------------------
+
+``units_type`` selects the constants the acceptance rules use. Pass ``'metal'``
+for eV, Å, and K, or ``'LJ'`` for reduced Lennard-Jones units. The choice must
+match the units of the energies and lengths the calculator returns. A MACE or
+DFT calculator works in metal units; a reduced Lennard-Jones potential works in
+LJ units.
+
+In ``'metal'`` units `mcpy` uses physical constants and reads each species' mass
+from ASE. The inverse temperature is
+
+.. math::
+
+   \beta = \frac{1}{k_B T},
+   \qquad k_B = 8.617333\times10^{-5}\ \mathrm{eV/K},
+
+and the thermal de Broglie wavelength :math:`\Lambda` of each species follows
+from its mass and the temperature through the expression given in the acceptance
+rules above, evaluated in Å.
+
+In ``'LJ'`` units every constant equals one. The Boltzmann and Planck constants
+are 1, all masses are 1, and :math:`\Lambda = 1` for every species. The de
+Broglie factors then drop out of the insertion and deletion rules, leaving their
+reduced-unit forms.
+
+These constants live in the ``SetUnits`` helper, which each ensemble builds from
+``units_type``, ``temperature``, and ``species``. It computes
+:math:`\beta` and the per-species :math:`\Lambda`, and exposes the two factors,
+``de_broglie_insertion`` and ``de_broglie_deletion``, that enter the
+number-changing acceptance rules above. See :doc:`reference/utils` for its
+signature.
+
+
 .. _running-minima:
 
 Running minima and basin-hopping output
