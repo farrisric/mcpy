@@ -40,6 +40,8 @@ from nvalchemi.dynamics import FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2, Conve
 from nvalchemi.dynamics import NVTLangevin, initialize_velocities
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook
+from pathlib import Path
+
 
 from ..utils.chunking import chunk_ranges
 
