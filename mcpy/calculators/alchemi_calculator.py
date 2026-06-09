@@ -41,6 +41,8 @@ from nvalchemi.dynamics import NVTLangevin, initialize_velocities
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook
 
+from ..utils.chunking import chunk_ranges
+
 
 logger = logging.getLogger(__name__)
 
@@ -237,10 +239,12 @@ class AlchemiCalculator:
         enable_cueq: bool = True,
         compile_model: bool = True,
         max_neighbors: int | None = None,
+        chunk_size: int | None = None,
     ) -> None:
         self.device = device
         self.dtype = dtype
         self.max_neighbors = max_neighbors
+        self.chunk_size = chunk_size
         self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model)
         self._nl_config = self.model.model_config.neighbor_config
 
@@ -266,17 +270,29 @@ class AlchemiCalculator:
         out = self.model(batch)
         return float(out['energy'].sum().item())
 
-    def get_potential_energies(self, atoms_list: List[Atoms]) -> np.ndarray:
+    def get_potential_energies(
+        self, atoms_list: List[Atoms], chunk_size: int | None = None
+    ) -> np.ndarray:
         """
         Batched forward pass over multiple (possibly differently sized) structures.
 
         One CUDA kernel launch per layer instead of N — the win behind batched
         replica exchange on a single GPU.
 
+        ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
+        most that many structures, evaluated one forward pass each, capping peak
+        GPU memory at the largest chunk instead of the whole batch. ``None`` (the
+        default) falls back to the instance ``chunk_size``; if that is also
+        ``None`` the whole list is evaluated in a single pass. Per-graph energies
+        are unaffected by chunking (MACE message passing is per-graph), up to
+        GPU run-to-run noise.
+
         Parameters
         ----------
         atoms_list : list[ase.Atoms]
             Structures to evaluate. Not mutated. Lengths may differ.
+        chunk_size : int | None
+            Per-call override of the instance ``chunk_size``.
 
         Returns
         -------
@@ -285,12 +301,17 @@ class AlchemiCalculator:
         """
         if not atoms_list:
             return np.empty(0, dtype=np.float64)
-        batch = _make_multi_batch(atoms_list, self.device, self.dtype)
-        batch.positions.requires_grad_(True)
-        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
-        _build_nl(batch, nl_hook)
-        out = self.model(batch)
-        return _per_graph_energies(out['energy'], len(atoms_list))
+        cs = self.chunk_size if chunk_size is None else chunk_size
+        out: List[np.ndarray] = []
+        for start, stop in chunk_ranges(len(atoms_list), cs):
+            chunk = atoms_list[start:stop]
+            batch = _make_multi_batch(chunk, self.device, self.dtype)
+            batch.positions.requires_grad_(True)
+            nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
+            _build_nl(batch, nl_hook)
+            model_out = self.model(batch)
+            out.append(_per_graph_energies(model_out['energy'], len(chunk)))
+        return np.concatenate(out)
 
     def run_md(
         self,
