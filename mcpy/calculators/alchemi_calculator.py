@@ -240,13 +240,21 @@ class AlchemiCalculator:
         compile_model: bool = True,
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
+        energy_only: bool = False,
     ) -> None:
         self.device = device
         self.dtype = dtype
         self.max_neighbors = max_neighbors
         self.chunk_size = chunk_size
+        self.energy_only = energy_only
         self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model)
         self._nl_config = self.model.model_config.neighbor_config
+        if energy_only:
+            # MC energy evaluation never uses forces. Dropping 'forces' from
+            # active_outputs sets compute_force=False in the MACE forward, so no
+            # autograd graph is built — lower peak memory, energy unchanged up to
+            # fp32 rounding. See docs/superpowers/specs/2026-06-09-...-design.md.
+            self.model.model_config.active_outputs.discard('forces')
 
     def get_potential_energy(self, atoms: Atoms) -> float:
         """
