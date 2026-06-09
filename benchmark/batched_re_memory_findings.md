@@ -116,3 +116,16 @@ at **3117 MB**, energies finite, O adsorption observed — clean end-to-end.
 (7–10× lower peak, OOM configs run), `energy_only` adds a free ~12 %, and
 `max_neighbors` is a dead end. Memory is no longer the constraint on replica
 count — wall time is.
+
+## 7. Relaxation path (`AlchemiFCalculator`)
+
+`chunk_size` was also added to the batched-FIRE relaxation calculator
+(`get_potential_energies`). `energy_only` does not apply — a relaxer needs forces.
+
+- Memory: 4 × 483-atom NPs, whole-batch 3660 MB → chunk=1 **992 MB (27 %)**; same
+  per-largest-chunk decoupling as the energy-only path.
+- Exactness: **not bit-exact.** Whole-vs-whole relaxation reproducibility floor
+  is 3.7e-4 eV, but chunk-vs-whole differs by 6.5e-3 eV (~1e-5 eV/atom) — batched
+  FIRE shares trajectory state (timestep/stopping), so chunking perturbs the
+  path. Both converge to the same minimum within `fmax=0.05`; the gap shrinks
+  with tighter `fmax`. So: **converged-equivalent, not bit-identical.**
