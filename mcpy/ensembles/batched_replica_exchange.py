@@ -200,12 +200,7 @@ class BatchedReplicaExchange:
                 result if isinstance(result, tuple) else (result, 0, None)
             )
             if atoms_new:
-                n_species_before = None
-                if delta_particles != 0:
-                    n_species_before = len(
-                        r.move_selector.get_atoms_specie_inside_cell(r.atoms, species)
-                    ) - delta_particles
-                trial_meta[i] = (delta_particles, species, n_species_before)
+                trial_meta[i] = (delta_particles, species)
             # else: move couldn't propose — atoms unchanged, snapshot harmless
 
         viable = [i for i in active if i in trial_meta]
@@ -216,11 +211,14 @@ class BatchedReplicaExchange:
         energies = self.calculator.get_potential_energies(atoms_list)
         for i, E_new in zip(viable, energies):
             r = self.replicas[i]
-            delta_particles, species, n_species_before = trial_meta[i]
+            delta_particles, species = trial_meta[i]
             delta_E = float(E_new) - r.E_old
             volume = r.move_selector.get_volume()
+            # de Broglie particle count: total atom count before the move
+            # (``r.n_atoms`` is updated only on acceptance). See
+            # docs/gcmc_acceptance_convention.rst.
             if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                       n_species_before):
+                                       r.n_atoms):
                 if r._wrap_on_accept:
                     r.atoms.wrap()
                 r.n_atoms = len(r.atoms)
