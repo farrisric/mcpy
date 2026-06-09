@@ -49,21 +49,70 @@ logger = logging.getLogger(__name__)
 _ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
 
 
+def _is_local_model_file(checkpoint: Union[str, Path]) -> bool:
+    """True if checkpoint points to an existing local .model/.pt/.pth file."""
+    path = Path(checkpoint).expanduser()
+    if not path.is_file():
+        return False
+    return path.suffix.lower() in {".model", ".pt", ".pth"}
+def _load_local_mace_model(
+    model_path: Path,
+    device: torch.device,
+    dtype: torch.dtype | None,
+    enable_cueq: bool,
+    compile_model: bool,
+    **compile_kwargs,
+) -> MACEWrapper:
+    """Load a local MACE checkpoint without triggering foundation-model download."""
+    model = torch.load(model_path, map_location=device, weights_only=False)
+    if dtype is not None:
+        model = model.to(dtype=dtype)
+    if enable_cueq:
+        try:
+            import cuequivariance # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "cuequivariance is required for enable_cueq=True. "
+                "Install with: pip install 'nvalchemi-toolkit[mace]'"
+            ) from exc
+        from mace.cli.convert_e3nn_cueq import run as convert_mace_weights
+        model = convert_mace_weights(model, return_model=True, device=device)
+    model = model.to(device)
+    if compile_model:
+        model.eval()
+        for param in model.parameters():
+            param.requires_grad = False
+        model = torch.compile(model, **compile_kwargs)
+    return MACEWrapper(model)
 def _load_model(
-    checkpoint: Union[str, MACEWrapper],
+    checkpoint: Union[str, Path, MACEWrapper],
     device: str,
     dtype: torch.dtype,
     enable_cueq: bool,
     compile_model: bool,
+    **compile_kwargs,
 ) -> MACEWrapper:
     if isinstance(checkpoint, MACEWrapper):
         return checkpoint
+    dev = torch.device(device)
+    # Local file -> torch.load + MACEWrapper
+    if _is_local_model_file(checkpoint):
+        return _load_local_mace_model(
+            Path(checkpoint).expanduser().resolve(),
+            device=dev,
+            dtype=dtype,
+            enable_cueq=enable_cueq,
+            compile_model=compile_model,
+            **compile_kwargs,
+        )
+    # Foundation name ("medium-mpa-0") or URL -> from_checkpoint
     return MACEWrapper.from_checkpoint(
-        checkpoint,
-        device=torch.device(device),
+        str(checkpoint),
+        device=dev,
         dtype=dtype,
         enable_cueq=enable_cueq,
         compile_model=compile_model,
+        **compile_kwargs,
     )
 
 
