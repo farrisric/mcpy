@@ -59,6 +59,7 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    species_radii
    moves
    calculators
+   gcmc_acceptance_convention
 
 .. toctree::
    :caption: Tutorials
