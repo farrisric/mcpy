@@ -76,7 +76,9 @@ geometry.
 of kernel launches instead of one launch per structure.
 ``BatchedReplicaExchange`` uses this to step every replica through a single
 forward pass per move, faster on one GPU than launching a separate context per
-replica.
+replica. A ``chunk_size`` argument splits that batch into sub-batches, which caps
+peak GPU memory at one chunk and so frees the replica count from the memory
+budget (see :ref:`controlling-gpu-memory`).
 
 
 Driving any ASE calculator
@@ -117,10 +119,11 @@ The Alchemi classes are an optional backend. Install them with
 needs a CUDA-enabled PyTorch build. Set ``compile_model=False`` for GCMC, where
 the atom count changes between trials and a compiled static graph does not hold.
 
-``AlchemiCalculator(checkpoint='medium-mpa-0', device='cuda', enable_cueq=True, compile_model=True)``
+``AlchemiCalculator(checkpoint='medium-mpa-0', device='cuda', enable_cueq=True, compile_model=True, energy_only=False, chunk_size=None)``
    GPU-native MACE evaluation with no relaxation. Accepts a named checkpoint, a
    local ``.pt`` path, or a shared ``MACEWrapper``. ``enable_cueq`` turns on
-   fused equivariance kernels.
+   fused equivariance kernels. ``energy_only`` and ``chunk_size`` control GPU
+   memory (see :ref:`controlling-gpu-memory`).
 
 ``AlchemiFCalculator(checkpoint='medium-mpa-0', steps=500, fmax=0.05, dt=1.0, optimizer='fire')``
    The GPU counterpart of ``MACE_F_Calculator``. Relaxes with a GPU-resident
@@ -129,17 +132,57 @@ the atom count changes between trials and a compiled static graph does not hold.
    half the steps of a smaller value. ``optimizer`` selects ``'fire'`` or the
    ``'fire2'`` variant.
 
-``get_potential_energies(atoms_list)``
+``get_potential_energies(atoms_list, chunk_size=None)``
    Evaluates or relaxes a list of structures of possibly different sizes in one
    batched pass, returning one energy per structure. The relaxing form retires
    each structure from the active batch as its force converges, so finished
    replicas do not slow the rest. This is the hook ``BatchedReplicaExchange``
-   calls each step.
+   calls each step. ``chunk_size`` splits the list into sub-batches to bound peak
+   memory (see :ref:`controlling-gpu-memory`); ``None`` uses the value passed to
+   the constructor.
 
 ``run_md(atoms, temperature, friction=0.01, dt=2.0, steps=100, seed=42)``
    Runs NVT Langevin dynamics in place, reusing the loaded model and neighbor
    list. It backs the GPU Brownian move rather than the GCMC acceptance loop,
    and appears here because it shares the calculator's model.
+
+
+.. _controlling-gpu-memory:
+
+Controlling GPU memory
+----------------------
+
+Batched evaluation places every replica's atoms in one forward pass, so peak GPU
+memory grows with the *total* atom count across the batch. On a single device a
+batched replica exchange therefore hits the memory ceiling through the replica
+count just as fast as through the per-replica size. Two options trade that down
+without changing the sampled energies beyond the backend's run-to-run noise.
+
+``chunk_size`` (both Alchemi classes)
+   Splits ``atoms_list`` into consecutive sub-batches of at most ``chunk_size``
+   structures, each evaluated in its own forward pass. Peak memory is then set by
+   the largest chunk (``chunk_size`` times the per-replica size), not by the
+   replica count, so a run with many replicas fits in the footprint of a single
+   chunk. Set it on the constructor and ``BatchedReplicaExchange`` picks it up;
+   the per-call argument overrides it, and ``None`` evaluates the whole batch at
+   once. Each forward carries a fixed overhead of roughly 17 ms, so chunk to the
+   largest size your memory budget allows rather than to 1: small chunks pay that
+   overhead once per chunk and slow the run down.
+
+``energy_only`` (``AlchemiCalculator`` only)
+   Drops force computation (removes ``'forces'`` from the model's
+   ``active_outputs``), so no autograd graph is built. Monte Carlo energy
+   evaluation never uses forces, so this costs no accuracy and saves about 12
+   percent of peak memory. It does not apply to ``AlchemiFCalculator``, whose
+   FIRE relaxation needs forces.
+
+As a rough guide, one forward pass on a 32 GB RTX 5090 with ``medium-mpa-0`` in
+float32 fits about 14,000 atoms with ``energy_only`` and about 12,000 with
+forces. Chunking keeps every pass under that limit, which leaves the replica
+count bounded by wall time rather than memory. Energy-only chunking is exact to
+the noise floor. Chunked FIRE relaxation reaches the same minimum to within
+``fmax`` but is not bit identical, because the batched optimizer shares some
+trajectory state across the chunk.
 
 
 Tuning the relaxation
