@@ -375,6 +375,9 @@ class AlchemiFCalculator:
     optimizer : str
         'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant —
         typically converges in fewer steps).
+    chunk_size : int | None
+        Default sub-batch size for batched relaxation (see
+        ``get_potential_energies``). ``None`` relaxes the whole batch at once.
     """
 
     def __init__(
@@ -389,6 +392,7 @@ class AlchemiFCalculator:
         dt: float = 1.0,
         optimizer: str = 'fire',
         max_neighbors: int | None = None,
+        chunk_size: int | None = None,
     ) -> None:
         self.steps = steps
         self.fmax = fmax
@@ -396,6 +400,7 @@ class AlchemiFCalculator:
         self.dtype = dtype
         self.dt = dt
         self.max_neighbors = max_neighbors
+        self.chunk_size = chunk_size
         self.last_relax_steps = 0
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
@@ -451,35 +456,15 @@ class AlchemiFCalculator:
         _write_back_positions(atoms, batch)
         return float(batch.energy.sum().item())
 
-    def get_potential_energies(self, atoms_list: List[Atoms]) -> np.ndarray:
-        """
-        Batched FIRE relaxation over multiple structures, then per-graph energies.
-
-        All graphs share one optimizer / one model forward pass per FIRE step.
-        nvalchemi FIRE's ConvergenceHook tracks each graph's max-force and
-        retires it from the active batch when it falls below ``fmax`` — so
-        already-converged replicas don't slow others down. Returns when every
-        graph has converged or ``steps`` is reached.
-
-        Parameters
-        ----------
-        atoms_list : list[ase.Atoms]
-            Starting geometries. Each is mutated in place: positions are
-            updated to the relaxed configuration (respecting FixAtoms).
-
-        Returns
-        -------
-        np.ndarray
-            Relaxed potential energies in eV, shape (len(atoms_list),).
-        """
-        if not atoms_list:
-            return np.empty(0, dtype=np.float64)
+    def _relax_batch(self, atoms_list: List[Atoms]) -> tuple:
+        """Batched FIRE relaxation of one (sub-)batch. Mutates positions in
+        place; returns ``(per_graph_energies, step_count)``."""
         n_graphs = len(atoms_list)
         batch = _make_multi_batch(atoms_list, self.device, self.dtype)
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(n_graphs, 1, device=self.device, dtype=self.dtype)
 
-        # Map each graph's FixAtoms indices into the concatenated batch.
+        # Map each graph's FixAtoms indices into the concatenated (sub-)batch.
         fixed: List[int] = []
         offset = 0
         for a in atoms_list:
@@ -501,12 +486,59 @@ class AlchemiFCalculator:
         opt.compute(batch)
         opt.run(batch)
 
-        self.last_relax_steps = int(opt.step_count)
-        self.total_relax_steps += self.last_relax_steps
-        logger.debug("FIRE relaxation (batched, %d graphs): %d/%d steps (fmax=%.3g eV/A)",
-                     n_graphs, self.last_relax_steps, self.steps, self.fmax)
         _write_back_positions_batched(atoms_list, batch)
-        return _per_graph_energies(batch.energy, n_graphs)
+        return _per_graph_energies(batch.energy, n_graphs), int(opt.step_count)
+
+    def get_potential_energies(
+        self, atoms_list: List[Atoms], chunk_size: int | None = None
+    ) -> np.ndarray:
+        """
+        Batched FIRE relaxation over multiple structures, then per-graph energies.
+
+        All graphs in a (sub-)batch share one optimizer / one model forward pass
+        per FIRE step. nvalchemi FIRE's ConvergenceHook tracks each graph's
+        max-force and retires it from the active batch when it falls below
+        ``fmax`` — so already-converged replicas don't slow others down. Returns
+        when every graph has converged or ``steps`` is reached.
+
+        ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
+        most that many structures, each relaxed independently, capping peak GPU
+        memory at the largest chunk. ``None`` (the default) falls back to the
+        instance ``chunk_size``; if that is also ``None`` the whole list is
+        relaxed at once. FIRE dynamics are per-graph (forces and the convergence
+        criterion are per-graph), so a graph's relaxed energy is independent of
+        which others share its sub-batch, up to GPU run-to-run noise.
+
+        Parameters
+        ----------
+        atoms_list : list[ase.Atoms]
+            Starting geometries. Each is mutated in place: positions are
+            updated to the relaxed configuration (respecting FixAtoms).
+        chunk_size : int | None
+            Per-call override of the instance ``chunk_size``.
+
+        Returns
+        -------
+        np.ndarray
+            Relaxed potential energies in eV, shape (len(atoms_list),).
+        """
+        if not atoms_list:
+            return np.empty(0, dtype=np.float64)
+        cs = self.chunk_size if chunk_size is None else chunk_size
+        out: List[np.ndarray] = []
+        steps: List[int] = []
+        for start, stop in chunk_ranges(len(atoms_list), cs):
+            energies, step_count = self._relax_batch(atoms_list[start:stop])
+            out.append(energies)
+            steps.append(step_count)
+        # last = deepest chunk relaxation; total accumulates work across chunks.
+        self.last_relax_steps = max(steps)
+        self.total_relax_steps += sum(steps)
+        logger.debug("FIRE relaxation (batched, %d graphs, %d chunk(s)): "
+                     "max %d/%d steps (fmax=%.3g eV/A)",
+                     len(atoms_list), len(steps), self.last_relax_steps,
+                     self.steps, self.fmax)
+        return np.concatenate(out)
 
     def run_md(
         self,
