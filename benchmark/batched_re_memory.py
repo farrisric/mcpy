@@ -82,19 +82,34 @@ def main():
     calc = AlchemiCalculator(device='cuda', compile_model=False)
     rows = []
 
-    # --- noise floor: identical full batch, repeated (forces on) ---
-    probe = [make_np(SIZES[1]) for _ in range(4)]
-    runs = np.stack([measure(calc, probe, None)[0] for _ in range(NOISE_REPEATS)])
-    eps_noise = float(np.max(runs.max(axis=0) - runs.min(axis=0)))
-    print(f'noise floor eps_noise = {eps_noise:.3e} eV')
+    # --- per-size single-NP reference energy + run-to-run floor. All replicas
+    # are identical NPs, so every replica's energy must equal this reference up
+    # to fp32 jitter; this is the fallback comparator for configs that OOM at
+    # full batch (chunking lets them run). ---
+    eps_noise, e_ref = {}, {}
+    for size in SIZES:
+        probe = [make_np(size)]
+        runs = np.stack([measure(calc, probe, None)[0] for _ in range(NOISE_REPEATS)])
+        eps_noise[size] = float(np.max(runs.max(axis=0) - runs.min(axis=0)))
+        e_ref[size] = float(np.median(runs))
+        print(f'noise floor[{size}] = {eps_noise[size]:.3e} eV')
 
     for size in SIZES:
         for n in REPLICAS:
             atoms_list = [make_np(size) for _ in range(n)]
-            base = measure(calc, atoms_list, None)
-            base_e = base[0] if base else None
-            rows.append(_row(size, n, 'baseline', 'whole', base, base_e, eps_noise)
-                        if base else
+            # Two whole-batch runs: b0 is the reference energies, b1 gives a
+            # config-matched (same size, same n) run-to-run floor that scales
+            # with both energy magnitude and the max-over-n-replicas extremes.
+            b0 = measure(calc, atoms_list, None)
+            b1 = measure(calc, atoms_list, None)
+            if b0 and b1:
+                floor = max(float(np.max(np.abs(b1[0] - b0[0]))), eps_noise[size])
+                base_e = b0[0]
+            else:
+                floor = eps_noise[size]
+                base_e = np.full(n, e_ref[size]) if not b0 else b0[0]
+            rows.append(_row(size, n, 'baseline', 'whole', b0, base_e, floor)
+                        if b0 else
                         dict(size=size, n=n, lever='baseline', setting='whole',
                              peak_MB=None, max_dE=None, within_noise=False,
                              wall_ms=None, oom=True))
@@ -102,13 +117,13 @@ def main():
             # chunking (only meaningful for n > 1)
             for cs in [c for c in (1, 2, 4) if c < n]:
                 out = measure(calc, atoms_list, cs)
-                rows.append(_row(size, n, 'chunk', cs, out, base_e, eps_noise))
+                rows.append(_row(size, n, 'chunk', cs, out, base_e, floor))
 
             # energy_only (forces off), whole batch
             set_energy_only(calc, True)
             out = measure(calc, atoms_list, None)
             set_energy_only(calc, False)
-            rows.append(_row(size, n, 'energy_only', 'on', out, base_e, eps_noise))
+            rows.append(_row(size, n, 'energy_only', 'on', out, base_e, floor))
 
             # max_neighbors sweep (single replica isolates the NL effect)
             if n == 1:
@@ -116,9 +131,9 @@ def main():
                     calc.max_neighbors = mn
                     out = measure(calc, atoms_list, None)
                     calc.max_neighbors = None
-                    rows.append(_row(size, n, 'maxnbr', mn, out, base_e, eps_noise))
+                    rows.append(_row(size, n, 'maxnbr', mn, out, base_e, floor))
             print(f'size={size} n={n} done '
-                  f'(baseline peak={base[1]:.0f} MB)' if base else
+                  f'(baseline peak={b0[1]:.0f} MB)' if b0 else
                   f'size={size} n={n} OOM at baseline')
 
     _write_csv(rows, eps_noise)
@@ -128,8 +143,9 @@ def main():
 
 def _write_csv(rows, eps_noise):
     path = os.path.join(OUTDIR, 'batched_re_memory.csv')
+    floors = ' '.join(f'{s}:{e:.3e}' for s, e in sorted(eps_noise.items()))
     with open(path, 'w', newline='') as fh:
-        fh.write(f'# eps_noise={eps_noise:.6e} eV\n')
+        fh.write(f'# eps_noise(eV) per size: {floors}\n')
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
@@ -138,7 +154,9 @@ def _write_csv(rows, eps_noise):
 
 def _write_summary(rows, eps_noise):
     path = os.path.join(OUTDIR, 'batched_re_memory_summary.md')
-    lines = ['# Batched RE memory sweep\n\n', f'noise floor: {eps_noise:.3e} eV\n']
+    lines = ['# Batched RE memory sweep\n\n', '## Noise floor per size (eV)\n']
+    for s, e in sorted(eps_noise.items()):
+        lines.append(f'- {s} atoms: {e:.3e}\n')
 
     lines.append('\n## Min-safe max_neighbors per size\n')
     for size in sorted({r['size'] for r in rows}):
