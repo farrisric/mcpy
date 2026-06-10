@@ -23,6 +23,7 @@ On step 1 the batch has no forces yet, so we must:
 from __future__ import annotations
 
 import logging
+import os
 from typing import List, Union
 
 import numpy as np
@@ -49,15 +50,64 @@ logger = logging.getLogger(__name__)
 _ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
 
 
+class _HeadMACEWrapper(MACEWrapper):
+    """MACEWrapper that pins a multihead MACE model to one head.
+
+    nvalchemi's batch carries no ``head`` field, so the inner MACE model falls
+    back to head 0. Fine-tuned models often keep the pretrain head at index 0
+    and the fine-tuned head elsewhere, so head 0 is the wrong potential. This
+    injects a fixed head index into the MACE input.
+    """
+
+    def __init__(self, model: torch.nn.Module, head_index: int) -> None:
+        super().__init__(model)
+        self._head_index = head_index
+
+    def adapt_input(self, data, **kwargs):
+        d = super().adapt_input(data, **kwargs)
+        d['head'] = torch.full((data.num_graphs,), self._head_index,
+                               dtype=torch.long, device=data.positions.device)
+        return d
+
+
 def _load_model(
     checkpoint: Union[str, MACEWrapper],
     device: str,
     dtype: torch.dtype,
     enable_cueq: bool,
     compile_model: bool,
+    head: Union[str, int, None] = None,
 ) -> MACEWrapper:
     if isinstance(checkpoint, MACEWrapper):
         return checkpoint
+    # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
+    # string as a download alias, so it cannot open local paths. ``head``
+    # selects a multihead model's head by name or index. torch.compile is not
+    # applied on this branch (alias path only); cuEq is.
+    if isinstance(checkpoint, (str, os.PathLike)) and os.path.exists(checkpoint):
+        raw = torch.load(checkpoint, map_location=device, weights_only=False).to(dtype)
+        # Resolve the head index before any cuEq conversion, while ``raw.heads``
+        # is guaranteed present.
+        idx = None if head is None else (
+            head if isinstance(head, int) else list(raw.heads).index(head)
+        )
+        if enable_cueq:
+            try:
+                import cuequivariance  # noqa: F401
+                from mace.cli.convert_e3nn_cueq import run as _to_cueq
+            except ImportError as exc:
+                raise ImportError(
+                    "enable_cueq=True requires the 'cuequivariance' package; "
+                    "install with: pip install 'nvalchemi-toolkit[mace]'"
+                ) from exc
+            raw = _to_cueq(raw, return_model=True, device=device)
+        raw = raw.to(device)
+        return MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
+    if head is not None:
+        raise ValueError(
+            "head= is only supported when loading a local .model path; "
+            f"got alias checkpoint {checkpoint!r}"
+        )
     return MACEWrapper.from_checkpoint(
         checkpoint,
         device=torch.device(device),
@@ -241,13 +291,14 @@ class AlchemiCalculator:
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
         energy_only: bool = False,
+        head: Union[str, int, None] = None,
     ) -> None:
         self.device = device
         self.dtype = dtype
         self.max_neighbors = max_neighbors
         self.chunk_size = chunk_size
         self.energy_only = energy_only
-        self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model)
+        self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model, head)
         self._nl_config = self.model.model_config.neighbor_config
         if energy_only:
             # MC energy evaluation never uses forces. Dropping 'forces' from
@@ -393,6 +444,7 @@ class AlchemiFCalculator:
         optimizer: str = 'fire',
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
+        head: Union[str, int, None] = None,
     ) -> None:
         self.steps = steps
         self.fmax = fmax
@@ -409,7 +461,7 @@ class AlchemiFCalculator:
             )
         self._optimizer_cls = _ALCHEMI_OPTIMIZERS[optimizer]
         self.optimizer_name = optimizer
-        self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model)
+        self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model, head)
         self._nl_config = self.model.model_config.neighbor_config
 
     def get_potential_energy(self, atoms: Atoms) -> float:
