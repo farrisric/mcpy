@@ -1,16 +1,3 @@
-"""
-Alchemi (nvalchemi) calculator with FIRE geometry relaxation.
-
-``AlchemiFCalculator`` relaxes atoms with nvalchemi's GPU-resident FIRE before
-returning the energy, mirroring MACE_F_Calculator. For an energy-only single
-forward pass, see :class:`AlchemiCalculator` in ``alchemi_calculator.py``. Shared
-internals (model loading, batching, neighbor-list bootstrap, FixAtoms handling,
-MD) live in ``_alchemi_common.py``.
-
-Requirements:
-  pip install 'nvalchemi-toolkit[mace]'
-"""
-
 from __future__ import annotations
 
 import logging

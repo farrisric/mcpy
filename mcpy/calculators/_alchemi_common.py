@@ -1,23 +1,3 @@
-"""
-Shared internals for the Alchemi (nvalchemi) calculators.
-
-Both ``AlchemiCalculator`` (energy-only) and ``AlchemiFCalculator`` (FIRE
-relaxation) build on these helpers: model loading, batch construction, the
-neighbor-list bootstrap, FixAtoms handling, and Langevin MD.
-
-Requirements:
-  pip install 'nvalchemi-toolkit[mace]'
-
-Notes on the bootstrap pattern
--------------------------------
-nvalchemi's FIRE optimizer runs pre_update BEFORE compute on every step.
-On step 1 the batch has no forces yet, so we must:
-  1. Pre-allocate batch.forces and batch.energy (compute() writes via copy_()).
-  2. Build the neighbor list once via NeighborListHook before calling compute().
-  3. Call opt.compute(batch) to populate initial forces.
-  4. Then call opt.run(batch).
-"""
-
 from __future__ import annotations
 
 import os

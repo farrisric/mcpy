@@ -1,16 +1,3 @@
-"""
-Energy-only Alchemi (nvalchemi) calculator.
-
-``AlchemiCalculator`` runs a single forward pass — no geometry relaxation — and
-is the calculator behind batched replica exchange. For FIRE geometry relaxation,
-see :class:`AlchemiFCalculator` in ``alchemi_f_calculator.py``. Shared internals
-(model loading, batching, neighbor-list bootstrap, MD) live in
-``_alchemi_common.py``.
-
-Requirements:
-  pip install 'nvalchemi-toolkit[mace]'
-"""
-
 from __future__ import annotations
 
 from typing import List, Union
