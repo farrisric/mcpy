@@ -7,7 +7,8 @@ __all__ = ['MACECalculator',
            'BaseCalculator']
 
 try:
-    from .alchemi_calculator import AlchemiCalculator, AlchemiFCalculator
+    from .alchemi_calculator import AlchemiCalculator
+    from .alchemi_f_calculator import AlchemiFCalculator
     __all__ += ['AlchemiCalculator', 'AlchemiFCalculator']
 except ImportError:
     # nvalchemi is an optional backend; skip if not installed.
