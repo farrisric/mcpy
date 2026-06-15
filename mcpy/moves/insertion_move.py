@@ -18,9 +18,11 @@ class InsertionMove(BaseMove):
                  cell: Cell,
                  species: list[str],
                  seed: int,
-                 min_insert: float = None) -> None:
+                 min_insert: float = None,
+                 max_atoms: int | None = None) -> None:
         super().__init__(cell, species, seed)
         self.min_insert = min_insert
+        self.max_atoms = max_atoms
         # Squared threshold so the per-attempt loop can skip the sqrt.
         self._min_insert_sq = min_insert ** 2 if min_insert is not None else None
 
@@ -30,6 +32,11 @@ class InsertionMove(BaseMove):
         Returns the same ``atoms`` object (mutated) with delta_N=+1.
         """
         selected_species = self.rng.random.choice(self.species)
+
+        if self.max_atoms is not None:
+            n_species = atoms.get_chemical_symbols().count(selected_species)
+            if n_species >= self.max_atoms:
+                return False, 1, selected_species
 
         insert_position = self.cell.get_random_point()
         if self._min_insert_sq is not None:

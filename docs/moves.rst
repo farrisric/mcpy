@@ -53,15 +53,17 @@ The following move classes are available from `mcpy.moves`.
 ~~~~~~~~~~~~~~~
 
 Attempts to insert an atom of one of the selected species at a random point drawn from the
-attached cell. Sets `delta_particles = +1` on a successful proposal.
+attached cell. Sets `delta_particles = +1` on a successful proposal. Optional ``max_atoms``
+skips the trial (no mutation, no energy evaluation) when the structure already contains at
+least that many atoms of the selected species.
 
 `DeletionMove`
 ~~~~~~~~~~~~~~
 
 Attempts to delete a randomly chosen atom of one of the selected species lying inside the
 attached cell. Sets `delta_particles = -1` on a successful proposal; returns falsy when no
-candidate atom exists, which the `MoveSelector` records as a failure rather than as a
-rejection.
+candidate atom exists or when optional ``min_atoms`` would be violated, which the
+`MoveSelector` records as a failure rather than as a rejection.
 
 `DisplacementMove`
 ~~~~~~~~~~~~~~~~~~

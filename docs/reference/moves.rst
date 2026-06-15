@@ -50,7 +50,7 @@ InsertionMove
 
 .. code-block:: python
 
-   InsertionMove(cell, species, seed, min_insert=None)
+   InsertionMove(cell, species, seed, min_insert=None, max_atoms=None)
 
 Inserts one atom of a random selected species at a random point in ``cell``.
 Sets ``delta_particles = +1``.
@@ -58,6 +58,9 @@ Sets ``delta_particles = +1``.
 - ``min_insert`` (float, optional): minimum distance to existing cell atoms. The
   move retries up to an internal cap and reports a failed move if it cannot
   place the atom without a closer contact.
+- ``max_atoms`` (int, optional): if the structure already contains at least this
+  many atoms of the selected species, the move is skipped without mutating
+  ``atoms`` (recorded as a failed move, no energy evaluation).
 
 
 DeletionMove
@@ -65,11 +68,15 @@ DeletionMove
 
 .. code-block:: python
 
-   DeletionMove(cell, species, seed)
+   DeletionMove(cell, species, seed, min_atoms=None)
 
 Deletes a random atom of the selected species lying inside ``cell``. Sets
 ``delta_particles = -1``. Returns a falsy result when no candidate atom exists,
-recorded as a failed move rather than a rejection.
+when ``min_atoms`` would be violated, or recorded as a failed move rather than a
+rejection.
+
+- ``min_atoms`` (int, optional): if the structure contains at most this many
+  atoms of the selected species, the move is skipped without mutating ``atoms``.
 
 
 DisplacementMove
