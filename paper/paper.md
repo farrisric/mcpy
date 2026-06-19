@@ -185,7 +185,7 @@ LAMMPS (blue) across both unit systems.\label{fig:validation}](argon_lammps_vali
 `mcpy` was developed to study the equilibrium oxidation of metal nanoparticles
 and surfaces under reactive atmospheres at near-DFT accuracy. The
 replica-exchange GCMC workflow was built during doctoral research at the
-Universitat de Barcelona and underpins a forthcoming manuscript on the oxidation
+Universitat de Barcelona [@farris2025thesis] and underpins a forthcoming manuscript on the oxidation
 thermodynamics of silver nanoparticles, with further application to additional
 catalytic metal/oxide systems within the IQTCUB group. \autoref{fig:phase} shows
 a representative result from this workflow: the hydrogenation phase diagram of a
