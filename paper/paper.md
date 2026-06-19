@@ -1,5 +1,5 @@
 ---
-title: 'mcpy: Grand Canonical Monte Carlo for atomistic systems with machine-learning potentials'
+title: 'mcpy: Canonical & Grand Canonical Monte Carlo for atomistic systems with machine-learning potentials'
 tags:
   - Python
   - computational chemistry
@@ -30,26 +30,27 @@ bibliography: paper.bib
 
 # Summary
 
-`mcpy` is a Python package for grand canonical Monte Carlo (GCMC) simulation of
+`mcpy` is a Python package for Monte Carlo (MC) simulations of
 atomistic systems of any kind (surfaces, nanoparticles, fluids, and bulk) at
 controlled temperature and chemical potential. It is built on the Atomic Simulation
 Environment (ASE) [@ase2017], so any ASE-compatible calculator can drive the
 sampling: density-functional theory codes, classical force fields, or
 machine-learning interatomic potentials (MLIPs) such as MACE [@mace2022].
-`mcpy` implements both GCMC and replica-exchange GCMC [@swendsen1986] in a
-single, modular run loop, and runs with or without local relaxation of trial
+`mcpy` implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
+modular run loops and runs with or without local relaxation of trial
 moves. Following the hybrid scheme of @senftle2014, insertions and deletions
 can be relaxed locally before the acceptance test, which makes sampling
 efficient in densely packed metallic systems where rigid insertions would
 almost always be rejected; relaxation can equally be switched off for standard
-GCMC of fluids and other systems. The same loop runs on CPUs via MPI or on
+MC of fluids and other systems. The same loop runs on CPUs via MPI or on
 GPUs through the NVIDIA Alchemi backend, which relaxes a batch of replicas in a
 single evaluation. The package provides modular trial
 moves (insertion, deletion, displacement, permutation, shake, and Brownian;
 permutation enables chemical-ordering optimization in multi-component systems),
 configurable cell geometries (periodic box, rectangular sub-slab, spherical
-region around a nanoparticle, and user-defined cells), and post-processing
-utilities that turn raw ensembles into surface and nanoparticle phase diagrams.
+region around a nanoparticle, and user-defined cells), global optimization and
+statistical sampling with post-processing utilities that turn raw ensembles into
+surface and nanoparticle phase diagrams.
 
 # Statement of need
 
@@ -59,30 +60,16 @@ canonical ensemble) at near–first-principles accuracy. MLIPs now deliver
 close-to-DFT accuracy at a small fraction of the cost, making large-scale GCMC
 of realistic structures increasingly practical. Yet no open-source package
 combines relaxation-coupled GCMC, replica exchange, an ASE-native MLIP backend,
-and the cell geometries needed for finite nanoparticles in a single workflow.
+and the cell geometries needed for finite nanoparticles in a single, modular workflow.
 
-`mcpy` is aimed at computational chemists and materials scientists studying
+`mcpy`'s grand-canonical simulations are aimed at computational chemists and materials scientists studying
 heterogeneous catalysis, oxidation, and gas–surface equilibria, where the
 stable composition, not just a fixed structure, is the quantity of interest.
 Although it was developed for these applications, the grand-canonical sampling
-is system-agnostic: it runs on any system ASE can represent and any
-ASE-compatible calculator, from molecular fluids to bulk solids, so the same
-workflow extends well beyond the metallic surfaces and nanoparticles that
+is agnostic to the level of theory or the targeted system: it runs on any system ASE can represent and any
+ASE-compatible calculator, from molecular fluids to bulk solids. The same
+workflow therefore extends well beyond the metallic surfaces and nanoparticles that
 motivated it.
-
-![Hydrogenation phase diagram of a 201-atom palladium–silver nanoparticle
-(Pd$_{151}$Ag$_{50}$) obtained with replica-exchange GCMC in `mcpy`, driven by
-the small AGNESI MACE potential [@mace_foundation]. The free energy of formation per atom $\Delta G$ (in meV/atom) is
-shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$
-(equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the lower band shows
-the most stable Pd$_{151}$Ag$_{50}$H$_z$ structure sampled in each
-chemical-potential window, from the bare particle at low $\mu_\mathrm{H}$ to a
-hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{111}$ at high pressure. The chemical
-ordering of the bare Pd$_{151}$Ag$_{50}$ particle was first optimized with a
-single basin-hopping, replica-exchange run over six temperatures; hydrogenated
-structures were then sampled by replica-exchange GCMC at hydrogen chemical
-potentials from $\Delta\mu_\mathrm{H} = -1$ to $-0.35$ eV with six temperatures
-per chemical-potential window.\label{fig:phase}](phase_diagram.png)
 
 # State of the field
 
@@ -187,7 +174,7 @@ and surfaces under reactive atmospheres at near-DFT accuracy. The
 replica-exchange GCMC workflow was built during doctoral research at the
 Universitat de Barcelona [@farris2025thesis] and underpins a forthcoming manuscript on the oxidation
 thermodynamics of silver nanoparticles, with further application to additional
-catalytic metal/oxide systems within the IQTCUB group. \autoref{fig:phase} shows
+catalytic metal/oxide systems. \autoref{fig:phase} shows
 a representative result from this workflow: the hydrogenation phase diagram of a
 201-atom Pd–Ag nanoparticle, in which `mcpy` recovers the progressive hydrogen
 loading of the particle as the chemical potential increases. By coupling
@@ -199,10 +186,26 @@ open-source, documented with worked examples covering GCMC, replica exchange,
 and phase-diagram construction, and continuously tested across Python 3.11–3.13,
 so that the published workflows can be reproduced and extended by other groups.
 
+![Hydrogenation phase diagram of a 201-atom palladium–silver nanoparticle
+(Pd$_{151}$Ag$_{50}$) obtained with replica-exchange GCMC in `mcpy`, driven by
+the small AGNESI MACE potential [@mace_foundation]. The free energy of formation $\Delta G$ (in eV) is
+shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$
+(equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the lower band shows
+the most stable Pd$_{151}$Ag$_{50}$H$_z$ structure sampled in each
+chemical-potential window, from the bare particle at low $\mu_\mathrm{H}$ to a
+hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure. The chemical
+ordering of the bare Pd$_{151}$Ag$_{50}$ particle was first optimized with a
+single basin-hopping, replica-exchange run over six temperatures; hydrogenated
+structures were then sampled by replica-exchange GCMC at hydrogen chemical
+potentials from $\Delta\mu_\mathrm{H} = -1$ to $-0.35$ eV with six temperatures
+per chemical-potential window.\label{fig:phase}](phase_diagram.png)
+
 # Acknowledgements
 
-The authors received no specific funding for this work.
-
+This work was supported by the Spanish/FEDER Ministerio de Ciencia, Innovacion y Universidades [Grant Nos.
+PID2021-128217NB-I00, MDM-2017-0767, CEX2021-001202-M, PID2022-140120OA-I00, and RYC2021-032281-I
+(for A.B.)] as well as by the Generalitat de Catalunya [Grant No. 2021SGR00286]. R. F. thanks the Spanish MICIUN
+for an FPI PhD grant (MDM-2017-0767-20-2). R. F. further acknowledges his current research group for supporting the continuation and development of this work.
 # AI usage disclosure
 
 Claude (Opus) assisted with code refactoring, test scaffolding, packaging
