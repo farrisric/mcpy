@@ -157,49 +157,23 @@ class BatchedReplicaExchange:
 
     def _batched_gcmc_step(self) -> None:
         """
-        One GCMC step across all replicas:
-          1. propose a trial move on each replica (in place, with snapshot)
-          2. batched energy eval over all replicas with viable trials
-          3. per-replica Metropolis accept/reject
+        One GCMC step across all replicas. Each replica performs
+        ``move_selector.n_moves`` trial moves, matching the serial
+        ``GrandCanonicalEnsemble.do_gcmc_step``. Moves are sequential within a
+        replica (each depends on the previously accepted state), so a single
+        sub-move is taken across all replicas at once and evaluated in one
+        batched forward pass; this repeats ``n_moves`` times.
+
+        Replicas may declare different ``n_moves``; a replica only participates
+        in sub-move ``k`` while ``k < n_moves`` for that replica.
         """
-        snapshots: List[Dict] = [None] * self.n_replicas
-        trial_meta: List[Optional[tuple]] = [None] * self.n_replicas
-
-        for i, r in enumerate(self.replicas):
-            snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
-            result = r.move_selector.do_trial_move(r.atoms)
-            atoms_new, delta_particles, species = (
-                result if isinstance(result, tuple) else (result, 0, None)
-            )
-            if atoms_new:
-                n_species_before = None
-                if delta_particles != 0:
-                    n_species_before = len(
-                        r.move_selector.get_atoms_specie_inside_cell(r.atoms, species)
-                    ) - delta_particles
-                trial_meta[i] = (delta_particles, species, n_species_before)
-            # else: move couldn't propose — atoms unchanged, snapshot harmless
-
-        viable = [i for i, m in enumerate(trial_meta) if m is not None]
-        if viable:
-            atoms_list = [self.replicas[i].atoms for i in viable]
-            energies = self.calculator.get_potential_energies(atoms_list)
-            for i, E_new in zip(viable, energies):
-                r = self.replicas[i]
-                delta_particles, species, n_species_before = trial_meta[i]
-                delta_E = float(E_new) - r.E_old
-                volume = r.move_selector.get_volume()
-                if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                           n_species_before):
-                    if r._wrap_on_accept:
-                        r.atoms.wrap()
-                    r.n_atoms = len(r.atoms)
-                    r.E_old = float(E_new)
-                    r.move_selector.acceptance_counter()
-                    r.calculate_cells_volume(r.atoms)
-                    r._record_minimum(r.atoms, r.E_old)
-                else:
-                    r.atoms.arrays = snapshots[i]
+        n_sub_moves = max(r.move_selector.n_moves for r in self.replicas)
+        for k in range(n_sub_moves):
+            active = [
+                i for i, r in enumerate(self.replicas)
+                if k < r.move_selector.n_moves
+            ]
+            self._batched_single_move(active)
 
         for r in self.replicas:
             r._step += 1
@@ -207,6 +181,53 @@ class BatchedReplicaExchange:
                 r.write_outfile()
             if r._step % r._trajectory_write_interval == 0:
                 r.write_coordinates(r.atoms, r.E_old)
+
+    def _batched_single_move(self, active: List[int]) -> None:
+        """
+        One trial move on each active replica:
+          1. propose a trial move on each replica (in place, with snapshot)
+          2. batched energy eval over the replicas with viable trials
+          3. per-replica Metropolis accept/reject
+        """
+        snapshots: Dict[int, Dict] = {}
+        trial_meta: Dict[int, tuple] = {}
+
+        for i in active:
+            r = self.replicas[i]
+            snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
+            result = r.move_selector.do_trial_move(r.atoms)
+            atoms_new, delta_particles, species = (
+                result if isinstance(result, tuple) else (result, 0, None)
+            )
+            if atoms_new:
+                trial_meta[i] = (delta_particles, species)
+            # else: move couldn't propose — atoms unchanged, snapshot harmless
+
+        viable = [i for i in active if i in trial_meta]
+        if not viable:
+            return
+
+        atoms_list = [self.replicas[i].atoms for i in viable]
+        energies = self.calculator.get_potential_energies(atoms_list)
+        for i, E_new in zip(viable, energies):
+            r = self.replicas[i]
+            delta_particles, species = trial_meta[i]
+            delta_E = float(E_new) - r.E_old
+            volume = r.move_selector.get_volume()
+            # de Broglie particle count: total atom count before the move
+            # (``r.n_atoms`` is updated only on acceptance). See
+            # docs/gcmc_acceptance_convention.rst.
+            if r._acceptance_condition(delta_E, delta_particles, volume, species,
+                                       r.n_atoms):
+                if r._wrap_on_accept:
+                    r.atoms.wrap()
+                r.n_atoms = len(r.atoms)
+                r.E_old = float(E_new)
+                r.move_selector.acceptance_counter()
+                r.calculate_cells_volume(r.atoms)
+                r._record_minimum(r.atoms, r.E_old)
+            else:
+                r.atoms.arrays = snapshots[i]
 
     # --------------------------------------------------------- exchange
 
@@ -225,17 +246,32 @@ class BatchedReplicaExchange:
                 self.exchange_successes[j] += 1
 
     def _accept_swap(self, i: int, j: int) -> bool:
-        """Standard temperature-RE Metropolis: P = exp((β_j - β_i)(E_j - E_i))."""
+        """Temperature-RE Metropolis: P = exp((β_j - β_i)(Φ_j - Φ_i)).
+
+        Replicas here are grand-canonical (fixed μ, fluctuating N), so configs
+        at different temperatures must be compared through the grand potential
+        Φ = E - Σ_s μ_s N_s rather than bare energy. With no chemical potential
+        this reduces to the standard energy-only swap.
+        """
         ri, rj = self.replicas[i], self.replicas[j]
         beta_i, beta_j = ri.units.beta, rj.units.beta
-        E_i, E_j = ri.E_old, rj.E_old
-        delta = (beta_j - beta_i) * (E_j - E_i)
+        phi_i, phi_j = self._grand_potential(ri), self._grand_potential(rj)
+        delta = (beta_j - beta_i) * (phi_j - phi_i)
         p = min(1.0, float(np.exp(delta)))
         self.logger.debug(
-            "swap %d<->%d: beta_i=%.3e beta_j=%.3e E_i=%.3f E_j=%.3f delta=%.3f p=%.3f",
-            i, j, beta_i, beta_j, E_i, E_j, delta, p,
+            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_i=%.3f Phi_j=%.3f delta=%.3f p=%.3f",
+            i, j, beta_i, beta_j, phi_i, phi_j, delta, p,
         )
         return self.rng.get_uniform() < p
+
+    @staticmethod
+    def _grand_potential(r) -> float:
+        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ."""
+        mu = getattr(r, '_mu', None)
+        if not mu:
+            return r.E_old
+        counts = Counter(r.atoms.get_chemical_symbols())
+        return r.E_old - sum(mu_s * counts[s] for s, mu_s in mu.items())
 
     def _swap_states(self, i: int, j: int) -> None:
         """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to

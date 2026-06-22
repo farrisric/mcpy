@@ -28,6 +28,9 @@
 - **Optional NVIDIA Alchemi backend** (`nvalchemi-toolkit`) for GPU-native MACE
   evaluation and FIRE relaxation — **3.08x speedup on 586-atom GCMC**
   (20 steps, MACE+LBFGS vs Alchemi+FIRE, RTX 5090)
+- **Single-GPU batched replica exchange** with a `chunk_size` knob that caps
+  peak GPU memory at one chunk (independent of replica count), plus an
+  `energy_only` fast path for the no-relaxation calculator
 - Configurable simulation parameters and logging
 
 ## Installation

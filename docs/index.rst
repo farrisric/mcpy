@@ -29,8 +29,9 @@ Highlights
   shake, and Brownian moves, mixed through a weighted ``MoveSelector``;
   permutation and displacement support compound ``n_swaps`` / ``n_steps``
   perturbations per trial for basin-hopping sampling.
-- **MLIP-ready** — MACE, NequIP, ACE, and an optional GPU-native
-  NVIDIA Alchemi backend for large systems.
+- **MLIP-ready** — dedicated MACE wrappers, plus any ASE-compatible potential
+  (NequIP, ACE, classical force fields) through the generic calculator adapter,
+  and an optional GPU-native NVIDIA Alchemi backend for large systems.
 - **Phase-diagram utilities** for post-processing GCMC ensembles into
   surface and nanoparticle phase diagrams.
 
@@ -57,6 +58,8 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    cells
    species_radii
    moves
+   calculators
+   gcmc_acceptance_convention
 
 .. toctree::
    :caption: Tutorials
@@ -70,6 +73,16 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    :maxdepth: 1
 
    examples
+
+.. toctree::
+   :caption: API reference
+   :maxdepth: 1
+
+   reference/ensembles
+   reference/moves
+   reference/cells
+   reference/calculators
+   reference/utils
 
 .. toctree::
    :caption: Reference

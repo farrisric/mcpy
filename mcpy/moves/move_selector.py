@@ -69,10 +69,6 @@ class MoveSelector:
     def get_volume(self):
         return self.move_list[self.to_use].get_volume()
 
-    def get_atoms_specie_inside_cell(self, atoms, species):
-        """Indices of ``species`` atoms inside the last-selected move's cell."""
-        return self.move_list[self.to_use].cell.get_atoms_specie_inside_cell(atoms, species)
-
     def calculate_volume(self, atoms):
         return self.move_list[self.to_use].calculate_volume(atoms)
 

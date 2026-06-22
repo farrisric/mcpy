@@ -259,6 +259,7 @@ def plot_phase_diagram(
     show_plot=False,
     k_b=8.617e-5,
     gamma_in_ev=False,
+    adsorbate_count_fn=None,
 ):
     """Build a grand-canonical adsorbate phase diagram for one configuration.
 
@@ -302,6 +303,13 @@ def plot_phase_diagram(
     gamma_in_ev : bool
         Report the unnormalized formation energy in eV instead of the default
         per-atom (nano) or per-area (surface) value in meV.
+    adsorbate_count_fn : callable | None
+        Optional ``atoms -> int`` returning the adsorbate count for a frame.
+        Use when the adsorbate symbol also occurs in an inert sublattice (e.g.
+        oxygen adsorbed on a particle that sits on an oxide support): the count
+        defines the stoichiometry while the full frame is still rendered. When
+        ``None`` (default) the count is the number of atoms whose symbol equals
+        ``adsorbate``.
 
     Returns
     -------
@@ -317,7 +325,10 @@ def plot_phase_diagram(
         energy = _frame_energy(at)
         if energy is None:
             continue
-        n_ads = sum(1 for a in at if a.symbol == adsorbate)
+        if adsorbate_count_fn is not None:
+            n_ads = int(adsorbate_count_fn(at))
+        else:
+            n_ads = sum(1 for a in at if a.symbol == adsorbate)
         data.append((at, float(energy), n_ads))
     if not data:
         raise ValueError("No frames with a retrievable energy were provided.")
