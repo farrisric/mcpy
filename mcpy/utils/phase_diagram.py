@@ -258,6 +258,7 @@ def plot_phase_diagram(
     outfile=None,
     show_plot=False,
     k_b=8.617e-5,
+    gamma_in_ev=False,
     adsorbate_count_fn=None,
 ):
     """Build a grand-canonical adsorbate phase diagram for one configuration.
@@ -299,6 +300,9 @@ def plot_phase_diagram(
         Show interactively instead of closing the figure.
     k_b : float
         Boltzmann constant [eV/K].
+    gamma_in_ev : bool
+        Report the unnormalized formation energy in eV instead of the default
+        per-atom (nano) or per-area (surface) value in meV.
     adsorbate_count_fn : callable | None
         Optional ``atoms -> int`` returning the adsorbate count for a frame.
         Use when the adsorbate symbol also occurs in an inert sublattice (e.g.
@@ -335,14 +339,16 @@ def plot_phase_diagram(
     ref_atoms, ref_E = clean[0][0], clean[0][1]
 
     n_metal = sum(1 for a in ref_atoms if a.symbol in metal_symbols)
+    gamma_scale = 1.0 if gamma_in_ev else 1000.0
     if kind == "surface":
         c = ref_atoms.get_cell()
-        norm_factor = float(np.linalg.norm(np.cross(c[0], c[1])))
-        unit = r"meV/Å²"
+        area = float(np.linalg.norm(np.cross(c[0], c[1])))
+        norm_factor = 1.0 if gamma_in_ev else area
+        unit = r"eV" if gamma_in_ev else r"meV/Å²"
         symbol = r"\gamma"
     else:
-        norm_factor = n_metal
-        unit = r"meV/atom"
+        norm_factor = 1.0 if gamma_in_ev else n_metal
+        unit = r"eV" if gamma_in_ev else r"meV/atom"
         symbol = r"\Delta G"
 
     best = {}
@@ -353,7 +359,10 @@ def plot_phase_diagram(
 
     dmu_grid = np.linspace(dmu_range[0], dmu_range[1], n_bins)
     free = np.array(
-        [((best[n][1] - n * (mu_ref + dmu_grid)) - ref_E) / norm_factor * 1000.0 for n in stoich]
+        [
+            ((best[n][1] - n * (mu_ref + dmu_grid)) - ref_E) / norm_factor * gamma_scale
+            for n in stoich
+        ]
     )
     s_idx = np.argmin(free, axis=0)
     min_g = free[s_idx, np.arange(n_bins)]
@@ -427,8 +436,9 @@ def plot_phase_diagram(
     ax.plot(dmu_grid[seg:], min_g[seg:], color="black", lw=2.0, zorder=12)
 
     span = min_g.max() - min_g.min()
+    y_floor = 50.0 * gamma_scale / 1000.0
     ax.set_xlim(dmu_grid[0], dmu_grid[-1])
-    ax.set_ylim(min_g.min() - 0.25 * max(span, 50.0), min_g.max() + 1.2 * max(span, 50.0))
+    ax.set_ylim(min_g.min() - 0.25 * max(span, y_floor), min_g.max() + 1.2 * max(span, y_floor))
     ax.set_xlabel(r"$\Delta\mu_{%s}(T,p)$ [eV]" % adsorbate, fontsize=18)
     ax.set_ylabel(rf"${symbol}$ [{unit}]", fontsize=18)
     ax.tick_params(direction="in", labelsize=14)
