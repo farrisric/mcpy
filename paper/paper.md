@@ -206,6 +206,7 @@ This work was supported by the Spanish/FEDER Ministerio de Ciencia, Innovacion y
 PID2021-128217NB-I00, MDM-2017-0767, CEX2021-001202-M, PID2022-140120OA-I00, and RYC2021-032281-I
 (for A.B.)] as well as by the Generalitat de Catalunya [Grant No. 2021SGR00286]. R. F. thanks the Spanish MICIUN
 for an FPI PhD grant (MDM-2017-0767-20-2). R. F. further acknowledges his current research group for supporting the continuation and development of this work.
+
 # AI usage disclosure
 
 Claude (Opus) assisted with code refactoring, test scaffolding, packaging
