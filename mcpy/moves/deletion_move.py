@@ -11,15 +11,24 @@ class DeletionMove(BaseMove):
     def __init__(self,
                  cell: Cell,
                  species: list[str],
-                 seed: int):
+                 seed: int,
+                 min_atoms: int | None = None):
         super().__init__(cell, species, seed)
+        self.min_atoms = min_atoms
 
     def do_trial_move(self, atoms) -> int:
         """
         Delete a random atom of the selected species from inside the cell.
-        Returns (False, -1, 'X') if no candidate atom exists (no mutation).
+        Returns (False, -1, species) if no candidate atom exists or if deleting
+        would leave fewer than ``min_atoms`` of that species (no mutation).
         """
         selected_species = self.rng.random.choice(self.species)
+
+        if self.min_atoms is not None:
+            n_species = atoms.get_chemical_symbols().count(selected_species)
+            if n_species <= self.min_atoms:
+                return False, -1, selected_species
+
         indices_of_species = self.cell.get_atoms_specie_inside_cell(
             atoms, selected_species
         )
