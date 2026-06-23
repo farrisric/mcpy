@@ -30,13 +30,13 @@ bibliography: paper.bib
 
 # Summary
 
-`mcpy` is a Python package for Monte Carlo (MC) simulations of
+`mcpy` is a Python package for simulations of
 atomistic systems of any kind (surfaces, nanoparticles, fluids, and bulk) at
 controlled temperature and chemical potential. It is built on the Atomic Simulation
 Environment (ASE) [@ase2017], so any ASE-compatible calculator can drive the
 sampling: density-functional theory codes, classical force fields, or
 machine-learning interatomic potentials (MLIPs) such as MACE [@mace2022].
-`mcpy` implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
+`mcpy` is mainly built for Monte Carlo (MC) simulations and implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
 modular run loops and runs with or without local relaxation of trial
 moves. Following the hybrid scheme of @senftle2014, insertions and deletions
 can be relaxed locally before the acceptance test, which makes sampling
@@ -50,7 +50,7 @@ permutation enables chemical-ordering optimization in multi-component systems),
 configurable cell geometries (periodic box, rectangular sub-slab, spherical
 region around a nanoparticle, and user-defined cells), global optimization and
 statistical sampling with post-processing utilities that turn raw ensembles into
-surface and nanoparticle phase diagrams.
+surface and nanoparticle phase diagrams. While mainly intended for pure MC simulations, the package also provides molecular dynamics (MD) capabilities through Langevin dynamics from the NVIDIA Alchemi backend (and ASE's Velocity-Verlet), exposed as MD-based trial moves. This enables hybrid schemes such as Hybrid Monte Carlo and MD within replica exchange.
 
 # Statement of need
 
