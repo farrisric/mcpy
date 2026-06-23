@@ -30,13 +30,13 @@ bibliography: paper.bib
 
 # Summary
 
-`mcpy` is a Python package for simulations of
-atomistic systems of any kind (surfaces, nanoparticles, fluids, and bulk) at
+`mcpy` is a Python package for Monte Carlo (MC) simulations of
+atomistic systems (surfaces, nanoparticles, fluids, and bulk) at
 controlled temperature and chemical potential. It is built on the Atomic Simulation
 Environment (ASE) [@ase2017], so any ASE-compatible calculator can drive the
 sampling: density-functional theory codes, classical force fields, or
 machine-learning interatomic potentials (MLIPs) such as MACE [@mace2022].
-`mcpy` is mainly built for Monte Carlo (MC) simulations and implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
+`mcpy` implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
 modular run loops and runs with or without local relaxation of trial
 moves. Following the hybrid scheme of @senftle2014, insertions and deletions
 can be relaxed locally before the acceptance test, which makes sampling
@@ -45,12 +45,12 @@ almost always be rejected; relaxation can equally be switched off for standard
 MC of fluids and other systems. The same loop runs on CPUs via MPI or on
 GPUs through the NVIDIA Alchemi backend, which relaxes a batch of replicas in a
 single evaluation. The package provides modular trial
-moves (insertion, deletion, displacement, permutation, shake, and Brownian;
+moves (insertion, deletion, displacement, permutation, shake, and plus short MD runs via Brownian/Langevin moves; 
 permutation enables chemical-ordering optimization in multi-component systems),
 configurable cell geometries (periodic box, rectangular sub-slab, spherical
 region around a nanoparticle, and user-defined cells), global optimization and
 statistical sampling with post-processing utilities that turn raw ensembles into
-surface and nanoparticle phase diagrams. While mainly intended for pure MC simulations, the package also provides molecular dynamics (MD) capabilities through Langevin dynamics from the NVIDIA Alchemi backend (and ASE's Velocity-Verlet), exposed as MD-based trial moves. This enables hybrid schemes such as Hybrid Monte Carlo and MD within replica exchange.
+surface and nanoparticle phase diagrams.
 
 # Statement of need
 
@@ -62,10 +62,10 @@ of realistic structures increasingly practical. Yet no open-source package
 combines relaxation-coupled GCMC, replica exchange, an ASE-native MLIP backend,
 and the cell geometries needed for finite nanoparticles in a single, modular workflow.
 
-`mcpy`'s grand-canonical simulations are aimed at computational chemists and materials scientists studying
+`mcpy`'s grand canonical simulations are aimed at computational chemists and materials scientists studying
 heterogeneous catalysis, oxidation, and gas–surface equilibria, where the
 stable composition, not just a fixed structure, is the quantity of interest.
-Although it was developed for these applications, the grand-canonical sampling
+Although it was developed for these applications, the grand canonical sampling
 is agnostic to the level of theory or the targeted system: it runs on any system ASE can represent and any
 ASE-compatible calculator, from molecular fluids to bulk solids. The same
 workflow therefore extends well beyond the metallic surfaces and nanoparticles that
@@ -81,23 +81,23 @@ Carlo code that supports GCMC of solids and fluids, but with classical
 interaction models and its own input ecosystem rather than native integration
 with MLIPs or ASE. LAMMPS [@lammps2022] provides a GCMC fix, parallel tempering,
 and machine-learning pair styles, but it neither couples replica exchange to
-grand-canonical sampling nor exposes a relaxation-coupled GCMC in which an
+grand canonical sampling nor exposes a relaxation-coupled GCMC in which an
 arbitrary ASE calculator drives each acceptance test. ASE
 itself [@ase2017] supplies the `Atoms` object and a unified calculator interface
-spanning DFT codes, classical force fields, and MLIPs, but no grand-canonical
+spanning DFT codes, classical force fields, and MLIPs, but no grand canonical
 ensemble built on top of it.
 
 We built `mcpy` as a new package rather than extending any one of these because
 the capabilities it unifies live in different ecosystems: the
-calculator-agnostic accuracy of ASE, the grand-canonical and replica-exchange
+calculator-agnostic accuracy of ASE, the grand canonical and replica-exchange
 machinery of dedicated Monte Carlo codes, and the geometric flexibility needed
 for finite nanoparticles. Adding MLIP-native, relaxation-coupled GCMC to RASPA2
 or DL_MONTE would require reimplementing ASE's calculator abstraction, while
-wrapping LAMMPS in a relaxation-coupled, ASE-native grand-canonical loop with
+wrapping LAMMPS in a relaxation-coupled, ASE-native grand canonical loop with
 free-volume cell geometries and *ab initio* thermodynamics post-processing would
 reproduce much of `mcpy`'s design around an MD-centric engine. Building directly on ASE instead
 lets `mcpy` inherit the entire ASE calculator ecosystem and contribute the
-missing grand-canonical layer. That layer is the package's distinct
+missing grand canonical layer. That layer is the package's distinct
 contribution: ASE-native, MLIP-driven, relaxation-coupled GCMC with replica
 exchange and nanoparticle/surface geometries.
 
@@ -120,11 +120,12 @@ researcher exchange accuracy for cost without rewriting the simulation.
 
 The second design choice is an optional relaxation-coupled acceptance criterion.
 Following the hybrid scheme of @senftle2014, each trial insertion or deletion can
-be relaxed locally (a short LBFGS minimization) before the acceptance test. This adds cost
+be relaxed locally before the acceptance test. This adds cost
 to each step, but in densely packed metallic surfaces and nanoparticles a rigid
 insertion overlaps neighboring atoms and is almost always rejected; the local
-relaxation is what makes grand-canonical sampling converge at all for these
+relaxation is what makes grand canonical sampling converge at all for these
 systems, so the per-step cost is the enabling trade-off rather than an overhead.
+Conversely, the relaxation step can be disabled entirely, recovering standard unbiased Metropolis Monte Carlo that samples the exact Boltzmann distribution — appropriate for fluids and other systems where rigid trial moves are readily accepted.
 
 The third choice concerns ergodicity and parallelism. Replica exchange
 [@swendsen1986] across temperatures or chemical potentials improves mixing, and
@@ -148,18 +149,18 @@ phase-diagram utilities map sampled ensembles onto *ab initio* thermodynamics
 phase diagrams [@reuter2001], connecting the simulated chemical potential to
 experimental temperature and partial pressure.
 
-To validate the grand-canonical sampling independently of any MLIP, we
+To validate the grand canonical sampling independently of any MLIP, we
 reproduced two Lennard-Jones reference systems against LAMMPS [@lammps2022]
-(\autoref{fig:validation}): a purely repulsive fluid in reduced units and real
+(\autoref{fig:validation}): a purely Lennard-Jones fluid in reduced units and real
 argon in physical (eV) units. The average particle number and density as a
 function of chemical potential agree between the two codes across both unit
 systems, including the sharp gas–liquid condensation of argon. Although `mcpy`
 has so far been applied mainly to metal surfaces and nanoparticles, this
-benchmark confirms that its grand-canonical machinery is correct and general,
+benchmark confirms that its grand canonical machinery is correct and general,
 applicable to atomistic materials beyond the metallic systems that motivated
 it.
 
-![Validation of `mcpy`'s grand-canonical sampling against LAMMPS [@lammps2022]
+![Validation of `mcpy`'s grand canonical sampling against LAMMPS [@lammps2022]
 for two Lennard-Jones reference systems. (a) A purely repulsive Lennard-Jones
 fluid in reduced units: chemical potential $\mu$ (in units of $\epsilon$)
 versus reduced density $\sigma^3\rho$ and average particle number. (b) Real
@@ -176,9 +177,9 @@ Universitat de Barcelona [@farris2025thesis] and underpins a forthcoming manuscr
 thermodynamics of silver nanoparticles, with further application to additional
 catalytic metal/oxide systems. \autoref{fig:phase} shows
 a representative result from this workflow: the hydrogenation phase diagram of a
-201-atom Pd–Ag nanoparticle, in which `mcpy` recovers the progressive hydrogen
+201-atom PdAg nanoparticle, in which `mcpy` recovers the progressive hydrogen
 loading of the particle as the chemical potential increases. By coupling
-MLIP-driven energetics with grand-canonical sampling and *ab initio*
+MLIP-driven energetics with grand canonical sampling and *ab initio*
 thermodynamics post-processing, `mcpy` predicts stable surface and nanoparticle
 compositions as a function of temperature and chemical potential, quantities
 that are otherwise inaccessible to fixed-composition relaxations. The package is
@@ -193,12 +194,12 @@ shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$
 (equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the lower band shows
 the most stable Pd$_{151}$Ag$_{50}$H$_z$ structure sampled in each
 chemical-potential window, from the bare particle at low $\mu_\mathrm{H}$ to a
-hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure. The chemical
+hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure. The initial chemical
 ordering of the bare Pd$_{151}$Ag$_{50}$ particle was first optimized with a
 single basin-hopping, replica-exchange run over six temperatures; hydrogenated
 structures were then sampled by replica-exchange GCMC at hydrogen chemical
 potentials from $\Delta\mu_\mathrm{H} = -1$ to $-0.35$ eV with six temperatures
-per chemical-potential window.\label{fig:phase}](phase_diagram.png)
+per chemical-potential window, using H insertion, H deletion, and Pd-Ag swap moves.\label{fig:phase}](phase_diagram.png)
 
 # Acknowledgements
 
