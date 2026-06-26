@@ -187,19 +187,20 @@ open-source, documented with worked examples covering GCMC, replica exchange,
 and phase-diagram construction, and continuously tested across Python 3.11–3.13,
 so that the published workflows can be reproduced and extended by other groups.
 
-![Hydrogenation phase diagram of a 201-atom palladium–silver nanoparticle
+![(a) Hydrogenation phase diagram of a 201-atom palladium–silver nanoparticle
 (Pd$_{151}$Ag$_{50}$) obtained with replica-exchange GCMC in `mcpy`, driven by
 the small AGNESI MACE potential [@mace_foundation]. The free energy of formation $\Delta G$ (in eV) is
 shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$
-(equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the lower band shows
-the most stable Pd$_{151}$Ag$_{50}$H$_z$ structure sampled in each
-chemical-potential window, from the bare particle at low $\mu_\mathrm{H}$ to a
-hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure. The initial chemical
+(equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the insets show some of 
+the most stable Pd$_{151}$Ag$_{50}$H$_z$ structures sampled for different
+chemical-potential windows, from the bare particle at low $\mu_\mathrm{H}$ to a
+hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure, highlighting the change in chemical ordering induced by the increase in hydrogen coverage. The chemical
 ordering of the bare Pd$_{151}$Ag$_{50}$ particle was first optimized with a
-single basin-hopping, replica-exchange run over six temperatures; hydrogenated
+single basin-hopping run; hydrogenated
 structures were then sampled by replica-exchange GCMC at hydrogen chemical
 potentials from $\Delta\mu_\mathrm{H} = -1$ to $-0.35$ eV with six temperatures
-per chemical-potential window, using H insertion, H deletion, and Pd-Ag swap moves.\label{fig:phase}](phase_diagram.png)
+per chemical-potential value, using H insertion, H deletion, and Pd-Ag swap moves.
+(b) Evolution of the number of inserted oxygen atoms during a replica-exchange GCMC simulation of a Pd$_{55}$ fcc nanoparticle supported on a Al$_2$O$_3$ surface. The run consisted of 12 replicas with different temperatures at a fixed $\Delta\mu_\mathrm{O} = -0.5$. The structural insets show representative configurations sampled along the trajectories of the different replicas. \label{fig:phase}](image.pdf)
 
 # Acknowledgements
 
