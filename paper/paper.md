@@ -16,6 +16,9 @@ authors:
   - name: Emanuele Telari
     orcid: 0009-0009-3296-959X
     affiliation: 1
+  - name: Konstantin M. Neyman
+    orcid: 0000-0002-5242-5567
+    affiliation: "1, 3"
   - name: Albert Bruix
     orcid: 0000-0003-2585-5542
     affiliation: 1
@@ -24,6 +27,8 @@ affiliations:
     index: 1
   - name: LEITAT Technological Center, Terrassa, Spain
     index: 2
+  - name: Institució Catalana de Recerca i Estudis Avançats (ICREA), Barcelona, Spain
+    index: 3
 date: 27 May 2026
 bibliography: paper.bib
 ---
@@ -32,31 +37,30 @@ bibliography: paper.bib
 
 `mcpy` is a Python package for Monte Carlo (MC) simulations of
 atomistic systems (surfaces, nanoparticles, fluids, and bulk) at
-controlled temperature and chemical potential. It is built on the Atomic Simulation
+controlled temperature, volume, and particle number or chemical potential. It is built on the Atomic Simulation
 Environment (ASE) [@ase2017], so any ASE-compatible calculator can drive the
 sampling: density-functional theory codes, classical force fields, or
 machine-learning interatomic potentials (MLIPs) such as MACE [@mace2022].
-`mcpy` implements canonical, grand canonical and replica-exchange MC [@swendsen1986] in 
+`mcpy` implements canonical and grand canonical ensembles, as well as replica-exchange approaches [@swendsen1986], in 
 modular run loops and runs with or without local relaxation of trial
 moves. Following the hybrid scheme of @senftle2014, insertions and deletions
 can be relaxed locally before the acceptance test, which makes sampling
-efficient in densely packed metallic systems where rigid insertions would
+efficient in grand canonical ensemble simulations of densely packed metallic systems where rigid insertions would
 almost always be rejected; relaxation can equally be switched off for standard
 MC of fluids and other systems. The same loop runs on CPUs via MPI or on
-GPUs through the NVIDIA Alchemi backend, which relaxes a batch of replicas in a
+GPUs through different backends such as NVIDIA Alchemi, which relaxes a batch of replicas in a
 single evaluation. The package provides modular trial
-moves (insertion, deletion, displacement, permutation, shake, and plus short MD runs via Brownian/Langevin moves; 
-permutation enables chemical-ordering optimization in multi-component systems),
+moves (insertion, deletion, displacement, permutation (enabling chemical-ordering optimization in multi-component systems), shake, and short MD runs via Brownian/Langevin moves),
 configurable cell geometries (periodic box, rectangular sub-slab, spherical
 region around a nanoparticle, and user-defined cells), global optimization and
-statistical sampling with post-processing utilities that turn raw ensembles into
+statistical sampling, together with post-processing utilities that turn raw ensembles into
 surface and nanoparticle phase diagrams.
 
 # Statement of need
 
-Predicting the equilibrium composition of surfaces and nanoparticles under
-reactive atmospheres requires sampling over particle number (the grand
-canonical ensemble) at near–first-principles accuracy. MLIPs now deliver
+Predicting the equilibrium structure and composition of surfaces and nanoparticles under
+reactive atmospheres requires sampling over candidate structures and compositions (i.e. particle number) in the grand
+canonical ensemble at near–first-principles accuracy. MLIPs now deliver
 close-to-DFT accuracy at a small fraction of the cost, making large-scale GCMC
 of realistic structures increasingly practical. Yet no open-source package
 combines relaxation-coupled GCMC, replica exchange, an ASE-native MLIP backend,
@@ -95,7 +99,7 @@ for finite nanoparticles. Adding MLIP-native, relaxation-coupled GCMC to RASPA2
 or DL_MONTE would require reimplementing ASE's calculator abstraction, while
 wrapping LAMMPS in a relaxation-coupled, ASE-native grand canonical loop with
 free-volume cell geometries and *ab initio* thermodynamics post-processing would
-reproduce much of `mcpy`'s design around an MD-centric engine. Building directly on ASE instead
+reproduce much of `mcpy`'s MC design around an MD-centric engine. Building directly on ASE instead
 lets `mcpy` inherit the entire ASE calculator ecosystem and contribute the
 missing grand canonical layer. That layer is the package's distinct
 contribution: ASE-native, MLIP-driven, relaxation-coupled GCMC with replica
@@ -125,7 +129,8 @@ to each step, but in densely packed metallic surfaces and nanoparticles a rigid
 insertion overlaps neighboring atoms and is almost always rejected; the local
 relaxation is what makes grand canonical sampling converge at all for these
 systems, so the per-step cost is the enabling trade-off rather than an overhead.
-Conversely, the relaxation step can be disabled entirely, recovering standard unbiased Metropolis Monte Carlo that samples the exact Boltzmann distribution — appropriate for fluids and other systems where rigid trial moves are readily accepted.
+Because the relaxation is delegated to ASE, any of ASE's local-relaxation algorithms can be selected according to its suitability for the chosen system and level of theory.
+Conversely, the relaxation step can be disabled entirely, recovering standard unbiased Metropolis Monte Carlo that samples the exact Boltzmann distribution, appropriate for fluids and other systems where rigid trial moves are readily accepted.
 
 The third choice concerns ergodicity and parallelism. Replica exchange
 [@swendsen1986] across temperatures or chemical potentials improves mixing, and
