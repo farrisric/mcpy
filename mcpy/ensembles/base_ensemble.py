@@ -29,7 +29,8 @@ class BaseEnsemble(ABC):
                  outfile_mode: str = 'w',
                  outfile_write_interval: int = 1,
                  minima_file: Optional[str] = None,
-                 minima_mode: str = 'a') -> None:
+                 minima_mode: str = 'a',
+                 empty_cache_interval: int = 0) -> None:
         """
         Base class for ensembles in Monte Carlo simulations.
 
@@ -43,6 +44,11 @@ class BaseEnsemble(ABC):
         a frame is written every time a new strictly-lower score is observed
         (see :meth:`_minimum_score`). ``minima_mode='a'`` appends a history of
         improving minima; ``'w'`` keeps only the current running best.
+
+        ``empty_cache_interval`` (0 = off) calls ``torch.cuda.empty_cache()``
+        every N steps to return pooled GPU blocks to the driver on long runs.
+        Prefer ``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`` where
+        available; this is the in-loop fallback. No-op without torch/CUDA.
         """
         self.logger = logger
 
@@ -69,6 +75,10 @@ class BaseEnsemble(ABC):
         self._minima_file = minima_file
         self._minima_mode = minima_mode
         self._minima_handle = None
+
+        # Opt-in periodic torch.cuda.empty_cache() to counter caching-allocator
+        # fragmentation over long runs (0 = off). See mcpy.utils.gpu.
+        self._empty_cache_interval = empty_cache_interval
         self._best_score = float('inf')
         self._best_energy = float('inf')
         self._best_atoms = None

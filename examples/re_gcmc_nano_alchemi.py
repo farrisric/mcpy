@@ -16,6 +16,12 @@ Run::
 
 No mpirun. One GPU. Each replica builds its OWN cell and move_selector
 (BatchedReplicaExchange would otherwise share state across replicas).
+
+GPU memory on long runs: the atom count changes every accepted move, which
+fragments the CUDA caching allocator, so reserved GPU memory drifts up over a
+long run (allocator fragmentation, not a leak). Launch with
+``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``, or pass
+``empty_cache_interval=N`` to BatchedReplicaExchange as an in-loop fallback.
 """
 import argparse
 import os

@@ -7,6 +7,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 
 from .base_ensemble import BaseEnsemble
+from ..utils.gpu import empty_cuda_cache, should_empty_cache
 from ..utils.random_number_generator import RandomNumberGenerator
 from ..utils.set_unit_constant import SetUnits
 from ..moves.move_selector import MoveSelector
@@ -35,7 +36,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  outfile_mode: str = 'w',
                  outfile_write_interval: Optional[int] = 1,
                  minima_file: Optional[str] = None,
-                 minima_mode: str = 'a') -> None:
+                 minima_mode: str = 'a',
+                 empty_cache_interval: int = 0) -> None:
 
         super().__init__(atoms=atoms,
                          cells=cells,
@@ -49,7 +51,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                          outfile_mode=outfile_mode,
                          outfile_write_interval=outfile_write_interval,
                          minima_file=minima_file,
-                         minima_mode=minima_mode)
+                         minima_mode=minima_mode,
+                         empty_cache_interval=empty_cache_interval)
 
         self.E_old = self.compute_energy(self.atoms)
 
@@ -295,6 +298,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.do_gcmc_step()
         self._step += 1
         self._last_step_seconds = time.perf_counter() - t0
+
+        if should_empty_cache(self._step, self._empty_cache_interval):
+            empty_cuda_cache()
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile()

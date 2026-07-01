@@ -60,6 +60,30 @@ This pulls in `nvalchemi-toolkit[mace]`. Requires a CUDA-enabled PyTorch build.
 See `NVALCHEMI_NOTES.md` for tuning details (`compile_model=False` and `dt=1.0`
 are required for GCMC).
 
+#### GPU memory on long runs
+
+GCMC insertions/deletions change the atom count every accepted move, so each
+relaxation allocates differently sized tensors. PyTorch's CUDA caching allocator
+reserves a fresh block-set per size and pools it, so reserved GPU memory drifts
+far above the live footprint over a long run (live stays ~model-sized; reserved
+can climb to the card limit and cause spurious OOM). It is allocator
+fragmentation, not a leak.
+
+Launch long runs with expandable segments, which grows one segment in place
+instead of a pool per size:
+
+```sh
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python your_run.py
+```
+
+As an in-loop fallback, the ensembles accept `empty_cache_interval=N` to call
+`torch.cuda.empty_cache()` every `N` steps (0 = off, the default):
+
+```python
+GrandCanonicalEnsemble(..., empty_cache_interval=200)
+BatchedReplicaExchange(..., empty_cache_interval=200)
+```
+
 ### MPI for replica exchange
 
 `mpi4py` is not pulled in automatically — install it with conda:
