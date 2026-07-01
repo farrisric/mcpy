@@ -31,7 +31,6 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
-from ..utils.gpu import empty_cuda_cache, should_empty_cache
 from ..utils.random_number_generator import RandomNumberGenerator
 from .base_ensemble import write_xyz
 
@@ -51,7 +50,6 @@ class BatchedReplicaExchange:
         write_out_interval: int = 20,
         seed: int = 31,
         global_minimum_file: Optional[str] = 'global_minimum.xyz',
-        empty_cache_interval: int = 0,
     ) -> None:
         if temperatures is None and mus is None:
             raise ValueError("Provide either temperatures or mus (one per replica).")
@@ -83,9 +81,6 @@ class BatchedReplicaExchange:
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
         self.write_out_interval = write_out_interval
-        # Opt-in periodic empty_cache() against allocator fragmentation on long
-        # runs (0 = off); prefer PYTORCH_CUDA_ALLOC_CONF=expandable_segments.
-        self.empty_cache_interval = empty_cache_interval
 
         self._re_step = 0
         self.rng = RandomNumberGenerator(seed=seed)
@@ -115,9 +110,6 @@ class BatchedReplicaExchange:
 
                 if step % self.write_out_interval == 0:
                     self._write_outfile(step)
-
-                if should_empty_cache(step, self.empty_cache_interval):
-                    empty_cuda_cache()
 
                 self._re_step += 1
         finally:

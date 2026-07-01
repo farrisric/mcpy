@@ -76,13 +76,8 @@ instead of a pool per size:
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python your_run.py
 ```
 
-As an in-loop fallback, the ensembles accept `empty_cache_interval=N` to call
-`torch.cuda.empty_cache()` every `N` steps (0 = off, the default):
-
-```python
-GrandCanonicalEnsemble(..., empty_cache_interval=200)
-BatchedReplicaExchange(..., empty_cache_interval=200)
-```
+This keeps reserved memory near the true per-step peak; live usage is only ever
+a small model-sized footprint.
 
 ### MPI for replica exchange
 

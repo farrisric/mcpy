@@ -18,8 +18,7 @@ Typical usage:
 GPU memory on long runs: the atom count changes every accepted move, which
 fragments the CUDA caching allocator, so reserved GPU memory drifts up over a
 long run (allocator fragmentation, not a leak). Launch with
-``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``, or pass
-``empty_cache_interval=N`` to the ensemble as an in-loop fallback.
+``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``.
 """
 import argparse
 import logging

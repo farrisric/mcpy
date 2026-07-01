@@ -59,7 +59,7 @@ def main():
                           mc_sample_points=100_000)
     calculator = AlchemiFCalculator(
         checkpoint=args.checkpoint, steps=args.relax_steps, fmax=args.fmax,
-        device='cuda', enable_cueq=True, compile_model=False)
+        device='cuda', enable_cueq=True, compile_model=args.compile)
 
     species = ['O']
     # Weight insertion > deletion so the atom count generally grows.
@@ -80,10 +80,10 @@ def main():
     gcmc.initialize_run()
     rows = []
     for step in range(args.steps):
-        gcmc.do_gcmc_step()
+        gcmc._run()  # real per-step path
         torch.cuda.synchronize()
         rows.append(dict(
-            step=step,
+            step=gcmc._step,
             n_atoms=len(gcmc.atoms),
             allocated_MB=round(torch.cuda.memory_allocated() / 1024 ** 2, 1),
             reserved_MB=round(torch.cuda.memory_reserved() / 1024 ** 2, 1),
@@ -127,6 +127,9 @@ def parse_args():
     p.add_argument('--vacuum', type=float, default=6.0)
     p.add_argument('--checkpoint', default='medium-mpa-0')
     p.add_argument('--seed', type=int, default=7)
+    p.add_argument('--compile', action='store_true',
+                   help='Enable torch.compile (recompiles as the atom count '
+                        'changes; off by default)')
     p.add_argument('--outdir', default=os.path.join(OUTDIR, '_growth_tmp'))
     p.add_argument('--tag', default='')
     os.makedirs(p.parse_known_args()[0].outdir, exist_ok=True)
