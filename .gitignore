@@ -19,8 +19,17 @@ wheels/
 *.pt
 *.pth
 
-# Benchmark outputs (local only)
+# Benchmark outputs (local only; regenerate with the benchmark/*.py scripts)
 benchmark/benchmark_results/
+benchmark/*.csv
+benchmark/*.png
+benchmark/*_summary.md
+benchmark/*_summary_small.md
+benchmark/*_findings.md
+benchmark/confirm_run/
+benchmark/_scan_tmp/
+benchmark/_growth_tmp/
+.lavish/
 
 # Jupyter Notebook output
 .ipynb_checkpoints/
