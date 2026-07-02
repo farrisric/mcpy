@@ -54,11 +54,28 @@ def test_lj_units_define_beta():
     assert SetUnits('LJ', temperature=2.0, species=['X']).beta == pytest.approx(0.5)
 
 
+class _UphillCalc:
+    """Every evaluation costs more than the last, forcing the uphill
+    Metropolis branch (which reads units.beta) on each trial."""
+
+    def __init__(self):
+        self.e = 0.0
+
+    def get_potential_energy(self, atoms):
+        self.e += 1.0
+        return self.e
+
+
 def test_gcmc_runs_in_lj_units():
     atoms = Atoms('H2', positions=[[1, 1, 1], [3, 1, 1]], cell=[10, 10, 10], pbc=True)
     ms = MoveSelector([1], [DisplacementMove(species=['H'], seed=1)], seed=2)
-    g = _gcmc(atoms, [Cell(atoms)], ms, mu={'H': 0.0}, units_type='LJ')
-    g.do_gcmc_step()  # must not raise
+    g = GrandCanonicalEnsemble(
+        atoms=atoms, cells=[Cell(atoms)], units_type='LJ',
+        calculator=_UphillCalc(), mu={'H': 0.0}, species=['H'],
+        temperature=1.0, move_selector=ms, random_seed=3,
+        traj_file=None, outfile=None,
+    )
+    g.do_gcmc_step()  # uphill move -> exercises the beta-dependent branch
     assert np.isfinite(g.E_old)
 
 
