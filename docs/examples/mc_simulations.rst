@@ -55,7 +55,7 @@ Code
 Outputs
 -------
 
-- ``mc_nvt.out`` — step log with the running lowest energy.
+- ``mc_nvt.out`` — step log with the current accepted energy.
 - ``mc_nvt.xyz`` — every accepted configuration, one frame per acceptance.
 
 Interpretation

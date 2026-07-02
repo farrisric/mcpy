@@ -31,6 +31,7 @@ Code
    from ase.constraints import FixAtoms
    from mace.calculators import mace_mp
 
+   from mcpy.calculators import BaseCalculator
    from mcpy.cell import CustomCell
    from mcpy.ensembles import ReplicaExchange
    from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
@@ -53,9 +54,9 @@ Code
    cell_o  = CustomCell(atoms, custom_height=5.5, bottom_z=12.8 - 2.11,
                         species_radii={'Ag': 2.11, 'O': 0.0})
 
-   calculator = mace_mp(device='cuda')
-   calculator.steps = 40
-   calculator.fmax = 0.1
+   # BaseCalculator relaxes with LBFGS before each energy evaluation;
+   # a bare mace_mp would return unrelaxed energies.
+   calculator = BaseCalculator(mace_mp(device='cuda'), steps=40, fmax=0.1)
 
    mus = {'Ag': -2.99, 'O': -4.91 + delta_mu_O}
 

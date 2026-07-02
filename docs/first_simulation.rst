@@ -123,17 +123,18 @@ Expected output
 
 The log file ``gcmc_first.out`` follows the schema documented in
 :doc:`ensembles`. Each line carries the step index, particle count, current
-energy, and per-move acceptance ratios since the last log line:
+energy, and per-move acceptance ratios since the last log line (the move
+order is spelled out in the header; the initial row logs ``N/A`` ratios):
 
 .. code-block:: text
 
-   step       N           energy           acceptance
-   ----------------------------------------------------------------
-   0          48          -157.21          (initial)
-   10         51          -160.83          ins: 40.0%, del: 0.0%
-   20         53          -163.04          ins: 30.0%, del: 10.0%
+   Step       N_atoms    Energy (eV)     Acceptance Ratios (Ins, Del)
+   -----------------------------------------------------------------
+   0          48         -157.210000     N/A, N/A
+   10         51         -160.830000     40.0%, 0.0%
+   20         53         -163.040000     30.0%, 10.0%
    ...
-   200        58          -168.12          ins: 25.5%, del: 12.0%
+   200        58         -168.120000     25.5%, 12.0%
 
 The trajectory ``gcmc_first.xyz`` can be opened directly in ASE:
 

@@ -47,6 +47,12 @@ Alternatively, you can install the package in editable mode:
 pip install -e .
 ```
 
+To use the MACE calculators (and run the bundled examples), add the `mace` extra:
+
+```sh
+pip install -e .[mace]
+```
+
 ### Optional: NVIDIA Alchemi backend (large systems on CUDA)
 
 For GPU-native MACE evaluation on systems with ≥500 atoms, install the optional
@@ -93,13 +99,12 @@ conda install mpi4py
 Core:
 
 - `ase>=3.23.0`
-- `mace-torch>=0.3.9`
-- `scikit-learn>=1.6.1`
 
 Optional:
 
+- `mace-torch>=0.3.9` — MACE calculators (install via `.[mace]`)
 - `nvalchemi-toolkit[mace]>=0.1.0` — GPU-native MACE (install via `.[alchemi]`)
-- `mpi4py>=4.0.1` — replica exchange (install via conda)
+- `mpi4py>=4.0.3` — replica exchange (install via conda)
 
 ## Usage
 

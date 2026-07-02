@@ -94,20 +94,30 @@ The body of ``run_gcmc`` is the same as in :doc:`../first_simulation`,
 parameterised on ``delta_mu_gas`` so the only difference between runs is
 :math:`\mu_{\mathrm{O}} = \mu_{\mathrm{O}}^{\mathrm{ref}} + \Delta\mu`.
 
-Phase-diagram post-processing (sketch):
+Phase-diagram post-processing with
+:func:`mcpy.utils.phase_diagram.analyze_phase_diagram_results` (concatenate
+the per-condition trajectories into one file first; the reference frame is
+selected by index):
 
 .. code-block:: python
 
-   from mcpy.utils.phase_diagram import surface_gibbs
+   from mcpy.utils.phase_diagram import analyze_phase_diagram_results
 
-   gammas = surface_gibbs(
-       trajectories=glob('sweep/dmu_*/*.xyz'),
-       mu_metal=-3.27,
-       mu_gas_ref=-4.91,
-       e_ref=E_clean_slab,
-       area=slab_area_A2,
+   results = analyze_phase_diagram_results(
+       trajectory_path='sweep/all_relaxed_structures.xyz',
+       host_symbol='Ag',
+       oxygen_symbol='O',
+       idx_ref=0,                    # frame index of the clean reference slab
+       e_host=-2.829,                # bulk Ag energy per atom (eV)
+       delta_mu_o_min=-1.0,
+       delta_mu_o_max=0.0,
+       T=500,
+       output_plot_path='phase_diagram.png',
    )
-   plot_lower_envelope(gammas)
+
+The returned dictionary carries the :math:`\gamma(\Delta\mu_{\mathrm{O}})`
+curves, the stable-phase transitions, and per-phase oxide ratios; the lower
+envelope and the phase tinting are drawn into ``output_plot_path``.
 
 
 Expected output
@@ -117,14 +127,15 @@ You should obtain:
 
 - One ``gcmc_*.xyz`` and ``gcmc_*.out`` pair per :math:`\mu_{\mathrm{O}}`
   value, under ``sweep/dmu_*/``.
-- A phase-diagram figure ``phase_diagram.pdf``, showing one curve per
+- A phase-diagram figure ``phase_diagram.png``, showing one curve per
   condition and a highlighted convex hull marking the stable phases.
 
-A representative log line at the end of a converged run looks like:
+A representative log line at the end of a converged run looks like
+(columns: step, N_atoms, energy, per-move acceptance ratios in move order):
 
 .. code-block:: text
 
-   2000       62          -174.55          ins: 22.3%, del: 10.1%, disp: 41.7%
+   2000       62         -174.550000     22.3%, 10.1%, 41.7%
 
 
 Interpretation

@@ -202,7 +202,6 @@ Save as ``submit_gcmc_alchemi.sh``:
    "$PYTHON" "$SCRIPT" \
        --checkpoint medium-mpa-0 \
        --device cuda \
-       --no-compile \
        --T 500.0 \
        --steps 1000 \
        --delta-mu-O -0.5 \
@@ -276,7 +275,6 @@ Save as ``submit_re_gcmc_batched.sh``:
        --temperatures 250 300 350 400 450 500 \
        --checkpoint medium-mpa-0 \
        --device cuda \
-       --no-compile \
        --gcmc-steps 200 \
        --exchange-interval 10 \
        --delta-mu-O -0.5 \
@@ -292,9 +290,10 @@ Notes specific to the batched path:
   above) share a single ``AlchemiCalculator`` and are evaluated in one batched
   forward pass. Keep ``--gres=gpu:1``; adding ranks or extra GPUs does not help
   this path.
-- **``--no-compile`` is still required**, for the same reason as the
-  single-replica run: insertions/deletions change the atom count, so
-  ``torch.compile`` would recompile every step and OOM.
+- **``torch.compile`` stays on by default**, same as the single-replica run:
+  it handles GCMC's dynamic atom count via dynamic shapes after a one-time
+  warmup. ``--no-compile`` is only the escape hatch if the compile
+  guard-building phase OOMs on a node with tight host-memory limits.
 - **Replica count = number of ``--temperatures``.** More replicas means a
   larger batch and more GPU memory; if startup OOMs, reduce the number of
   temperatures before changing anything else.
