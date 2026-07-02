@@ -116,8 +116,10 @@ Scaling to large systems on GPU
 
 The Alchemi classes are an optional backend. Install them with
 ``pip install -e .[alchemi]``, which pulls in ``nvalchemi-toolkit[mace]`` and
-needs a CUDA-enabled PyTorch build. Set ``compile_model=False`` for GCMC, where
-the atom count changes between trials and a compiled static graph does not hold.
+needs a CUDA-enabled PyTorch build. Keep ``compile_model=True`` (the default):
+GCMC changes the atom count between trials, but torch.compile switches to
+dynamic shapes after the first change, so a run pays a one-time warmup and then
+evaluates every atom count at compiled speed (measured 1.3-1.4x on GCMC).
 
 ``AlchemiCalculator(checkpoint='medium-mpa-0', device='cuda', enable_cueq=True, compile_model=True, energy_only=False, chunk_size=None)``
    GPU-native MACE evaluation with no relaxation. Accepts a named checkpoint, a

@@ -224,10 +224,11 @@ Key SLURM-script rules:
   ``~/.local/lib/python3.11/site-packages``, which on many user homes
   contains stale packages that shadow the env.
 - ``TMPDIR=/tmp/$USER`` — local disk on the compute node, not NFS.
-- **Always pass** ``--no-compile`` to the simulation script. GCMC has a
-  dynamic atom count (insertions/deletions change system size), so
-  ``torch.compile`` would recompile on every new size and OOMs during the
-  guard-building phase. ``compile_model=False`` is required for GCMC.
+- ``torch.compile`` is on by default and handles GCMC's dynamic atom count
+  (after the first size change it switches to dynamic shapes; one-time
+  warmup, then ~1.3-1.4x faster). On nodes with tight host-memory limits the
+  compile guard-building phase can OOM at startup — if you hit that (see
+  troubleshooting below), pass ``--no-compile`` to the simulation script.
 
 
 Batched replica exchange on one GPU
@@ -336,10 +337,10 @@ Common failure modes
      - ``export TMPDIR=/dev/shm/$USER-pip``.
    * - ``InternalTorchDynamoError: MemoryError: std::bad_alloc`` or
        ``Warp CUDA error 2: out of memory`` at startup
-     - ``torch.compile`` tries to JIT-compile the model; the guard-building
-       pass OOMs. GCMC also invalidates the cache on every insert/delete
-       because atom count changes.
-     - Pass ``--no-compile`` to the script (sets ``compile_model=False``).
+     - ``torch.compile`` tries to JIT-compile the model and the guard-building
+       pass OOMs against the job's host-memory limit.
+     - Pass ``--no-compile`` to the script (sets ``compile_model=False``), or
+       request more host memory for the job.
 
 
 Reproducing this exact env later

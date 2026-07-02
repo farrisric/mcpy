@@ -73,7 +73,7 @@ Usage (drop-in replacement for ``MACE_F_Calculator``):
        fmax=0.05,
        device='cuda',
        enable_cueq=True,
-       compile_model=False,   # required for GCMC (dynamic atom count)
+       compile_model=True,    # one-time warmup, then faster even at varying N
        dt=1.0,                # tuned default; not 0.1
    )
 

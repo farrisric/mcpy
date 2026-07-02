@@ -245,7 +245,7 @@ calc = AlchemiFCalculator(
     fmax=0.05,
     device='cuda',
     enable_cueq=True,
-    compile_model=False,   # CRITICAL — dynamic shapes break torch.compile in GCMC
+    compile_model=True,    # ~30-60s warmup + one recompile on first N-change, then faster
     dt=1.0,                # NOT 0.1 — see "FIRE tuning" below
     optimizer='fire',      # 'fire2' has conservative defaults that converge slower
 )
@@ -255,7 +255,7 @@ energy = calc.get_potential_energy(atoms)
 Share a pre-loaded model to avoid reloading per-ensemble:
 ```python
 from nvalchemi.models.mace import MACEWrapper
-model = MACEWrapper.from_checkpoint('medium-mpa-0', enable_cueq=True, compile_model=False, ...)
+model = MACEWrapper.from_checkpoint('medium-mpa-0', enable_cueq=True, compile_model=True, ...)
 calc  = AlchemiFCalculator(checkpoint=model, steps=500, fmax=0.05, dt=1.0)
 ```
 
@@ -273,12 +273,24 @@ Why: ASE FIRE starts at `dt=0.1 fs` and grows to `dtmax=1.0 fs` quickly, so most
 
 FIRE2 defaults (`delaystep=60`, conservative growth) converge slower than tuned FIRE in our tests. Stick with `'fire'`.
 
-### `torch.compile` in GCMC — don't
+### `torch.compile` in GCMC — yes (guidance reversed 2026-07-02)
 
-`compile_model=True` triggers recompile on every new tensor shape. GCMC changes atom count every accepted move → constant recompiles. Energy-only bench showed `compile=True` was **7x slower** than `compile=False` for GCMC. The notes' performance table (17-58x) was fixed-N relax, where compile pays off.
+An earlier version of these notes said compile recompiles on every atom-count change and measured energy-only GCMC 7x slower.
+That is obsolete on the current torch/nvalchemi stack: automatic dynamic shapes kick in after the first N-change, so a variable-N run pays one initial compile plus one recompile, then every atom count runs on the cached dynamic graph.
+Measured on the RTX 5090 (medium-mpa-0, cuEq, fp32, GCMC-like N walk):
 
-For fixed-N MD: `compile_model=True` still helps.
-For GCMC / variable-N workflows: **`compile_model=False`**.
+| Path | uncompiled | compiled | gain |
+|------|-----------:|---------:|-----:|
+| FIRE relax, per FIRE step (~200-290 at) | 15.7 ms | 12.0 ms | 1.30x |
+| FIRE relax, Ag201+O GCMC wall (1600 steps) | 2.89 s/step | 2.02 s/step | 1.43x |
+| Energy-only, per eval (~200-220 at, varying N) | 15.6 ms median | 12.1 ms median | 1.3x (2x on mean) |
+| Forward at 3.7k atoms | 67.7 ms | 34.0 ms | 2.0x |
+
+Warmup cost: ~10-60 s total, once per process.
+`benchmark/gcmc_compile_ab.py` reproduces the A/B; `benchmark/verify_compile_parity.py` checks compiled-vs-uncompiled energies (<= 0.7 meV observed) and must pass after nvalchemi upgrades.
+
+For fixed-N MD and variable-N GCMC alike: **`compile_model=True`** (the default).
+Set `compile_model=False` only for short smoke tests where the warmup dominates.
 
 ---
 
@@ -290,7 +302,7 @@ For GCMC / variable-N workflows: **`compile_model=False`**.
 | `AttributeError: 'Batch' has no attribute 'neighbor_list'` | Model called before NL built | Build NL via hook before any `model(batch)` call |
 | `compute()` silently no-ops | Target tensors absent; `copy_()` skips None targets | Pre-alloc as above |
 | Slow on small systems | Alchemi overhead > GPU benefit below ~400 atoms when MACE is also on CUDA | Use `MACE_F_Calculator(optimizer='lbfgs')` for <400-atom GCMC; Alchemi for ≥500 atoms |
-| GCMC much slower than expected | `compile_model=True` recompiles per atom-count change | Set `compile_model=False` for any variable-N workflow |
+| Long pauses early in a GCMC run | torch.compile warmup + one recompile on the first atom-count change | Expected, once per process (~10-60 s total); only disable compile for short smoke tests |
 | FIRE needs hundreds of steps to converge | Default `dt=0.1` is too small for nvalchemi (its `dt_max=dt*10`) | Use `dt=1.0` — halves the step count |
 | Final energy differs between MACE and Alchemi by ≫0.01 eV | Models silently misaligned (`mace_mp('medium')` ≠ `'medium-mpa-0'`) | Pass identical `--checkpoint` to both sides — they resolve to different cached files |
 | `OptionalDependencyError: mace not installed` | Old error — MACE is installed | Was a stale notebook cell; `pip install 'nvalchemi-toolkit[mace]'` if fresh env |

@@ -80,8 +80,10 @@ chunk_size=None)``, and ``run_md(...)``.
 - ``checkpoint`` (str | MACEWrapper): named checkpoint, local ``.pt`` path, or a
   shared ``MACEWrapper``.
 - ``enable_cueq`` (bool): fused equivariance kernels.
-- ``compile_model`` (bool): ``torch.compile`` the model. Set ``False`` for GCMC,
-  where the atom count changes between trials.
+- ``compile_model`` (bool): ``torch.compile`` the model. Keep ``True`` (the
+  default): after a one-time warmup and one recompile on the first atom-count
+  change, dynamic shapes handle GCMC's varying N at compiled speed. Set
+  ``False`` only for short smoke tests where the warmup dominates.
 - ``max_neighbors`` (int, optional): neighbor-list cap.
 - ``chunk_size`` (int, optional): default sub-batch size for
   ``get_potential_energies``; caps peak GPU memory at one chunk. ``None``
@@ -109,7 +111,8 @@ GPU counterpart of ``MACE_F_Calculator``: FIRE relaxation then energy, honoring
 - ``dt`` (float): FIRE initial timestep.
 - ``optimizer`` (str): ``'fire'`` or ``'fire2'``. Raises ``ValueError``
   otherwise.
-- ``compile_model`` (bool): set ``False`` for GCMC.
+- ``compile_model`` (bool): keep ``True`` (see ``AlchemiCalculator`` above);
+  measured 1.3-1.4x on GCMC after the one-time warmup.
 - ``chunk_size`` (int, optional): default sub-batch size for
   ``get_potential_energies``; caps peak GPU memory at one chunk. Chunked
   relaxation reaches the same minimum to within ``fmax`` but is not bit

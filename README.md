@@ -57,8 +57,9 @@ pip install -e .[alchemi]
 ```
 
 This pulls in `nvalchemi-toolkit[mace]`. Requires a CUDA-enabled PyTorch build.
-See `NVALCHEMI_NOTES.md` for tuning details (`compile_model=False` and `dt=1.0`
-are required for GCMC).
+See `NVALCHEMI_NOTES.md` for tuning details (keep the defaults
+`compile_model=True` and `dt=1.0`; compile costs a one-time warmup and then
+speeds up GCMC even though the atom count varies).
 
 #### GPU memory on long runs
 
