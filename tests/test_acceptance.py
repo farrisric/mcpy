@@ -54,18 +54,18 @@ def test_nvt_zero_temperature_rejects_uphill():
     assert not (e._acceptance_condition(0.5))
 
 
-def test_nvt_uphill_matches_metropolis_boundary(monkeypatch):
-    import mcpy.ensembles.canonical_ensemble as ce
+def test_nvt_uphill_matches_metropolis_boundary():
     from ase.units import kB
 
     diff, T = 0.1, 300.0
     p = np.exp(-diff / (kB * T))
 
     e = _nvt(T)
-    # Accept when the draw is just below p, reject when just above.
-    monkeypatch.setattr(ce.random, "random", lambda: p * 0.99)
+    # Accept when the draw is just below p, reject when just above. The draw
+    # comes from the ensemble-owned generator, never the global random module.
+    e._rng_acceptance = FixedRNG(p * 0.99)
     assert e._acceptance_condition(diff)
-    monkeypatch.setattr(ce.random, "random", lambda: p * 1.01)
+    e._rng_acceptance = FixedRNG(p * 1.01)
     assert not (e._acceptance_condition(diff))
 
 

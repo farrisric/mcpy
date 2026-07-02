@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
 
@@ -11,9 +13,10 @@ class MoveSelector:
       * cumulative counters (``move_counter_total`` /
         ``move_acceptance_total``) — never reset; used by ``finalize_run``.
 
-    Failed trial moves (returning falsy from ``do_trial_move``) are recorded in
-    ``move_failed_counter`` / ``move_failed_counter_total`` and excluded from
-    the acceptance-ratio denominator so ratios reflect viable attempts only.
+    Failed trial moves (``do_trial_move`` returning ``False`` in place of the
+    atoms) are recorded in ``move_failed_counter`` /
+    ``move_failed_counter_total`` and excluded from the acceptance-ratio
+    denominator so ratios reflect viable attempts only.
 
     Parameters
     ----------
@@ -23,13 +26,21 @@ class MoveSelector:
         The moves to sample from.
     seed : int, optional
         Seed for reproducibility.
+    n_moves : int, optional
+        Trial moves the ensemble performs per GCMC step. Defaults to
+        ``round(sum(probabilities))`` (at least 1), which preserves the
+        legacy behavior of integer weights doubling as the trial count.
     """
 
-    def __init__(self, probabilities, move_list, seed=None):
+    def __init__(self, probabilities, move_list, seed=None, n_moves=None):
         assert len(probabilities) == len(move_list)
         self.move_list = move_list
         self.move_list_names = [move.__class__.__name__[:3] for move in move_list]
-        self.n_moves = sum(probabilities)
+        if n_moves is None:
+            n_moves = max(1, round(sum(probabilities)))
+        if n_moves < 1:
+            raise ValueError(f"n_moves must be >= 1, got {n_moves}")
+        self.n_moves = int(n_moves)
         self.rho = np.asarray(np.cumsum(probabilities), dtype=float)
         self._rho_total = float(self.rho[-1])
         self._n_moves_idx = len(self.rho)
@@ -52,16 +63,18 @@ class MoveSelector:
 
     def do_trial_move(self, atoms):
         """Choose a move and apply it. Tracks attempt and (if the move
-        returned falsy) records the failure so ratios use viable attempts."""
+        returned the ``False`` sentinel) records the failure so ratios use
+        viable attempts."""
         self.to_use = self.__get_index__()
         self.move_counter[self.to_use] += 1
         self.move_counter_total[self.to_use] += 1
         result = self.move_list[self.to_use].do_trial_move(atoms)
-        # The move can signal "couldn't propose" by returning a falsy
-        # atoms object (e.g. DeletionMove returns False when the cell is
-        # empty for that species).
+        # The move signals "couldn't propose" by returning False in place of
+        # the atoms (e.g. DeletionMove when the cell is empty for that
+        # species). An identity check, not truthiness: a legitimately empty
+        # Atoms object (last atom deleted) is falsy but IS a valid proposal.
         atoms_new = result[0] if isinstance(result, tuple) else result
-        if not atoms_new:
+        if atoms_new is False or atoms_new is None:
             self.move_failed_counter[self.to_use] += 1
             self.move_failed_counter_total[self.to_use] += 1
         return result
@@ -110,6 +123,11 @@ class MoveSelector:
         return self.interval_ratios()
 
     def get_acceptance_ration(self):  # legacy typo'd name
+        warnings.warn(
+            "MoveSelector.get_acceptance_ration is a deprecated typo'd alias; "
+            "use interval_ratios() (or get_acceptance_ratio()).",
+            DeprecationWarning, stacklevel=2,
+        )
         return self.interval_ratios()
 
     def reset_counters(self):

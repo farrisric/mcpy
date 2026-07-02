@@ -199,9 +199,18 @@ class BatchedReplicaExchange:
             atoms_new, delta_particles, species = (
                 result if isinstance(result, tuple) else (result, 0, None)
             )
-            if atoms_new:
-                trial_meta[i] = (delta_particles, species)
-            # else: move couldn't propose — atoms unchanged, snapshot harmless
+            if atoms_new is False or atoms_new is None:
+                # Move couldn't propose — atoms unchanged, snapshot harmless.
+                # Identity check, not truthiness: an empty Atoms (last atom
+                # deleted) is falsy but is a real proposal.
+                continue
+            if atoms_new is not r.atoms:
+                raise RuntimeError(
+                    f"move '{r.move_selector.get_name()}' returned a "
+                    "different Atoms object; GCMC moves must mutate the "
+                    "passed atoms in place"
+                )
+            trial_meta[i] = (delta_particles, species)
 
         viable = [i for i in active if i in trial_meta]
         if not viable:

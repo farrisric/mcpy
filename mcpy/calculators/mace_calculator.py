@@ -13,7 +13,11 @@ class MACECalculator:
         :param device: Device to load the model on ('cpu' or 'cuda').
         """
         torch_tools.set_default_dtype('float64')
-        self.model = torch.load(model_paths, map_location=device).to(device)
+        self.device = device
+        # weights_only=False: MACE checkpoints are pickled full models, which
+        # torch >= 2.6 refuses to load under its weights_only default.
+        self.model = torch.load(model_paths, map_location=device,
+                                weights_only=False).to(device)
         for param in self.model.parameters():
             param.requires_grad = False
         self.z_table = utils.AtomicNumberTable([int(z) for z in self.model.atomic_numbers])
@@ -34,7 +38,11 @@ class MACECalculator:
             'head': torch.tensor([0], dtype=torch.long),
             'ptr': torch.tensor([0, len(atoms)])
         })
-        return atom_data
+        # AtomicData builds on CPU; the model may live on CUDA.
+        return {
+            k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+            for k, v in atom_data.items()
+        }
 
     def get_potential_energy(self, atoms: Atoms) -> float:
         """

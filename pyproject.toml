@@ -6,12 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "ase>=3.23.0",
-    "mace-torch>=0.3.9",
 #    "mpi4py>=4.0.3",
-    "scikit-learn>=1.6.1",
 ]
 
 [project.optional-dependencies]
+# MACE-torch backend for MACECalculator / MACE_F_Calculator:
+#   pip install -e .[mace]
+mace = [
+    "mace-torch>=0.3.9",
+]
 # NVIDIA Alchemi (nvalchemi-toolkit) — GPU-native MACE evaluation + dynamics.
 # Recommended for systems >= ~500 atoms on CUDA (see NVALCHEMI_NOTES.md).
 # Requires CUDA toolkit and a compatible PyTorch build; install with:

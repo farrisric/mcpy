@@ -32,6 +32,7 @@ class SetUnits:
         """Set units for Lennard-Jones (LJ) potential."""
         self.BOLTZMANN_CONSTANT = 1.0
         self.PLANCK_CONSTANT = 1.0
+        self.beta = 1 / (self.temperature * self.BOLTZMANN_CONSTANT)
         self.masses = {specie: 1 for specie in self.species}
         self.lambda_dbs = {specie: 1 for specie in self.species}
 

@@ -1,4 +1,5 @@
 from ase import Atoms
+from ase.geometry import find_mic
 import numpy as np
 
 from .base_move import BaseMove
@@ -46,9 +47,14 @@ class InsertionMove(BaseMove):
             if len(indices) > 0:
                 positions_bias = atoms.positions[indices]
                 min_sq = self._min_insert_sq
+                # Periodic systems need minimum-image distances: a point near
+                # a box face can overlap an atom's periodic image.
+                use_mic = bool(np.any(np.asarray(atoms.pbc)))
                 placed = False
                 for _ in range(_MAX_INSERT_ATTEMPTS):
                     diff = positions_bias - insert_position
+                    if use_mic:
+                        diff = find_mic(diff, atoms.cell, pbc=atoms.pbc)[0]
                     d2 = np.einsum('ij,ij->i', diff, diff)
                     if d2.min() >= min_sq:
                         placed = True

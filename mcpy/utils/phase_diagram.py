@@ -1,4 +1,5 @@
 import argparse
+import functools
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -8,15 +9,24 @@ from ase.io import read
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.gridspec import GridSpec
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 200,
-        # "font.family": "sans-serif",
-        "font.sans-serif": "Arial",
-        "font.size": 14,
-        "mathtext.default": "regular",
-    }
-)
+# Applied per-call via _with_mpl_style, never at import time: importing mcpy
+# must not rewrite the host application's global rcParams.
+_MPL_STYLE = {
+    "figure.dpi": 200,
+    "font.sans-serif": "Arial",
+    "font.size": 14,
+    "mathtext.default": "regular",
+}
+
+
+def _with_mpl_style(func):
+    """Run ``func`` inside an rc_context so the style (and any rcParams the
+    function sets while plotting) is reverted on return."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with mpl.rc_context(_MPL_STYLE):
+            return func(*args, **kwargs)
+    return wrapper
 
 
 def free_en(en_dft, n_host, n_oxygen, e_host, e_o2, delta_mu_o, delta_mu_host, area):
@@ -28,6 +38,7 @@ def from_mu_to_press(mu, T=500, mu_ref=-0.5, p_0=1, k_b=0.00008617, U_dft=-9.861
     return np.exp(((mu - mu_ref - U_dft) * 2) / (k_b * T)) * p_0
 
 
+@_with_mpl_style
 def analyze_phase_diagram_results(
     trajectory_path="relaxed_structures.xyz",
     host_symbol="Ag",
@@ -242,6 +253,7 @@ def _flatten_frames(frames):
     return flat
 
 
+@_with_mpl_style
 def plot_phase_diagram(
     frames,
     adsorbate="H",

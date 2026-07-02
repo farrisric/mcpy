@@ -33,6 +33,11 @@ class CustomCell(Cell):
         """
         Calculate the dimensions and offset for a custom-height cell.
         """
+        if custom_height is None or bottom_z is None:
+            raise ValueError(
+                "CustomCell requires explicit custom_height and bottom_z "
+                f"(got custom_height={custom_height}, bottom_z={bottom_z})"
+            )
         if custom_height > self.original_dimensions[2][2]:
             raise ValueError("Custom height cannot be greater than the original cell height.")
         if bottom_z < 0 or bottom_z + custom_height > self.original_dimensions[2][2]:
@@ -57,6 +62,9 @@ class CustomCell(Cell):
         """
         Estimate the free volume of the custom cell using kdtree nearest-atom
         queries per unique radius. Avoids the O(N_points * N_atoms) broadcast.
+        Atoms are replicated into neighboring periodic images along the
+        system's periodic directions so exclusion spheres straddling a box
+        face are counted in full.
         """
         n_atoms = len(atoms)
         if n_atoms == 0:
@@ -66,12 +74,13 @@ class CustomCell(Cell):
         frac_coords = self._rng.random((self.mc_sample_points, 3))
         cart_coords = frac_coords @ self.dimensions  # in cell frame
 
-        positions = atoms.positions - self.offset
+        positions = self._periodic_images(atoms)
         symbols = atoms.get_chemical_symbols()
         radii = np.fromiter(
             (self.species_radii[s] for s in symbols),
             dtype=float, count=n_atoms,
         )
+        radii = np.tile(radii, len(positions) // n_atoms)
 
         covered = np.zeros(self.mc_sample_points, dtype=bool)
         for r in np.unique(radii):
@@ -84,6 +93,22 @@ class CustomCell(Cell):
 
         occupied_fraction = float(np.count_nonzero(covered)) / self.mc_sample_points
         self.volume = self.cell_volume * (1.0 - occupied_fraction)
+
+    def _periodic_images(self, atoms):
+        """Positions (cell frame) of the atoms plus their -1/0/+1 periodic
+        images along each periodic direction of the *original* box."""
+        positions = atoms.positions - self.offset
+        pbc = np.asarray(atoms.pbc, dtype=bool)
+        if not pbc.any():
+            return positions
+        shift_ranges = [(-1, 0, 1) if p else (0,) for p in pbc]
+        images = [
+            positions + np.array([i, j, k], dtype=float) @ self.original_dimensions
+            for i in shift_ranges[0]
+            for j in shift_ranges[1]
+            for k in shift_ranges[2]
+        ]
+        return np.concatenate(images)
 
     def get_atoms_specie_inside_cell(self, atoms, specie):
         """

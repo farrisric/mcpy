@@ -102,6 +102,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.exchange_attempts = state["exchange_attempts"]
         if "exchange_successes" in state:
             self.exchange_successes = state["exchange_successes"]
+        # The configuration changed under the cells: refresh their free
+        # volumes now, or the next insertion/deletion acceptance would use
+        # the previous configuration's volume (GCMC only recalculates on
+        # accepted moves).
+        self.calculate_cells_volume(self.atoms)
 
     def get_outfile_header(self) -> str:
         return (
@@ -128,8 +133,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             + "\n" + "-" * self._table_width + "\n"
         )
 
-    def write_outfile(self) -> None:
-        """Write one row: step, N, energy, per-interval acceptance ratios."""
+    def write_outfile(self, step: int = None, energy: float = None) -> None:
+        """Write one row: step, N, energy, per-interval acceptance ratios.
+
+        ``step``/``energy`` are accepted for compatibility with the
+        :class:`BaseEnsemble` signature but ignored — GCMC always logs its
+        own ``_step``/``E_old`` so the row matches the sampler state.
+        """
         if self._outfile is None or self._outfile_handle is None:
             return
         if self._last_logged_step == self._step:
@@ -218,11 +228,21 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
             atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
 
-            if not atoms_new:
+            if atoms_new is False or atoms_new is None:
                 # Move couldn't be proposed (e.g. empty cell). The move did
                 # not mutate ``atoms``; MoveSelector already recorded the
-                # failure so it won't depress the acceptance ratio.
+                # failure so it won't depress the acceptance ratio. Identity
+                # check, not truthiness: an empty Atoms (last atom deleted)
+                # is falsy but is a real proposal that must be scored.
                 continue
+
+            if atoms_new is not atoms:
+                raise RuntimeError(
+                    f"move '{self.move_selector.get_name()}' returned a "
+                    "different Atoms object; GCMC moves must mutate the "
+                    "passed atoms in place (copy-based moves are for "
+                    "CanonicalEnsemble only)"
+                )
 
             E_new = self.compute_energy(atoms)
             delta_E = E_new - self.E_old
