@@ -6,7 +6,7 @@ import argparse
 import os
 
 import numpy as np
-from ase.build import fcc100, fcc111
+from ase.build import fcc100, fcc110, fcc111, fcc211
 from ase.constraints import FixAtoms
 
 from mcpy.utils.logging import configure as configure_logging
@@ -29,7 +29,8 @@ def parse_args():
     p.add_argument('--gas', default='O', help='Gas species symbol')
     p.add_argument('--lattice-param', type=float, default=4.1755, help='fcc lattice constant (Å)')
     p.add_argument('--surface-type', default='111', choices=['111', '100', '110', '211'])
-    p.add_argument('--surface-size', type=int, nargs=3, default=[4, 4, 3])
+    p.add_argument('--surface-size', type=int, nargs=3, default=[4, 4, 3],
+                   help='Slab size; fcc(211) needs the first dim divisible by 3, e.g. 6 4 3')
     p.add_argument('--vacuum', type=float, default=8.0, help='Vacuum spacing (Å)')
     p.add_argument('--T', type=float, default=500.0, help='Temperature (K)')
     p.add_argument('--mu-metal', type=float, default=-3.26999, help='Bulk metal DFT energy (eV)')
@@ -63,15 +64,17 @@ def build_slab(args):
                        periodic=True, vacuum=args.vacuum)
         bottom = [a.index for a in atoms if a.tag == size[-1]]
     elif args.surface_type == '110':
-        # 110 termination: fix last two layers
-        atoms = fcc100(args.metal, a=args.lattice_param, size=size,
+        # 110 termination: fix last two layers (more open surface)
+        atoms = fcc110(args.metal, a=args.lattice_param, size=size,
                        periodic=True, vacuum=args.vacuum)
         bottom = [a.index for a in atoms if a.tag in (size[-1], size[-1] - 1)]
     elif args.surface_type == '211':
-        atoms = fcc100(args.metal, a=args.lattice_param, size=size,
-                       periodic=True, vacuum=args.vacuum)
+        # ASE fcc211 needs size[0] divisible by 3 and assigns no layer tags:
+        # fix the lowest-z layer's worth of atoms instead.
+        atoms = fcc211(args.metal, a=args.lattice_param, size=size,
+                       vacuum=args.vacuum)
         layer = size[0] * size[1]
-        bottom = list(range(len(atoms)))[-layer:]
+        bottom = list(np.argsort(atoms.positions[:, 2])[:layer])
     else:
         raise ValueError(f'Invalid surface type: {args.surface_type}')
     atoms.set_constraint(FixAtoms(indices=bottom))
@@ -107,7 +110,7 @@ def main():
     move_selector = MoveSelector(
         [n, n, n, n],
         [DeletionMove(cell_metal, species=[args.metal], seed=seeds[0]),
-         DeletionMove(cell_gas, species=[args.metal], seed=seeds[1]),
+         DeletionMove(cell_gas, species=[args.gas], seed=seeds[1]),
          InsertionMove(cell_metal, species=[args.metal], min_insert=args.min_insert, seed=seeds[2]),
          InsertionMove(cell_gas, species=[args.gas], min_insert=args.min_insert, seed=seeds[3])],
     )

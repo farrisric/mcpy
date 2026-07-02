@@ -11,6 +11,7 @@ from mcpy.utils.logging import configure as configure_logging
 
 configure_logging()
 
+from mcpy.calculators import BaseCalculator  # noqa: E402
 from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
 from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
@@ -44,7 +45,7 @@ def main():
     cell_ag_o = CustomCell(atoms, custom_height=7, bottom_z=12.8 - 2.068,
                            species_radii={'Ag': 2.068, 'O': 0})
 
-    calculator = mace_mp(device=args.device)
+    mace = mace_mp(device=args.device)
 
     species = ['Ag', 'O']
     move_selector = MoveSelector(
@@ -55,15 +56,16 @@ def main():
          InsertionMove(cell_ag_o, species=['O'], min_insert=0.5, seed=seeds[3])],
     )
 
-    calculator.steps = 100
-    calculator.fmax = 0.05
-    e_o2 = calculator.get_potential_energy(molecule('O2'))
-    e_ag = calculator.get_potential_energy(bulk('Ag', a=4.165))
+    # BaseCalculator relaxes with LBFGS before each energy evaluation; a bare
+    # mace_mp would return unrelaxed energies. Reference mu values use a
+    # stricter relaxation than the GCMC production settings below.
+    ref_calculator = BaseCalculator(mace, steps=100, fmax=0.05)
+    e_o2 = ref_calculator.get_potential_energy(molecule('O2'))
+    e_ag = ref_calculator.get_potential_energy(bulk('Ag', a=4.165))
 
     mus = {'Ag': e_ag - 0.176, 'O': e_o2 / 2 + args.delta_mu_O}
 
-    calculator.steps = 20
-    calculator.fmax = 0.1
+    calculator = BaseCalculator(mace, steps=20, fmax=0.1)
 
     tag = f'{atoms.get_chemical_formula()}_dmu_{args.delta_mu_O}'
     gcmc = GrandCanonicalEnsemble(

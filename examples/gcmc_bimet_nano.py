@@ -14,6 +14,7 @@ from mcpy.utils.logging import configure as configure_logging
 
 configure_logging()
 
+from mcpy.calculators import BaseCalculator  # noqa: E402
 from mcpy.moves import DeletionMove, InsertionMove, PermutationMove  # noqa: E402
 from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
@@ -46,7 +47,9 @@ def main():
     scell = SphericalCell(atoms, vacuum=3, species_radii={'Pt': 2, 'Au': 2.5, 'H': 0},
                           mc_sample_points=100_000)
 
-    calculator = mace_mp(device=args.device)
+    # BaseCalculator relaxes with LBFGS before each energy evaluation; a bare
+    # mace_mp would return unrelaxed energies.
+    calculator = BaseCalculator(mace_mp(device=args.device), steps=100, fmax=0.05)
 
     species = ['H']
     move_selector = MoveSelector(
@@ -56,8 +59,6 @@ def main():
          PermutationMove(species=['Au', 'Pt'], seed=seed_perm)],
     )
 
-    calculator.steps = 100
-    calculator.fmax = 0.05
     e_h2 = calculator.get_potential_energy(molecule('H2'))
 
     mus = {'H': e_h2 / 2 + args.delta_mu_H}
