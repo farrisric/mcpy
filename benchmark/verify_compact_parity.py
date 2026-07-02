@@ -1,21 +1,14 @@
-"""Parity check: compacted batched relaxation vs whole-batch vs serial.
+"""Parity check: compacted batched relaxation vs serial.
 
-Validates the ``compact=True`` path of ``AlchemiFCalculator`` (retire each
-graph from the batch at its first convergence) against:
+Validates the compacted batched path of ``AlchemiFCalculator`` (retire each
+graph from the batch at its first convergence — the only batched path)
+against:
 
-  1. the whole-batch path (``compact=False``, old ``opt.run`` behavior),
-  2. the serial single-graph path (``get_potential_energy`` per structure),
-  3. the physical contract: after write-back, a fresh forward on each relaxed
+  1. the serial single-graph path (``get_potential_energy`` per structure) —
+     same first-convergence stopping rule, so agreement should be tight,
+  2. the physical contract: after write-back, a fresh forward on each relaxed
      structure has max per-atom force <= fmax (excluding FixAtoms rows),
-  4. FixAtoms rows are bit-identical to the input positions.
-
-Note on expected deltas: compact retirement stops each graph at its FIRST
-convergence — the same stopping rule as the serial path — while the
-whole-batch path keeps relaxing fast graphs (below fmax) until the slowest
-graph converges, i.e. it relaxes them deeper. So compact-vs-serial should be
-tight, and compact-vs-whole-batch may show small negative-going deltas
-(whole-batch energies slightly lower). All structures still satisfy the
-force criterion, which is the actual relaxation contract.
+  3. FixAtoms rows are bit-identical to the input positions.
 
 Run in the ``alchemi`` conda env on the GPU box::
 
@@ -88,29 +81,21 @@ def main():
           + ', '.join(f'{len(a)}at' + ('+Fix' if a.constraints else '')
                       for a in structs))
 
-    a_whole = [a.copy() for a in structs]
-    calc.compact = False
-    e_whole = calc.get_potential_energies(a_whole)
-    steps_whole = calc.last_relax_steps
-
     a_comp = [a.copy() for a in structs]
-    calc.compact = True
     e_comp = calc.get_potential_energies(a_comp)
     steps_comp = calc.last_relax_steps
 
     e_serial = np.array([calc.get_potential_energy(a.copy()) for a in structs])
 
-    print(f'\nbatch steps: whole={steps_whole} compact={steps_comp}')
-    print(f'{"graph":>5} {"E_whole":>12} {"E_compact":>12} {"E_serial":>12} '
-          f'{"comp-whole":>11} {"comp-serial":>12}')
+    print(f'\nbatch steps: compact={steps_comp}')
+    print(f'{"graph":>5} {"E_compact":>12} {"E_serial":>12} {"comp-serial":>12}')
     for i in range(len(structs)):
-        print(f'{i:>5} {e_whole[i]:>12.4f} {e_comp[i]:>12.4f} '
-              f'{e_serial[i]:>12.4f} {e_comp[i] - e_whole[i]:>11.4f} '
+        print(f'{i:>5} {e_comp[i]:>12.4f} {e_serial[i]:>12.4f} '
               f'{e_comp[i] - e_serial[i]:>12.4f}')
 
     failures = []
 
-    # 3. force contract on the compacted write-back geometries
+    # 2. force contract on the compacted write-back geometries
     fm = fresh_max_forces(calc, a_comp)
     print('\nfresh max|F| on compacted geometries: '
           + ' '.join(f'{x:.3f}' for x in fm))
@@ -118,22 +103,19 @@ def main():
         failures.append(f'force contract violated: max|F|={fm.max():.3f} '
                         f'> {FMAX} (+10% slack)')
 
-    # 4. FixAtoms rows unchanged
+    # 3. FixAtoms rows unchanged
     fixed = _fixed_indices(structs[5])
     if not np.allclose(a_comp[5].positions[fixed],
                        structs[5].positions[fixed], atol=0.0):
         failures.append('FixAtoms rows moved in compacted path')
 
-    # 2. compact vs serial: same stopping rule -> tight agreement
+    # 1. compact vs serial: same stopping rule -> tight agreement
     d_serial = np.abs(e_comp - e_serial)
     if (d_serial > 0.02).any():
         failures.append(f'compact vs serial max delta {d_serial.max():.4f} eV '
                         f'> 0.02 eV')
 
     print(f'\ncompact-vs-serial |dE|: max={d_serial.max():.4f} eV')
-    print(f'compact-vs-whole   dE : min={np.min(e_comp - e_whole):.4f} '
-          f'max={np.max(e_comp - e_whole):.4f} eV '
-          f'(whole-batch relaxes fast graphs deeper; small +deltas expected)')
 
     if failures:
         print('\nFAIL')

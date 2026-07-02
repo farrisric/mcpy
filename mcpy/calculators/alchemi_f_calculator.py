@@ -23,7 +23,6 @@ from ._alchemi_common import (
     _per_graph_energies,
     _run_langevin_md,
     _write_back_positions,
-    _write_back_positions_batched,
 )
 
 
@@ -65,13 +64,6 @@ class AlchemiFCalculator:
     chunk_size : int | None
         Default sub-batch size for batched relaxation (see
         ``get_potential_energies``). ``None`` relaxes the whole batch at once.
-    compact : bool
-        Batched relaxation only: retire each graph from the batch at its
-        first convergence instead of stepping the full batch until every
-        graph is converged simultaneously (which is what nvalchemi's
-        ``opt.run`` does — converged graphs keep paying the full forward
-        pass). Default True; set False to recover the old whole-batch
-        behavior.
     """
 
     def __init__(
@@ -88,7 +80,6 @@ class AlchemiFCalculator:
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
         head: Union[str, int, None] = None,
-        compact: bool = True,
     ) -> None:
         self.steps = steps
         self.fmax = fmax
@@ -97,7 +88,6 @@ class AlchemiFCalculator:
         self.dt = dt
         self.max_neighbors = max_neighbors
         self.chunk_size = chunk_size
-        self.compact = compact
         self.last_relax_steps = 0
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
@@ -182,10 +172,6 @@ class AlchemiFCalculator:
         _build_nl(batch, nl_hook)
         opt.compute(batch)
 
-        if not self.compact:
-            opt.run(batch)
-            _write_back_positions_batched(atoms_list, batch)
-            return _per_graph_energies(batch.energy, n_graphs), int(opt.step_count)
         return self._run_compacted(opt, batch, atoms_list)
 
     def _run_compacted(self, opt, batch, atoms_list: List[Atoms]) -> tuple:
@@ -255,12 +241,9 @@ class AlchemiFCalculator:
         Batched FIRE relaxation over multiple structures, then per-graph energies.
 
         All graphs in a (sub-)batch share one optimizer / one model forward pass
-        per FIRE step. With ``compact=True`` (the default) each graph is
-        removed from the batch at its first convergence, so already-converged
-        graphs stop paying for the forward pass; with ``compact=False`` the
-        full batch is stepped until every graph is converged at the same step
-        (nvalchemi ``opt.run`` behavior). Returns when every graph has
-        converged or ``steps`` is reached.
+        per FIRE step. Each graph is removed from the batch at its first
+        convergence, so already-converged graphs stop paying for the forward
+        pass. Returns when every graph has converged or ``steps`` is reached.
 
         ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
         most that many structures, each relaxed independently, capping peak GPU
