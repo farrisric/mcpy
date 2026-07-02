@@ -51,8 +51,7 @@ def _load_model(
         return checkpoint
     # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
     # string as a download alias, so it cannot open local paths. ``head``
-    # selects a multihead model's head by name or index. torch.compile is not
-    # applied on this branch (alias path only); cuEq is.
+    # selects a multihead model's head by name or index.
     if isinstance(checkpoint, (str, os.PathLike)) and os.path.exists(checkpoint):
         raw = torch.load(checkpoint, map_location=device, weights_only=False).to(dtype)
         # Resolve the head index before any cuEq conversion, while ``raw.heads``
@@ -71,6 +70,17 @@ def _load_model(
                 ) from exc
             raw = _to_cueq(raw, return_model=True, device=device)
         raw = raw.to(device)
+        if compile_model:
+            # Mirror MACEWrapper.from_checkpoint step 3: the model is
+            # inference-only after this. The e3nn patch is a private nvalchemi
+            # helper; benchmark/verify_compile_parity.py pins it so an upgrade
+            # that renames it fails loudly.
+            from nvalchemi.models.mace import _patch_e3nn_irrep_len_for_compile
+            _patch_e3nn_irrep_len_for_compile()
+            raw.eval()
+            for param in raw.parameters():
+                param.requires_grad = False
+            raw = torch.compile(raw)
         return MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
     if head is not None:
         raise ValueError(
