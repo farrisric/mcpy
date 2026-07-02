@@ -138,24 +138,6 @@ def _write_back_positions(atoms: Atoms, batch: Batch) -> None:
     atoms.positions = relaxed
 
 
-def _write_back_positions_batched(
-    atoms_list: List[Atoms], batch: Batch
-) -> None:
-    """Write per-graph relaxed positions back into each Atoms object."""
-    relaxed = batch.positions.detach().cpu().numpy()
-    batch_idx = batch.batch_idx.detach().cpu().numpy()
-    for i, atoms in enumerate(atoms_list):
-        new_pos = relaxed[batch_idx == i].copy()
-        fixed: set[int] = set()
-        for c in atoms.constraints:
-            if isinstance(c, FixAtoms):
-                fixed.update(c.index.tolist())
-        if fixed:
-            for j in fixed:
-                new_pos[j] = atoms.positions[j]
-        atoms.positions = new_pos
-
-
 def _fixed_indices(atoms: Atoms) -> List[int]:
     """Indices held by ASE ``FixAtoms`` constraints, sorted and de-duplicated."""
     idx: set[int] = set()
