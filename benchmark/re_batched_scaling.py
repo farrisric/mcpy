@@ -227,6 +227,7 @@ def main():
         enable_cueq=not args.no_cueq,
         compile_model=not args.no_compile,
         chunk_size=None,  # whole batch: expose the raw n_replicas memory scaling
+        compact=not args.no_compact,
     )
 
     # Warm the model kernels + record resident (model + context) footprint.
@@ -387,6 +388,9 @@ def parse_args():
     p.add_argument('--checkpoint', default='medium-mpa-0')
     p.add_argument('--no-cueq', action='store_true')
     p.add_argument('--no-compile', action='store_true')
+    p.add_argument('--no-compact', action='store_true',
+                   help='Disable first-convergence batch compaction '
+                        '(old whole-batch opt.run behavior)')
     p.add_argument('--outdir', default=os.path.join(OUTDIR, '_scan_tmp'))
     p.add_argument('--tag', default='',
                    help='Suffix for output filenames (avoids clobbering runs)')

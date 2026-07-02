@@ -65,6 +65,13 @@ class AlchemiFCalculator:
     chunk_size : int | None
         Default sub-batch size for batched relaxation (see
         ``get_potential_energies``). ``None`` relaxes the whole batch at once.
+    compact : bool
+        Batched relaxation only: retire each graph from the batch at its
+        first convergence instead of stepping the full batch until every
+        graph is converged simultaneously (which is what nvalchemi's
+        ``opt.run`` does — converged graphs keep paying the full forward
+        pass). Default True; set False to recover the old whole-batch
+        behavior.
     """
 
     def __init__(
@@ -81,6 +88,7 @@ class AlchemiFCalculator:
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
         head: Union[str, int, None] = None,
+        compact: bool = True,
     ) -> None:
         self.steps = steps
         self.fmax = fmax
@@ -89,6 +97,7 @@ class AlchemiFCalculator:
         self.dt = dt
         self.max_neighbors = max_neighbors
         self.chunk_size = chunk_size
+        self.compact = compact
         self.last_relax_steps = 0
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
@@ -172,10 +181,72 @@ class AlchemiFCalculator:
 
         _build_nl(batch, nl_hook)
         opt.compute(batch)
-        opt.run(batch)
 
-        _write_back_positions_batched(atoms_list, batch)
-        return _per_graph_energies(batch.energy, n_graphs), int(opt.step_count)
+        if not self.compact:
+            opt.run(batch)
+            _write_back_positions_batched(atoms_list, batch)
+            return _per_graph_energies(batch.energy, n_graphs), int(opt.step_count)
+        return self._run_compacted(opt, batch, atoms_list)
+
+    def _run_compacted(self, opt, batch, atoms_list: List[Atoms]) -> tuple:
+        """Step FIRE manually, retiring each graph from the batch at its first
+        convergence so subsequent steps only compute the still-active graphs.
+
+        ``opt.run`` computes the FULL batch every step and stops only when all
+        graphs are converged at the same step; with mixed trial moves the fast
+        graphs pay for the slowest one. Retiring at first convergence also
+        matches the single-graph ``get_potential_energy`` semantics (a lone
+        graph stops at its own first convergence).
+
+        Batch rows are removed with ``Batch.index_select`` and the optimizer's
+        per-graph FIRE state is shrunk in lockstep with
+        ``_sync_state_to_batch`` — the same primitives nvalchemi's inflight
+        refill machinery uses. Positions and energy are harvested per graph at
+        retirement; returns ``(per_graph_energies, step_count)``.
+        """
+        alive = np.arange(len(atoms_list))  # batch row -> atoms_list index
+        energies = np.zeros(len(atoms_list))
+        n_steps = 0
+        opt._open_hooks()
+        try:
+            while alive.size and n_steps < self.steps:
+                batch, conv = opt.step(batch)
+                n_steps += 1
+                if conv is None or conv.numel() == 0:
+                    continue
+                rows = np.unique(conv.detach().cpu().numpy())
+                self._harvest(batch, rows, alive, energies, atoms_list)
+                keep = np.setdiff1d(np.arange(alive.size), rows)
+                alive = alive[keep]
+                if alive.size:
+                    keep_t = torch.as_tensor(keep, device=batch.device)
+                    opt._sync_state_to_batch(keep_t, 0, batch)
+                    batch = batch.index_select(keep_t)
+                    # _last_converged indexes the pre-shrink batch; clear it
+                    # or the next hook context builds an out-of-bounds mask.
+                    opt._last_converged = None
+            if alive.size:  # step cap hit: harvest the stragglers as-is
+                self._harvest(batch, np.arange(alive.size), alive, energies,
+                              atoms_list)
+        finally:
+            opt._close_hooks()
+        return energies, n_steps
+
+    @staticmethod
+    def _harvest(batch, rows, alive, energies, atoms_list) -> None:
+        """Write energy + relaxed positions of ``rows`` (batch row indices)
+        back to their originating Atoms objects, restoring FixAtoms rows."""
+        e = _per_graph_energies(batch.energy, int(batch.num_graphs))
+        pos = batch.positions.detach().cpu().numpy()
+        batch_idx = batch.batch_idx.detach().cpu().numpy()
+        for row in rows:
+            g = int(alive[row])
+            atoms = atoms_list[g]
+            energies[g] = e[row]
+            new_pos = pos[batch_idx == row].copy()
+            for j in _fixed_indices(atoms):
+                new_pos[j] = atoms.positions[j]
+            atoms.positions = new_pos
 
     def get_potential_energies(
         self, atoms_list: List[Atoms], chunk_size: int | None = None
@@ -184,10 +255,12 @@ class AlchemiFCalculator:
         Batched FIRE relaxation over multiple structures, then per-graph energies.
 
         All graphs in a (sub-)batch share one optimizer / one model forward pass
-        per FIRE step. nvalchemi FIRE's ConvergenceHook tracks each graph's
-        max-force and retires it from the active batch when it falls below
-        ``fmax`` — so already-converged replicas don't slow others down. Returns
-        when every graph has converged or ``steps`` is reached.
+        per FIRE step. With ``compact=True`` (the default) each graph is
+        removed from the batch at its first convergence, so already-converged
+        graphs stop paying for the forward pass; with ``compact=False`` the
+        full batch is stepped until every graph is converged at the same step
+        (nvalchemi ``opt.run`` behavior). Returns when every graph has
+        converged or ``steps`` is reached.
 
         ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
         most that many structures, each relaxed independently, capping peak GPU
