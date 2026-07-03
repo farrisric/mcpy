@@ -173,6 +173,17 @@ Atomic moves are unaffected: for them ``get_exchange_count()`` returns
 ``None`` and the ensembles fall back to the total-atom count documented
 above.
 
+The textbook form above holds for ``min_insert=None``. When ``min_insert``
+is set, ``MoleculeInsertionMove`` retries the random position/orientation
+draw (up to 1000 times) against the cell's ``species_radii`` atoms until it
+clears that minimum separation, which effectively restricts the *proposal*
+to the non-overlapping volume; the *acceptance* test still divides by the
+full cell volume ``V``. This is the same proposal/acceptance mismatch
+already noted above for atomic moves (see "What LAMMPS does" -- mcpy's free
+volume is used for the combinatorial factor but insertion points are still
+sampled over the full cell box): at high density it over-accepts insertions
+by roughly :math:`V/V_\text{accessible}`.
+
 Mixing atomic deletion with molecular species is unsupported: an atomic
 :class:`mcpy.moves.DeletionMove` configured for an element that also appears
 inside molecules can delete a single member atom and corrupt the

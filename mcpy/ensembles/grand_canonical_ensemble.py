@@ -190,9 +190,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                               n_atoms: int = None) -> bool:
         """Metropolis / de-Broglie acceptance test for displacement, insertion,
         and deletion moves. ``n_atoms`` is the particle count fed to the de
-        Broglie combinatorial factor; the GCMC loop passes the total atom count
-        before the move (the original convention, kept for consistency with the
-        group's published runs -- see docs/gcmc_acceptance_convention.rst)."""
+        Broglie combinatorial factor. Atomic moves pass the pre-move total
+        atom count (the original convention, kept for consistency with the
+        group's published runs); molecule moves pass their pre-move in-cell
+        molecule count via ``MoveSelector.get_exchange_count()`` -- see
+        docs/gcmc_acceptance_convention.rst."""
         if delta_particles == 0:
             if potential_diff <= 0:
                 return True
