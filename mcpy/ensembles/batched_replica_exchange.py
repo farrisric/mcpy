@@ -190,11 +190,16 @@ class BatchedReplicaExchange:
           3. per-replica Metropolis accept/reject
         """
         snapshots: Dict[int, Dict] = {}
+        constraint_snapshots: Dict[int, list] = {}
         trial_meta: Dict[int, tuple] = {}
 
         for i in active:
             r = self.replicas[i]
             snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
+            # ``del atoms[i]`` in a deletion move remaps FixAtoms indices in
+            # place; a rejected deletion must restore the constraint too or
+            # the fixed set drifts (see GrandCanonicalEnsemble.do_gcmc_step).
+            constraint_snapshots[i] = [c.copy() for c in r.atoms.constraints]
             result = r.move_selector.do_trial_move(r.atoms)
             atoms_new, delta_particles, species = (
                 result if isinstance(result, tuple) else (result, 0, None)
@@ -237,6 +242,7 @@ class BatchedReplicaExchange:
                 r._record_minimum(r.atoms, r.E_old)
             else:
                 r.atoms.arrays = snapshots[i]
+                r.atoms.set_constraint(constraint_snapshots[i])
 
     # --------------------------------------------------------- exchange
 
