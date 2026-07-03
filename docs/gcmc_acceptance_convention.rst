@@ -177,3 +177,10 @@ Mixing atomic deletion with molecular species is unsupported: an atomic
 :class:`mcpy.moves.DeletionMove` configured for an element that also appears
 inside molecules can delete a single member atom and corrupt the
 ``molecule_id`` bookkeeping.
+
+The MPI :class:`mcpy.ensembles.ReplicaExchange` does not support molecular
+species either: its per-species swap bookkeeping counts atoms by symbol
+(``atoms.symbols.count(specie)``), which is always 0 for a molecular name, so
+its constructor raises ``NotImplementedError`` when the wrapped GCMC ensemble
+has molecular species configured; :class:`mcpy.ensembles.BatchedReplicaExchange`
+is the supported replica-exchange path for molecular GCMC.

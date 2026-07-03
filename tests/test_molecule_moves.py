@@ -341,6 +341,27 @@ def test_gcmc_minimum_score_counts_molecules():
     assert g._minimum_score(atoms, -6.0) == pytest.approx(-8.0)
 
 
+def test_replica_exchange_rejects_molecular_species():
+    """MPI ReplicaExchange's per-species swap bookkeeping counts atoms by
+    symbol (docs/gcmc_acceptance_convention.rst), which is always 0 for a
+    molecular name; the constructor must refuse rather than silently drop
+    the mu*N correction (or accept-always on a mu-ladder)."""
+    pytest.importorskip('mpi4py')
+    from mcpy.ensembles.replica_exchange import ReplicaExchange
+
+    class _FakeUnits:
+        molecules = {'H2O': object()}
+
+    class _FakeGCMC:
+        units = _FakeUnits()
+
+    def factory(mu=None, rank=None):
+        return _FakeGCMC()
+
+    with pytest.raises(NotImplementedError, match='molecular species'):
+        ReplicaExchange(factory, mus=[{'H2O': 1.0}])
+
+
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 
 

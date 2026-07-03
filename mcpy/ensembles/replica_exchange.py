@@ -55,6 +55,16 @@ class ReplicaExchange:
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
 
+        if self.gcmc.units.molecules:
+            raise NotImplementedError(
+                "ReplicaExchange (MPI) does not support molecular species: "
+                "its per-species swap bookkeeping (_exchange_prob_T / "
+                "_exchange_prob_mu) counts atoms by symbol via "
+                "`atoms.symbols.count(specie)`, which is always 0 for a "
+                "molecular name such as 'H2O'. Use BatchedReplicaExchange "
+                "instead."
+            )
+
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
 
