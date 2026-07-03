@@ -214,7 +214,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             # On rejection we restore from this snapshot, which also undoes
             # any in-place relaxation done by ``compute_energy``. This
             # replaces the previous ``atoms.copy()`` per trial in the moves.
+            # Constraints too: ``del atoms[i]`` remaps FixAtoms indices in
+            # place (ASE ``delete_atoms``), so a rejected deletion would
+            # otherwise leave the restored configuration with shifted fixed
+            # indices — wrong atoms frozen from then on.
             saved_arrays = {k: v.copy() for k, v in atoms.arrays.items()}
+            saved_constraints = [c.copy() for c in atoms.constraints]
 
             atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
 
@@ -244,6 +249,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                                   volume, delta_particles, species)
             else:
                 atoms.arrays = saved_arrays
+                atoms.set_constraint(saved_constraints)
 
     def initialize_run(self) -> None:
         """Open files, write headers, log start, write initial state."""
