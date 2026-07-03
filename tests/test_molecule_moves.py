@@ -253,3 +253,21 @@ def test_molecule_deletion_ignores_other_compositions():
     # Only the O2 was deleted; the water is intact.
     assert len(atoms) == 4
     assert sorted(atoms.get_chemical_symbols()) == ['H', 'H', 'H', 'O']
+
+
+from mcpy.moves import DeletionMove, MoveSelector
+
+
+def test_move_selector_exchange_count():
+    atoms = _water_box()
+    cell = Cell(atoms)
+    mol_move = MoleculeDeletionMove(cell, _water_template(), 'H2O', seed=1)
+    atomic_move = DeletionMove(cell, species=['H'], seed=2)
+
+    ms = MoveSelector([1, 0], [mol_move, atomic_move], seed=3)
+    ms.do_trial_move(atoms)  # weight 0 on atomic: molecule move chosen
+    assert ms.get_exchange_count() == 1
+
+    ms2 = MoveSelector([0, 1], [mol_move, atomic_move], seed=3)
+    ms2.do_trial_move(atoms)
+    assert ms2.get_exchange_count() is None

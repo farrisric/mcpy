@@ -82,6 +82,17 @@ class MoveSelector:
     def get_volume(self):
         return self.move_list[self.to_use].get_volume()
 
+    def get_exchange_count(self):
+        """Pre-move exchangeable-particle count reported by the chosen move.
+
+        Molecule moves set ``last_exchange_count`` (in-cell molecule count of
+        their species); atomic moves don't have the attribute, so this returns
+        ``None`` and the ensemble falls back to its total-atom convention
+        (docs/gcmc_acceptance_convention.rst). Stateful like :meth:`get_volume`:
+        valid for the move chosen by the last :meth:`do_trial_move`.
+        """
+        return getattr(self.move_list[self.to_use], 'last_exchange_count', None)
+
     def calculate_volume(self, atoms):
         return self.move_list[self.to_use].calculate_volume(atoms)
 
