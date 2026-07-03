@@ -7,6 +7,7 @@ from .deletion_move import DeletionMove
 from .displacement_move import DisplacementMove
 from .permutation_move import PermutationMove
 from .molecule_insertion_move import MoleculeInsertionMove
+from .molecule_deletion_move import MoleculeDeletionMove
 
 __all__ = [
     "MoveSelector",
@@ -18,4 +19,5 @@ __all__ = [
     "InsertionMove",
     "PermutationMove",
     "MoleculeInsertionMove",
+    "MoleculeDeletionMove",
 ]

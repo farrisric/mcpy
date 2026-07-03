@@ -210,3 +210,46 @@ def test_molecule_insertion_min_insert_unplaceable():
     result, delta, name = move.do_trial_move(atoms)
     assert result is False
     assert len(atoms) == 1
+
+
+from mcpy.moves import MoleculeDeletionMove
+
+
+def test_molecule_deletion_removes_whole_molecule():
+    atoms = _water_box()
+    move = MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is atoms
+    assert delta == -1 and name == 'H2O'
+    # The H2O (3 atoms) is gone; the O2 and lone H remain.
+    assert len(atoms) == 3
+    assert sorted(atoms.get_chemical_symbols()) == ['H', 'O', 'O']
+    assert move.last_exchange_count == 1
+
+
+def test_molecule_deletion_no_candidates():
+    atoms = _box_atoms()  # no molecule_id array at all
+    move = MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False
+    assert delta == -1 and name == 'H2O'
+    assert len(atoms) == 2
+
+
+def test_molecule_deletion_min_molecules_floor():
+    atoms = _water_box()
+    move = MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O',
+                                seed=1, min_molecules=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False
+    assert len(atoms) == 6
+
+
+def test_molecule_deletion_ignores_other_compositions():
+    atoms = _water_box()
+    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
+    move = MoleculeDeletionMove(Cell(atoms), o2, 'O2', seed=1)
+    move.do_trial_move(atoms)
+    # Only the O2 was deleted; the water is intact.
+    assert len(atoms) == 4
+    assert sorted(atoms.get_chemical_symbols()) == ['H', 'H', 'H', 'O']
