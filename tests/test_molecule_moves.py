@@ -137,3 +137,76 @@ def test_setunits_rejects_isomer_compositions():
     with pytest.raises(ValueError, match='composition'):
         SetUnits('metal', temperature=300.0, species=[],
                  molecules={'co2_linear': a, 'co2_alt': b})
+
+
+from mcpy.moves import MoleculeInsertionMove
+
+
+def _water_template():
+    return build_molecule('H2O')
+
+
+def _empty_box():
+    atoms = Atoms(cell=[10, 10, 10], pbc=True)
+    return atoms
+
+
+def test_molecule_insertion_adds_whole_molecule():
+    atoms = _box_atoms()  # 2 H atoms, no molecule_id array yet
+    move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is atoms
+    assert delta == 1 and name == 'H2O'
+    assert len(atoms) == 5
+    # Lazy array creation: originals get -1, the new molecule a fresh id.
+    ids = atoms.arrays['molecule_id']
+    np.testing.assert_array_equal(ids[:2], [-1, -1])
+    assert set(ids[2:]) == {0}
+    # Rigid insertion: internal distances match the template.
+    template = _water_template()
+    d_new = atoms.get_all_distances()[2:, 2:]
+    d_tmpl = template.get_all_distances()
+    np.testing.assert_allclose(np.sort(d_new.ravel()), np.sort(d_tmpl.ravel()),
+                               atol=1e-10)
+    assert move.last_exchange_count == 0
+
+
+def test_molecule_insertion_orientations_vary():
+    move = MoleculeInsertionMove(Cell(_empty_box()), _water_template(), 'H2O', seed=3)
+    vecs = []
+    for _ in range(2):
+        atoms = _empty_box()
+        move.do_trial_move(atoms)
+        # O->H1 bond direction as an orientation fingerprint.
+        vecs.append(atoms.positions[1] - atoms.positions[0])
+    assert not np.allclose(vecs[0], vecs[1])
+
+
+def test_molecule_insertion_max_molecules_cap():
+    atoms = _water_box()  # already contains one H2O
+    move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O',
+                                 seed=1, max_molecules=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False
+    assert delta == 1 and name == 'H2O'
+    assert len(atoms) == 6  # unchanged
+
+
+def test_molecule_insertion_next_id_after_existing():
+    atoms = _water_box()  # ids 0 (H2O) and 1 (O2) present
+    move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
+    move.do_trial_move(atoms)
+    assert atoms.arrays['molecule_id'].max() == 2
+    assert move.last_exchange_count == 1  # one H2O before the move
+
+
+def test_molecule_insertion_min_insert_unplaceable():
+    # Cell whose species list covers the existing atom; min_insert larger
+    # than any possible separation in the box makes placement impossible.
+    atoms = Atoms('H', positions=[[5, 5, 5]], cell=[4, 4, 4], pbc=True)
+    cell = Cell(atoms, species_radii={'H': 1.0})
+    move = MoleculeInsertionMove(cell, _water_template(), 'H2O',
+                                 seed=1, min_insert=50.0)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False
+    assert len(atoms) == 1
