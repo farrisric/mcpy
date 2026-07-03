@@ -54,6 +54,7 @@ def _gcmc(atoms, move, accept):
         get_volume=lambda: 100.0,
         get_name=lambda: 'deletion',
         acceptance_counter=lambda: None,
+        get_exchange_count=lambda: None,
     )
     e._acceptance_condition = lambda *a, **k: accept
     e._wrap_on_accept = False
@@ -98,6 +99,7 @@ def test_batched_rejected_deletion_restores_constraint():
             get_volume=lambda: 100.0,
             get_name=lambda: 'deletion',
             acceptance_counter=lambda: None,
+            get_exchange_count=lambda: None,
         ),
         E_old=0.0,
         n_atoms=len(atoms),

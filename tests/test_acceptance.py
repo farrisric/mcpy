@@ -210,6 +210,7 @@ def test_do_gcmc_step_feeds_total_atom_count():
 
     e.move_selector = types.SimpleNamespace(
         n_moves=1, do_trial_move=_insert, get_volume=lambda: 100.0,
+        get_exchange_count=lambda: None,
     )
 
     captured = {}

@@ -271,3 +271,71 @@ def test_move_selector_exchange_count():
     ms2 = MoveSelector([0, 1], [mol_move, atomic_move], seed=3)
     ms2.do_trial_move(atoms)
     assert ms2.get_exchange_count() is None
+
+
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+
+
+class _StubCalc:
+    def get_potential_energy(self, atoms):
+        return -1.0 * len(atoms)
+
+
+class _HugeUphillCalc:
+    """Forces rejection of every move (acceptance probability ~ 0)."""
+
+    def get_potential_energy(self, atoms):
+        return 1.0e6 * len(atoms)
+
+
+def _mol_gcmc(atoms, move_selector, calculator, mu_h2o=0.0):
+    return GrandCanonicalEnsemble(
+        atoms=atoms, cells=[Cell(atoms)], units_type='LJ',
+        calculator=calculator, mu={'H2O': mu_h2o}, species=[],
+        temperature=1.0, move_selector=move_selector, random_seed=3,
+        traj_file=None, outfile=None,
+        molecules={'H2O': _water_template()},
+    )
+
+
+def test_gcmc_acceptance_uses_molecule_count():
+    atoms = _water_box()  # 6 atoms, one H2O molecule
+    ms = MoveSelector(
+        [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
+        seed=2)
+    g = _mol_gcmc(atoms, ms, _StubCalc())
+
+    captured = {}
+    original = g._acceptance_condition
+
+    def spy(potential_diff, delta_particles, volume, species, n_atoms=None):
+        captured['n'] = n_atoms
+        return original(potential_diff, delta_particles, volume, species, n_atoms)
+
+    g._acceptance_condition = spy
+    g.do_gcmc_step()
+    # Molecule count (1 H2O), not the 6-atom total.
+    assert captured['n'] == 1
+
+
+def test_gcmc_rejected_molecule_move_rolls_back():
+    atoms = _water_box()
+    n_before = len(atoms)
+    ids_before = atoms.arrays['molecule_id'].copy()
+    ms = MoveSelector(
+        [1], [MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
+        seed=2)
+    g = _mol_gcmc(atoms, ms, _HugeUphillCalc(), mu_h2o=-1.0e9)
+    g.do_gcmc_step()
+    assert len(g.atoms) == n_before
+    np.testing.assert_array_equal(g.atoms.arrays['molecule_id'], ids_before)
+
+
+def test_gcmc_minimum_score_counts_molecules():
+    atoms = _water_box()
+    ms = MoveSelector(
+        [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
+        seed=2)
+    g = _mol_gcmc(atoms, ms, _StubCalc(), mu_h2o=2.0)
+    # Omega = E - mu * N_molecules = E - 2.0 * 1
+    assert g._minimum_score(atoms, -6.0) == pytest.approx(-8.0)

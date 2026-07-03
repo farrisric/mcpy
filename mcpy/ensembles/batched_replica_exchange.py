@@ -228,11 +228,15 @@ class BatchedReplicaExchange:
             delta_particles, species = trial_meta[i]
             delta_E = float(E_new) - r.E_old
             volume = r.move_selector.get_volume()
-            # de Broglie particle count: total atom count before the move
-            # (``r.n_atoms`` is updated only on acceptance). See
+            # de Broglie particle count: molecule moves report their in-cell
+            # molecule count, atomic moves fall back to the pre-move total
+            # atom count (``r.n_atoms`` is updated only on acceptance). See
             # docs/gcmc_acceptance_convention.rst.
+            n_exchange = r.move_selector.get_exchange_count()
+            if n_exchange is None:
+                n_exchange = r.n_atoms
             if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                       r.n_atoms):
+                                       n_exchange):
                 if r._wrap_on_accept:
                     r.atoms.wrap()
                 r.n_atoms = len(r.atoms)
