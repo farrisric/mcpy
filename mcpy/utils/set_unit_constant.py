@@ -9,17 +9,35 @@ class SetUnits:
     def __init__(self,
                  unit_type: str,
                  temperature: float,
-                 species: List) -> None:
+                 species: List,
+                 molecules: dict = None) -> None:
         """
         Initialize the SetUnits class with a specific unit type.
 
         Parameters:
         unit_type (str): The type of units to set. Possible values are "LJ" or "metal".
-        species (List): List of species for which to set units.
+        species (List): List of atomic species for which to set units.
+        molecules (dict, optional): Mapping of molecular species name to an
+            ASE Atoms template. The name is the key used in ``mu`` and
+            ``lambda_dbs``; the mass is the sum of the template's atomic
+            masses. Molecular species are identified by composition, so two
+            templates with the same composition cannot coexist.
         """
         self.unit_type = unit_type
         self.species = species
         self.temperature = temperature
+        self.molecules = molecules or {}
+
+        compositions = {}
+        for name, template in self.molecules.items():
+            key = tuple(sorted(template.get_chemical_symbols()))
+            if key in compositions:
+                raise ValueError(
+                    f"molecular species '{name}' and '{compositions[key]}' share "
+                    f'composition {key}; molecules are identified by composition '
+                    'so they cannot coexist'
+                )
+            compositions[key] = name
 
         if unit_type == "LJ":
             self._set_lj_units()
@@ -33,8 +51,9 @@ class SetUnits:
         self.BOLTZMANN_CONSTANT = 1.0
         self.PLANCK_CONSTANT = 1.0
         self.beta = 1 / (self.temperature * self.BOLTZMANN_CONSTANT)
-        self.masses = {specie: 1 for specie in self.species}
-        self.lambda_dbs = {specie: 1 for specie in self.species}
+        names = list(self.species) + list(self.molecules)
+        self.masses = {specie: 1 for specie in names}
+        self.lambda_dbs = {specie: 1 for specie in names}
 
     def _set_metal_units(self) -> None:
         """Set units for metal potential."""
@@ -45,6 +64,8 @@ class SetUnits:
         self.beta = 1/(self.temperature*self.BOLTZMANN_CONSTANT)
 
         self.masses = {specie: atomic_masses[atomic_numbers[specie]] for specie in self.species}
+        for name, template in self.molecules.items():
+            self.masses[name] = float(template.get_masses().sum())
         self.lambda_dbs = {
             specie: (
                 self.PLANCK_CONSTANT / np.sqrt(
@@ -52,7 +73,7 @@ class SetUnits:
                     self.mass_conversion_factor * (1 / self.beta)
                     )
                 ) * self.lambda_conversion_factor
-            for specie in self.species
+            for specie in self.masses
         }
 
     def de_broglie_insertion(self, volume, n_atoms, specie: str) -> float:
