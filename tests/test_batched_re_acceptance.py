@@ -13,6 +13,7 @@ from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 class _FakeUnits:
     def __init__(self, beta):
         self.beta = beta
+        self.molecules = {}
 
 
 class _FakeAtoms:
@@ -29,6 +30,16 @@ class _FakeReplica:
         self.E_old = energy
         self._mu = mu
         self.atoms = _FakeAtoms(symbols)
+
+    def _minimum_score(self, atoms, energy):
+        """Mirrors GrandCanonicalEnsemble._minimum_score for atomic species
+        (these fakes carry no molecular species) so _grand_potential's
+        delegation to it can be exercised without a real ensemble."""
+        score = energy
+        symbols = atoms.get_chemical_symbols()
+        for specie, mu in (self._mu or {}).items():
+            score -= mu * symbols.count(specie)
+        return score
 
 
 class _FakeRng:

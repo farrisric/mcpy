@@ -341,6 +341,22 @@ def test_gcmc_minimum_score_counts_molecules():
     assert g._minimum_score(atoms, -6.0) == pytest.approx(-8.0)
 
 
+from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
+
+
+def test_batched_re_grand_potential_counts_molecules():
+    """BatchedReplicaExchange._grand_potential delegates to _minimum_score,
+    which counts whole molecules via find_molecules; Counter(get_chemical_
+    symbols()) would count 'H2O' 0 times and silently drop the mu*N term."""
+    atoms = _water_box()  # one H2O, one O2, one lone H
+    ms = MoveSelector(
+        [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
+        seed=2)
+    g = _mol_gcmc(atoms, ms, _StubCalc(), mu_h2o=2.0)
+    expected = g.E_old - 2.0 * 1  # one H2O molecule, not zero
+    assert BatchedReplicaExchange._grand_potential(g) == pytest.approx(expected)
+
+
 def test_gcmc_molecule_smoke_lj():
     """Short LJ-units GCMC run with O2 insert/delete: no crash, bookkeeping
     stays consistent (every molecule id maps to exactly one O2)."""

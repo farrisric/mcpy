@@ -285,12 +285,15 @@ class BatchedReplicaExchange:
 
     @staticmethod
     def _grand_potential(r) -> float:
-        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ."""
-        mu = getattr(r, '_mu', None)
-        if not mu:
-            return r.E_old
-        counts = Counter(r.atoms.get_chemical_symbols())
-        return r.E_old - sum(mu_s * counts[s] for s, mu_s in mu.items())
+        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ.
+
+        Delegates to the replica's own ``_minimum_score``, which is exactly
+        this same grand-potential definition and already counts molecules
+        correctly for molecular mu keys (via ``find_molecules``) instead of
+        ``atoms.get_chemical_symbols()``, which is always 0 for a molecular
+        name such as ``'H2O'``.
+        """
+        return r._minimum_score(r.atoms, r.E_old)
 
     def _swap_states(self, i: int, j: int) -> None:
         """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to
