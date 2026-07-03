@@ -150,3 +150,30 @@ Where this lives in the code and tests
 - ``tests/test_custom_cell_region.py`` —
   ``test_subsurface_oxygen_is_excluded_from_deletion_candidates`` documents the
   buried-O caveat.
+
+
+Molecular moves
+---------------
+
+Rigid-molecule insertion/deletion (:class:`mcpy.moves.MoleculeInsertionMove`,
+:class:`mcpy.moves.MoleculeDeletionMove`) do **not** use the total-atom
+convention above. They use the textbook rigid-molecule form: ``N`` is the
+number of molecules of the exchanged species whose center of mass lies inside
+the move's cell, reported by the move itself through
+``MoveSelector.get_exchange_count()``. :math:`\Lambda` is computed from the
+total molecular mass, and ``delta_particles`` remains :math:`\pm 1` (one
+molecule per move).
+
+Orientations are sampled uniformly, so the rotational partition function is
+absorbed into :math:`\mu`: the chemical potential passed for a molecular
+species must be the **full** molecular chemical potential (translational,
+rotational, and internal contributions of the reference reservoir included).
+
+Atomic moves are unaffected: for them ``get_exchange_count()`` returns
+``None`` and the ensembles fall back to the total-atom count documented
+above.
+
+Mixing atomic deletion with molecular species is unsupported: an atomic
+:class:`mcpy.moves.DeletionMove` configured for an element that also appears
+inside molecules can delete a single member atom and corrupt the
+``molecule_id`` bookkeeping.
