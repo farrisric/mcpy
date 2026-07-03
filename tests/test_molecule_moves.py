@@ -22,3 +22,72 @@ def test_box_cell_is_point_inside_always_true():
     cell = Cell(_box_atoms())
     assert cell.is_point_inside(np.array([5.0, 5.0, 5.0]))
     assert cell.is_point_inside(np.array([-100.0, 0.0, 1e6]))
+
+
+from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
+                                       random_rotation_matrix)
+from mcpy.utils import RandomNumberGenerator
+
+
+def _water_box():
+    """Box with one H2O (id 0), one O2 (id 1), and one lone H (id -1)."""
+    atoms = Atoms('OH2O2H',
+                  positions=[[5.0, 5.0, 5.0],    # O  of H2O
+                             [5.8, 5.0, 5.0],    # H  of H2O
+                             [5.0, 5.8, 5.0],    # H  of H2O
+                             [2.0, 2.0, 2.0],    # O  of O2
+                             [2.0, 2.0, 3.2],    # O  of O2
+                             [8.0, 8.0, 8.0]],   # lone H
+                  cell=[10, 10, 10], pbc=True)
+    atoms.new_array('molecule_id', np.array([0, 0, 0, 1, 1, -1]))
+    return atoms
+
+
+def test_molecule_com_plain():
+    atoms = _water_box()
+    members = np.array([3, 4])
+    com = molecule_com(atoms, members)
+    np.testing.assert_allclose(com, [2.0, 2.0, 2.6])
+
+
+def test_molecule_com_mic_across_boundary():
+    # O2 straddling the z boundary: atoms at z=9.8 and z=0.6 (bond 0.8 via mic).
+    atoms = Atoms('O2', positions=[[5, 5, 9.8], [5, 5, 0.6]],
+                  cell=[10, 10, 10], pbc=True)
+    atoms.new_array('molecule_id', np.array([0, 0]))
+    com = molecule_com(atoms, np.array([0, 1]))
+    # Midpoint of the unwrapped pair (z = 10.2) wrapped back into the box.
+    np.testing.assert_allclose(com, [5.0, 5.0, 0.2], atol=1e-10)
+
+
+def test_find_molecules_filters_composition():
+    atoms = _water_box()
+    water = find_molecules(atoms, sorted(['O', 'H', 'H']))
+    assert len(water) == 1
+    np.testing.assert_array_equal(water[0], [0, 1, 2])
+    oxygen = find_molecules(atoms, sorted(['O', 'O']))
+    assert len(oxygen) == 1
+    np.testing.assert_array_equal(oxygen[0], [3, 4])
+
+
+def test_find_molecules_missing_array_and_cell_filter():
+    plain = _box_atoms()
+    assert find_molecules(plain, ['H', 'H']) == []
+
+    class _NowhereCell:
+        def is_point_inside(self, point):
+            return False
+
+    atoms = _water_box()
+    assert find_molecules(atoms, sorted(['O', 'H', 'H']), _NowhereCell()) == []
+
+
+def test_random_rotation_matrix_is_rotation():
+    rng = RandomNumberGenerator(seed=7)
+    r1 = random_rotation_matrix(rng)
+    r2 = random_rotation_matrix(rng)
+    for r in (r1, r2):
+        np.testing.assert_allclose(r @ r.T, np.eye(3), atol=1e-12)
+        assert np.linalg.det(r) == pytest.approx(1.0)
+    # Consecutive draws differ: orientation is actually random.
+    assert not np.allclose(r1, r2)
