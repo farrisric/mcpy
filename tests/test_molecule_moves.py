@@ -383,7 +383,11 @@ def test_gcmc_molecule_smoke_lj():
     stays consistent (every molecule id maps to exactly one O2)."""
     o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
     atoms = Atoms(cell=[8, 8, 8], pbc=True)
-    cell = Cell(atoms)
+    # species_radii non-empty so cell.get_species() is non-empty and the
+    # min_insert retry path below actually runs against real neighbors
+    # (an empty species_radii makes get_atoms_specie_inside_cell always
+    # return no indices, silently skipping the overlap filter).
+    cell = Cell(atoms, species_radii={'O': 0.0})
     ms = MoveSelector(
         [1, 1],
         [MoleculeInsertionMove(cell, o2, 'O2', seed=11, min_insert=0.8),
@@ -424,3 +428,44 @@ def test_write_xyz_molecule_id_roundtrip(tmp_path):
     write_xyz(atoms, -1.0, path)
     back = ase.io.read(path)
     np.testing.assert_array_equal(back.arrays['molecule_id'], [7, 7])
+
+
+def test_find_molecules_queries_com_point():
+    """The point handed to cell.is_point_inside must be the molecule's
+    center of mass, not e.g. the first member's position."""
+    atoms = _water_box()
+    recorded = {}
+
+    class _RecordingCell:
+        def is_point_inside(self, point):
+            recorded['point'] = point
+            return True
+
+    find_molecules(atoms, sorted(['O', 'H', 'H']), _RecordingCell())
+    np.testing.assert_allclose(recorded['point'],
+                               molecule_com(atoms, np.array([0, 1, 2])))
+
+
+def test_molecule_deletion_picks_among_multiple_candidates():
+    """With two O2 candidates, repeated trials (fresh atoms, different seeds)
+    must be able to pick either one -- not always the first found -- and
+    last_exchange_count must report both candidates every time."""
+    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
+
+    def _two_o2_box():
+        atoms = Atoms('O4', positions=[[1, 1, 1], [1, 1, 2.2],
+                                       [5, 5, 5], [5, 5, 6.2]],
+                      cell=[10, 10, 10], pbc=True)
+        atoms.new_array('molecule_id', np.array([0, 0, 1, 1]))
+        return atoms
+
+    deleted_ids = set()
+    for seed in range(1, 21):
+        atoms = _two_o2_box()
+        move = MoleculeDeletionMove(Cell(atoms), o2, 'O2', seed=seed)
+        result, delta, name = move.do_trial_move(atoms)
+        assert result is atoms
+        assert move.last_exchange_count == 2
+        remaining_ids = set(atoms.arrays['molecule_id'].tolist())
+        deleted_ids |= {0, 1} - remaining_ids
+    assert deleted_ids == {0, 1}
