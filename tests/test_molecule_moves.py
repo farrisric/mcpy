@@ -374,3 +374,16 @@ def test_gcmc_molecule_smoke_lj():
                     == ['O', 'O']
     assert np.isfinite(g.E_old)
     assert len(seen_n) > 1  # N actually fluctuated
+
+
+def test_write_xyz_molecule_id_roundtrip(tmp_path):
+    import ase.io
+
+    from mcpy.ensembles.base_ensemble import write_xyz
+
+    atoms = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]], cell=[8, 8, 8], pbc=True)
+    atoms.new_array('molecule_id', np.array([7, 7]))
+    path = str(tmp_path / 'frame.xyz')
+    write_xyz(atoms, -1.0, path)
+    back = ase.io.read(path)
+    np.testing.assert_array_equal(back.arrays['molecule_id'], [7, 7])
