@@ -91,9 +91,7 @@ def main():
         steps=args.relax_steps,
         fmax=args.fmax,
         device=args.device,
-        # Off deliberately: at ~3.7k atoms the compile guard-building phase
-        # OOMs; compile is on by default elsewhere and preferred below ~2k.
-        compile_model=False,
+        compile_model=True,
         max_neighbors=args.max_neighbors,
         optimizer=args.optimizer,
     )
