@@ -60,6 +60,17 @@ def test_molecule_com_mic_across_boundary():
     np.testing.assert_allclose(com, [5.0, 5.0, 0.2], atol=1e-10)
 
 
+def test_molecule_com_is_mass_weighted():
+    # H2O has heterogeneous masses: compare against ASE's own COM (independent
+    # oracle; the molecule does not straddle a boundary) and confirm the result
+    # differs from the unweighted mean.
+    atoms = _water_box()
+    members = np.array([0, 1, 2])
+    com = molecule_com(atoms, members)
+    np.testing.assert_allclose(com, atoms[members].get_center_of_mass())
+    assert not np.allclose(com, atoms.positions[members].mean(axis=0))
+
+
 def test_find_molecules_filters_composition():
     atoms = _water_box()
     water = find_molecules(atoms, sorted(['O', 'H', 'H']))
