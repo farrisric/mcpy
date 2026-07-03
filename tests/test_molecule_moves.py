@@ -339,3 +339,38 @@ def test_gcmc_minimum_score_counts_molecules():
     g = _mol_gcmc(atoms, ms, _StubCalc(), mu_h2o=2.0)
     # Omega = E - mu * N_molecules = E - 2.0 * 1
     assert g._minimum_score(atoms, -6.0) == pytest.approx(-8.0)
+
+
+def test_gcmc_molecule_smoke_lj():
+    """Short LJ-units GCMC run with O2 insert/delete: no crash, bookkeeping
+    stays consistent (every molecule id maps to exactly one O2)."""
+    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
+    atoms = Atoms(cell=[8, 8, 8], pbc=True)
+    cell = Cell(atoms)
+    ms = MoveSelector(
+        [1, 1],
+        [MoleculeInsertionMove(cell, o2, 'O2', seed=11, min_insert=0.8),
+         MoleculeDeletionMove(cell, o2, 'O2', seed=12)],
+        seed=13,
+    )
+    g = GrandCanonicalEnsemble(
+        atoms=atoms, cells=[cell], units_type='LJ',
+        calculator=_StubCalc(), mu={'O2': 1.0}, species=[],
+        temperature=1.0, move_selector=ms, random_seed=14,
+        traj_file=None, outfile=None,
+        molecules={'O2': o2},
+    )
+    seen_n = set()
+    for _ in range(60):
+        g.do_gcmc_step()
+        seen_n.add(len(g.atoms))
+        ids = g.atoms.arrays.get('molecule_id')
+        if ids is not None:
+            for mid in np.unique(ids):
+                if mid < 0:
+                    continue
+                members = np.where(ids == mid)[0]
+                assert sorted(np.asarray(g.atoms.get_chemical_symbols())[members]) \
+                    == ['O', 'O']
+    assert np.isfinite(g.E_old)
+    assert len(seen_n) > 1  # N actually fluctuated

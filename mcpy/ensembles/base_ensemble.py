@@ -283,8 +283,16 @@ def write_xyz(atoms, energy, file_or_path, extra: str = ''):
         comment += f' {extra}'
     comment += f' Lattice="{cell_str}"\n'
     parts = [f"{num_atoms}\n", comment]
-    for s, p in zip(symbols, positions):
-        parts.append(f"{s} {p[0]} {p[1]} {p[2]}\n")
+
+    # Check if molecule_id array exists
+    mol_ids = atoms.arrays.get('molecule_id')
+
+    for i, (s, p) in enumerate(zip(symbols, positions)):
+        line = f"{s} {p[0]} {p[1]} {p[2]}"
+        if mol_ids is not None:
+            line += f" {mol_ids[i]}"
+        line += "\n"
+        parts.append(line)
     text = "".join(parts)
 
     if isinstance(file_or_path, str):
