@@ -55,7 +55,10 @@ class ReplicaExchange:
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
 
-        if self.gcmc.units.molecules:
+        # getattr chain: CanonicalEnsemble has no ``units`` attribute (it
+        # stores ``_beta`` directly) and is a supported temperature-ladder
+        # ensemble here, so a units-less ensemble must pass the guard.
+        if getattr(getattr(self.gcmc, 'units', None), 'molecules', None):
             raise NotImplementedError(
                 "ReplicaExchange (MPI) does not support molecular species: "
                 "its per-species swap bookkeeping (_exchange_prob_T / "

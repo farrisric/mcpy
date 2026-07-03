@@ -362,6 +362,23 @@ def test_replica_exchange_rejects_molecular_species():
         ReplicaExchange(factory, mus=[{'H2O': 1.0}])
 
 
+def test_replica_exchange_accepts_units_less_ensemble():
+    """CanonicalEnsemble has no ``units`` attribute (it stores _beta
+    directly) and is a supported temperature-ladder ensemble: the molecule
+    guard must let units-less ensembles through, not die on AttributeError."""
+    pytest.importorskip('mpi4py')
+    from mcpy.ensembles.replica_exchange import ReplicaExchange
+
+    class _FakeCanonical:
+        pass  # deliberately no `units` attribute
+
+    def factory(T=None, rank=None):
+        return _FakeCanonical()
+
+    re = ReplicaExchange(factory, temperatures=[300.0])
+    assert isinstance(re.gcmc, _FakeCanonical)
+
+
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 
 
