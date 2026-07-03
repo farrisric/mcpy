@@ -231,9 +231,15 @@ def test_do_gcmc_step_feeds_total_atom_count():
 # --------------------------------------------------------------------------
 
 def _replica(temperature, energy):
+    # No mu configured: _minimum_score (which _grand_potential delegates to)
+    # is the bare energy, matching GrandCanonicalEnsemble._minimum_score with
+    # an empty self._mu. `atoms` is unused by the lambda but still read by
+    # _grand_potential before the call, so it must be present.
     return types.SimpleNamespace(
         units=types.SimpleNamespace(beta=1.0 / (8.617333e-5 * temperature)),
         E_old=energy,
+        atoms=None,
+        _minimum_score=lambda atoms, energy: energy,
     )
 
 
