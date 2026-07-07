@@ -66,4 +66,9 @@ class InsertionMove(BaseMove):
                     return False, 1, selected_species
 
         atoms += Atoms(selected_species, positions=[insert_position])
+        # Coexistence with molecule moves: ASE ``extend`` zero-pads arrays
+        # missing from the fragment, which would silently attach this atom to
+        # molecule id 0. Tag it as free (-1) explicitly.
+        if 'molecule_id' in atoms.arrays:
+            atoms.arrays['molecule_id'][-1] = -1
         return atoms, 1, selected_species

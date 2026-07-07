@@ -486,3 +486,36 @@ def test_molecule_deletion_picks_among_multiple_candidates():
         remaining_ids = set(atoms.arrays['molecule_id'].tolist())
         deleted_ids |= {0, 1} - remaining_ids
     assert deleted_ids == {0, 1}
+
+
+from mcpy.moves import InsertionMove  # noqa: E402
+
+
+def test_atomic_insertion_alongside_molecules_stays_free():
+    # ASE ``extend`` zero-pads arrays missing from the fragment; without the
+    # explicit -1 tag the inserted atom would join molecule id 0.
+    atoms = _water_box()  # molecule ids 0 (H2O) and 1 (O2) present
+    move = InsertionMove(Cell(atoms), species=['H'], seed=7)
+    result, delta, species = move.do_trial_move(atoms)
+    assert result is atoms and delta == 1
+    assert atoms.arrays['molecule_id'][-1] == -1
+    # H2O (id 0) still has exactly its own three members
+    assert (atoms.arrays['molecule_id'] == 0).sum() == 3
+
+
+def test_atomic_deletion_never_picks_molecule_members():
+    # One free O plus O-containing molecules: atomic O deletion must always
+    # take the free atom, whatever the seed.
+    for seed in range(8):
+        atoms = _water_box()
+        atoms += Atoms('O', positions=[[8.0, 2.0, 2.0]])
+        atoms.arrays['molecule_id'][-1] = -1
+        move = DeletionMove(Cell(atoms), species=['O'], seed=seed)
+        result, delta, species = move.do_trial_move(atoms)
+        assert result is atoms and delta == -1
+        ids = atoms.arrays['molecule_id']
+        assert (ids == 0).sum() == 3  # H2O intact
+        assert (ids == 1).sum() == 2  # O2 intact
+        # And with no free O left, the move reports a failed proposal.
+        again = move.do_trial_move(atoms)
+        assert again[0] is False

@@ -32,6 +32,14 @@ class DeletionMove(BaseMove):
         indices_of_species = self.cell.get_atoms_specie_inside_cell(
             atoms, selected_species
         )
+        # Coexistence with molecule moves: only free atoms (molecule_id < 0)
+        # are atomic-deletion candidates; deleting a member atom would corrupt
+        # the molecule bookkeeping (its partner would leak, undeletable).
+        mol_ids = atoms.arrays.get('molecule_id')
+        if mol_ids is not None and len(indices_of_species) > 0:
+            indices_of_species = indices_of_species[
+                mol_ids[indices_of_species] < 0
+            ]
         if len(indices_of_species) == 0:
             return False, -1, 'X'
         remove_index = int(self.rng.random.choice(indices_of_species))

@@ -184,10 +184,14 @@ volume is used for the combinatorial factor but insertion points are still
 sampled over the full cell box): at high density it over-accepts insertions
 by roughly :math:`V/V_\text{accessible}`.
 
-Mixing atomic deletion with molecular species is unsupported: an atomic
-:class:`mcpy.moves.DeletionMove` configured for an element that also appears
-inside molecules can delete a single member atom and corrupt the
-``molecule_id`` bookkeeping.
+Atomic and molecular species of the same element can coexist (e.g. atomic O
+alongside O2 molecules): an atomic :class:`mcpy.moves.InsertionMove` tags its
+inserted atom as free (``molecule_id = -1``, guarding against ASE's zero-fill
+when extending arrays), and an atomic :class:`mcpy.moves.DeletionMove` only
+picks free atoms, never molecule members. Displacement-type moves are not
+molecule-aware: they can drag a member atom individually, which is
+thermodynamically valid with a relaxing calculator but departs from the
+rigid-molecule picture.
 
 The MPI :class:`mcpy.ensembles.ReplicaExchange` does not support molecular
 species either: its per-species swap bookkeeping counts atoms by symbol
