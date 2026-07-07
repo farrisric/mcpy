@@ -54,6 +54,9 @@ def parse_args():
                         '(0 = disabled, matching pre-move behaviour)')
     p.add_argument('--mol-disp-max', type=float, default=1.0,
                    help='Max COM displacement of the rigid move (A)')
+    p.add_argument('--mol-disp-angle', type=float, default=None,
+                   help='Max rotation angle of the rigid move (rad); '
+                        'None = full uniform rotation')
     p.add_argument('--no-compile', action='store_true')
     p.add_argument('--seed', type=int, default=7)
     p.add_argument('--outdir',
@@ -132,7 +135,8 @@ def main():
             weights.append(args.mol_disp_weight)
             moves.append(MoleculeDisplacementMove(
                 cell, co, 'CO', seed=s[0] + 101,
-                max_displacement=args.mol_disp_max))
+                max_displacement=args.mol_disp_max,
+                max_angle=args.mol_disp_angle))
         move_selector = MoveSelector(weights, moves, n_moves=3)
         d = args.delta_mus[rank]
         tag = f'{base_atoms.get_chemical_formula()}_CO_dmu_{d}'
