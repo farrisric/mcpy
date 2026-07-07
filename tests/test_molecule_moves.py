@@ -558,3 +558,21 @@ def test_molecule_displacement_no_candidates():
     result, delta, name = move.do_trial_move(atoms)
     assert result is False and delta == 0
     assert len(atoms) == 2
+
+
+def test_molecule_displacement_capped_rotation():
+    # With a small max_angle the orientation change per trial is bounded:
+    # the O->H bond direction rotates by less than max_angle.
+    atoms = _water_box()
+    v_before = atoms.positions[1] - atoms.positions[0]
+    move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O',
+                                    seed=9, max_displacement=0.3,
+                                    max_angle=0.3)
+    move.do_trial_move(atoms)
+    v_after = atoms.positions[1] - atoms.positions[0]
+    cosang = np.dot(v_before, v_after) / (
+        np.linalg.norm(v_before) * np.linalg.norm(v_after))
+    assert np.arccos(np.clip(cosang, -1, 1)) <= 0.3 + 1e-9
+    # Rigidity still holds.
+    np.testing.assert_allclose(np.linalg.norm(v_after),
+                               np.linalg.norm(v_before), atol=1e-10)

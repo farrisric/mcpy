@@ -28,11 +28,18 @@ class MoleculeDisplacementMove(BaseMove):
                  molecule: Atoms,
                  name: str,
                  seed: int,
-                 max_displacement: float = 0.5) -> None:
+                 max_displacement: float = 0.5,
+                 max_angle: float = None) -> None:
+        """``max_angle`` (radians) caps the rotation per trial: a uniform
+        random axis with a uniform angle in [0, max_angle] — still a
+        symmetric proposal. ``None`` keeps the full uniform SO(3) rotation,
+        which is too aggressive for strongly anchored adsorbates (measured
+        ~5% acceptance for CO on CuPd vs ~60% for physisorbed H2O)."""
         super().__init__(cell, [name], seed)
         self.name = name
         self._template_symbols = sorted(molecule.get_chemical_symbols())
         self.max_displacement = max_displacement
+        self.max_angle = max_angle
 
     def do_trial_move(self, atoms) -> Atoms:
         """Rigidly translate + rotate one molecule. Returns the same
@@ -51,7 +58,10 @@ class MoleculeDisplacementMove(BaseMove):
             rz = 2.0 * self.rng.get_uniform() - 1.0
             rsq = rx * rx + ry * ry + rz * rz
         shift = np.array([rx, ry, rz]) * self.max_displacement
-        rotation = random_rotation_matrix(self.rng)
+        if self.max_angle is None:
+            rotation = random_rotation_matrix(self.rng)
+        else:
+            rotation = self._capped_rotation()
 
         # Rotate about the COM using minimum-image member offsets so a
         # molecule split across a periodic boundary stays rigid.
@@ -60,3 +70,22 @@ class MoleculeDisplacementMove(BaseMove):
             offsets = find_mic(offsets, atoms.cell, pbc=atoms.pbc)[0]
         atoms.positions[members] = com + shift + offsets @ rotation.T
         return atoms, 0, self.name
+
+    def _capped_rotation(self):
+        """Rotation by a uniform angle in [0, max_angle] about a uniform
+        random axis. Symmetric: the inverse (same angle, flipped axis) is
+        proposed with equal probability."""
+        while True:
+            axis = np.array([self.rng.get_gaussian() for _ in range(3)])
+            norm = np.linalg.norm(axis)
+            if norm > 1e-12:
+                break
+        axis /= norm
+        angle = self.rng.get_uniform() * self.max_angle
+        w = np.cos(angle / 2.0)
+        x, y, z = np.sin(angle / 2.0) * axis
+        return np.array([
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ])
