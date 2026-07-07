@@ -141,6 +141,7 @@ def main():
     pt.run()
 
     plot_phase_diagram(args, n_metal)
+    render_snapshots(args, base_atoms.get_chemical_formula())
 
 
 def plot_phase_diagram(args, n_metal):
@@ -177,6 +178,36 @@ def plot_phase_diagram(args, n_metal):
     print(f'phase diagram: {out}')
     print('coverage:', {d: f'{c:.1f}±{e:.1f}' for d, c, e in
                         zip(args.delta_mus, cov, err)})
+
+
+def render_snapshots(args, formula):
+    """One rendered snapshot per replica (final trajectory frame) plus the
+    cross-replica global minimum, on a single row."""
+    import ase.io
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from ase.visualize.plot import plot_atoms
+
+    n = len(args.delta_mus)
+    fig, axes = plt.subplots(1, n + 1, figsize=(2.6 * (n + 1), 3.0),
+                             constrained_layout=True)
+    for ax, d in zip(axes[:n], args.delta_mus):
+        atoms = ase.io.read(
+            os.path.join(args.outdir, f'gcmc_{formula}_CO_dmu_{d}.xyz'),
+            index=-1)
+        n_co = (len(atoms) - len([s for s in atoms.get_chemical_symbols()
+                                  if s in ('Cu', 'Pd')])) // 2
+        plot_atoms(atoms, ax, rotation='12z,-75x', show_unit_cell=0)
+        ax.set_title(f'$\\Delta\\mu$ = {d} eV\n{n_co} CO', fontsize=9)
+        ax.set_axis_off()
+    gm = ase.io.read(os.path.join(args.outdir, 'global_minimum.xyz'))
+    plot_atoms(gm, axes[n], rotation='12z,-75x', show_unit_cell=0)
+    axes[n].set_title(f'global minimum\n{gm.get_chemical_formula()}', fontsize=9)
+    axes[n].set_axis_off()
+    out = os.path.join(args.outdir, 'snapshots_co_cupd.png')
+    fig.savefig(out, dpi=180)
+    print(f'snapshots: {out}')
 
 
 if __name__ == '__main__':
