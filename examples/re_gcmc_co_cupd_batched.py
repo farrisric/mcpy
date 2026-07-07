@@ -208,6 +208,8 @@ def library_phase_diagram(args, formula, e_co):
         rotation='12z,-75x',
         system_label=formula,
         outfile=out,
+        adsorbate_label='CO',
+        atoms_per_reservoir_molecule=1,
     )
     print(f'phase diagram (library): {out}')
     print('stable CO stoichiometries:',
