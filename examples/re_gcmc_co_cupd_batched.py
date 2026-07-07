@@ -54,6 +54,10 @@ def parse_args():
     p.add_argument('--outdir',
                    default=os.path.expanduser('~/mcpy_tmp_runs/co_cupd'),
                    help='Output directory (kept outside the git repo)')
+    p.add_argument('--init-dir', default=None,
+                   help='Seed each replica from the last trajectory frame of a '
+                        'previous run in this directory (same delta-mus) to '
+                        'continue toward convergence')
     return p.parse_args()
 
 
@@ -100,6 +104,14 @@ def main():
 
     def gcmc_factory(mu, rank):
         atoms = base_atoms.copy()
+        if args.init_dir:
+            import ase.io
+            d = args.delta_mus[rank]
+            prev = os.path.join(
+                args.init_dir,
+                f'gcmc_{base_atoms.get_chemical_formula()}_CO_dmu_{d}.xyz')
+            atoms = ase.io.read(prev, index=-1)  # molecule_id round-trips
+            atoms.pbc = False
         cell = SphericalCell(
             atoms, vacuum=3.5,
             species_radii={'Cu': 2.4, 'Pd': 2.5, 'C': 0.0, 'O': 0.0},
