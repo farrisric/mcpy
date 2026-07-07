@@ -158,11 +158,46 @@ def main():
     )
     pt.run()
 
-    plot_phase_diagram(args, n_metal)
+    plot_coverage(args, n_metal)
     render_snapshots(args, base_atoms.get_chemical_formula())
+    library_phase_diagram(args, base_atoms.get_chemical_formula(), e_co)
 
 
-def plot_phase_diagram(args, n_metal):
+def library_phase_diagram(args, formula, e_co):
+    """The proper thermodynamic phase diagram via mcpy's own analysis:
+    per-stoichiometry free-energy lines, stable envelope, transitions, and
+    per-phase structure thumbnails. CO molecules are counted via their single
+    C atom; mu_ref = E(CO) matches the full-molecular-mu convention."""
+    import ase.io
+    from mcpy.utils.phase_diagram import plot_phase_diagram
+
+    frames = []
+    for d in args.delta_mus:
+        frames.append(ase.io.read(
+            os.path.join(args.outdir, f'gcmc_{formula}_CO_dmu_{d}.xyz'),
+            index=':'))
+    pad = 0.15
+    out = os.path.join(args.outdir, 'phase_diagram_co_cupd.png')
+    res = plot_phase_diagram(
+        frames,
+        adsorbate='C',
+        metal_symbols=('Cu', 'Pd'),
+        mu_ref=e_co,
+        kind='nano',
+        T=args.T,
+        dmu_range=(min(args.delta_mus) - pad, max(args.delta_mus) + pad),
+        rotation='12z,-75x',
+        system_label=formula,
+        outfile=out,
+    )
+    print(f'phase diagram (library): {out}')
+    print('stable CO stoichiometries:',
+          [res['stoich'][i] for i in res['phase_order']])
+    print('transitions at delta_mu:', np.round(res['transitions'], 3).tolist())
+    return res
+
+
+def plot_coverage(args, n_metal):
     """Coverage vs delta_mu from the per-replica outfiles (last 50%)."""
     import matplotlib
     matplotlib.use('Agg')
@@ -200,9 +235,9 @@ def plot_phase_diagram(args, n_metal):
     ax.set_xlabel(r'$\Delta\mu_\mathrm{CO}$ (eV)')
     ax.set_ylabel(r'$\langle N_\mathrm{CO} \rangle$ adsorbed')
     ax.set_title(f'CO on CuPd nanoparticle, T = {args.T:.0f} K')
-    out = os.path.join(args.outdir, 'phase_diagram_co_cupd.png')
+    out = os.path.join(args.outdir, 'coverage_co_cupd.png')
     fig.savefig(out, dpi=150)
-    print(f'phase diagram: {out}')
+    print(f'coverage isotherm: {out}')
     print('coverage:', {d: f'{c:.1f}±{e:.1f}' for d, c, e in
                         zip(args.delta_mus, cov, err)})
 
