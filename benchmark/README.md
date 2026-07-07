@@ -34,6 +34,10 @@ Stage 2, rigid LJ dimer exchanged as whole molecules (mcpy `MoleculeInsertionMov
 `<PE>` agrees at every point as well (0.4-1.4 sigma).
 **All stages pass.**
 
+![mcpy vs LAMMPS LJ isotherms](figs/lammps_gcmc_parity_isotherms.png)
+
+The isotherms lie on top of each other at every chemical potential, for both the atomic stage and the rigid-dimer stage (error bars are block-averaged standard errors).
+
 Rerun: `python benchmark/lammps_gcmc_parity.py --stage all` (needs a LAMMPS binary with the MC and MOLECULE packages, e.g. conda-forge `lammps`; pass it with `--lmp`).
 
 ## 2. MACE parity (`mace_gcmc_parity.py`)
