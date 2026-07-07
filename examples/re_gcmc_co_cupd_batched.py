@@ -168,7 +168,12 @@ def main():
 
     plot_coverage(args, n_metal)
     render_snapshots(args, base_atoms.get_chemical_formula())
-    library_phase_diagram(args, base_atoms.get_chemical_formula(), e_co)
+    try:
+        library_phase_diagram(args, base_atoms.get_chemical_formula(), e_co)
+    except ValueError as exc:
+        # Deep continuation chains may hold no adsorbate-free reference frame;
+        # pool the chain's trajectories by hand for the final diagram then.
+        print(f'library phase diagram skipped: {exc}')
 
 
 def library_phase_diagram(args, formula, e_co):
@@ -184,6 +189,12 @@ def library_phase_diagram(args, formula, e_co):
         frames.append(ase.io.read(
             os.path.join(args.outdir, f'gcmc_{formula}_CO_dmu_{d}.xyz'),
             index=':'))
+        # Continuation runs start CO-loaded; pull the adsorbate-free
+        # reference frames from the run they were seeded from.
+        if args.init_dir:
+            frames.append(ase.io.read(
+                os.path.join(args.init_dir, f'gcmc_{formula}_CO_dmu_{d}.xyz'),
+                index=':'))
     pad = 0.15
     out = os.path.join(args.outdir, 'phase_diagram_co_cupd.png')
     res = plot_phase_diagram(
