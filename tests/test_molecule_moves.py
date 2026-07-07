@@ -519,3 +519,42 @@ def test_atomic_deletion_never_picks_molecule_members():
         # And with no free O left, the move reports a failed proposal.
         again = move.do_trial_move(atoms)
         assert again[0] is False
+
+
+from mcpy.moves import MoleculeDisplacementMove  # noqa: E402
+
+
+def test_molecule_displacement_rigid_and_bounded():
+    atoms = _water_box()
+    d_before = atoms.get_all_distances(mic=True)[np.ix_([0, 1, 2], [0, 1, 2])]
+    com_before = molecule_com(atoms, np.array([0, 1, 2]))
+    move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O',
+                                    seed=3, max_displacement=0.4)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is atoms and delta == 0 and name == 'H2O'
+    # Rigid: internal distances preserved; only the H2O moved (O2 untouched).
+    d_after = atoms.get_all_distances(mic=True)[np.ix_([0, 1, 2], [0, 1, 2])]
+    np.testing.assert_allclose(d_after, d_before, atol=1e-10)
+    com_after = molecule_com(atoms, np.array([0, 1, 2]))
+    assert 0 < np.linalg.norm(com_after - com_before) <= 0.4 + 1e-9
+    np.testing.assert_array_equal(atoms.arrays['molecule_id'],
+                                  [0, 0, 0, 1, 1, -1])
+
+
+def test_molecule_displacement_rotates():
+    atoms = _water_box()
+    bond_before = atoms.positions[1] - atoms.positions[0]
+    move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O', seed=5)
+    move.do_trial_move(atoms)
+    bond_after = atoms.positions[1] - atoms.positions[0]
+    assert not np.allclose(bond_after, bond_before)  # orientation changed
+    np.testing.assert_allclose(np.linalg.norm(bond_after),
+                               np.linalg.norm(bond_before), atol=1e-10)
+
+
+def test_molecule_displacement_no_candidates():
+    atoms = _box_atoms()
+    move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O', seed=1)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False and delta == 0
+    assert len(atoms) == 2

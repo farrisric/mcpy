@@ -23,8 +23,8 @@ from mcpy.utils.logging import configure as configure_logging
 
 configure_logging()
 
-from mcpy.moves import (MoleculeDeletionMove, MoleculeInsertionMove,  # noqa: E402
-                        PermutationMove)
+from mcpy.moves import (MoleculeDeletionMove, MoleculeDisplacementMove,  # noqa: E402
+                        MoleculeInsertionMove, PermutationMove)
 from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
 from mcpy.ensembles import BatchedReplicaExchange  # noqa: E402
@@ -49,6 +49,11 @@ def parse_args():
     p.add_argument('--rel-steps', type=int, default=30)
     p.add_argument('--rel-fmax', type=float, default=0.1)
     p.add_argument('--min-insert', type=float, default=1.3)
+    p.add_argument('--mol-disp-weight', type=int, default=0,
+                   help='Weight of the rigid CO translate+rotate move '
+                        '(0 = disabled, matching pre-move behaviour)')
+    p.add_argument('--mol-disp-max', type=float, default=1.0,
+                   help='Max COM displacement of the rigid move (A)')
     p.add_argument('--no-compile', action='store_true')
     p.add_argument('--seed', type=int, default=7)
     p.add_argument('--outdir',
@@ -118,14 +123,17 @@ def main():
             seed=move_seeds[3 * rank] + 1,
         )
         s = move_seeds[3 * rank:3 * (rank + 1)]
-        move_selector = MoveSelector(
-            [2, 2, 1],
-            [MoleculeInsertionMove(cell, co, 'CO', seed=s[0],
-                                   min_insert=args.min_insert),
-             MoleculeDeletionMove(cell, co, 'CO', seed=s[1]),
-             PermutationMove(species=['Cu', 'Pd'], seed=s[2])],
-            n_moves=3,
-        )
+        weights = [2, 2, 1]
+        moves = [MoleculeInsertionMove(cell, co, 'CO', seed=s[0],
+                                       min_insert=args.min_insert),
+                 MoleculeDeletionMove(cell, co, 'CO', seed=s[1]),
+                 PermutationMove(species=['Cu', 'Pd'], seed=s[2])]
+        if args.mol_disp_weight > 0:
+            weights.append(args.mol_disp_weight)
+            moves.append(MoleculeDisplacementMove(
+                cell, co, 'CO', seed=s[0] + 101,
+                max_displacement=args.mol_disp_max))
+        move_selector = MoveSelector(weights, moves, n_moves=3)
         d = args.delta_mus[rank]
         tag = f'{base_atoms.get_chemical_formula()}_CO_dmu_{d}'
         return GrandCanonicalEnsemble(
