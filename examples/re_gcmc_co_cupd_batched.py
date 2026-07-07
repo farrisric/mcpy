@@ -40,6 +40,9 @@ def parse_args():
                    help='CO delta_mu ladder, one replica each (eV)')
     p.add_argument('--T', type=float, default=400.0)
     p.add_argument('--n-pd', type=int, default=5, help='Pd atoms in the Cu NP')
+    p.add_argument('--octa-length', type=int, default=4,
+                   help='Octahedron length (4,1 -> 38 atoms; 9,3 -> 405)')
+    p.add_argument('--octa-cutoff', type=int, default=1)
     p.add_argument('--gcmc-steps', type=int, default=80)
     p.add_argument('--exchange-interval', type=int, default=8)
     p.add_argument('--checkpoint', default='medium-mpa-0')
@@ -48,12 +51,14 @@ def parse_args():
     p.add_argument('--min-insert', type=float, default=1.3)
     p.add_argument('--no-compile', action='store_true')
     p.add_argument('--seed', type=int, default=7)
-    p.add_argument('--outdir', default='runs_co_cupd')
+    p.add_argument('--outdir',
+                   default=os.path.expanduser('~/mcpy_tmp_runs/co_cupd'),
+                   help='Output directory (kept outside the git repo)')
     return p.parse_args()
 
 
-def build_nanoparticle(n_pd, seed):
-    atoms = Octahedron('Cu', 4, cutoff=1)  # 38-atom truncated octahedron
+def build_nanoparticle(n_pd, seed, length=4, cutoff=1):
+    atoms = Octahedron('Cu', length, cutoff=cutoff)
     rng = np.random.default_rng(seed)
     pd_idx = rng.choice(len(atoms), size=n_pd, replace=False)
     symbols = np.array(atoms.get_chemical_symbols())
@@ -74,7 +79,8 @@ def main():
     move_seeds = [int(s) for s in seeds[:3 * n_rep]]
     master_seed, np_seed = int(seeds[-1]), int(seeds[-2])
 
-    base_atoms = build_nanoparticle(args.n_pd, np_seed)
+    base_atoms = build_nanoparticle(args.n_pd, np_seed,
+                                    args.octa_length, args.octa_cutoff)
     n_metal = len(base_atoms)
     print(f'nanoparticle: {base_atoms.get_chemical_formula()} ({n_metal} atoms)')
 
@@ -167,6 +173,15 @@ def plot_phase_diagram(args, n_metal):
         blocks = [b.mean() for b in np.array_split(tail, nb) if len(b)]
         cov.append(np.mean(blocks))
         err.append(np.std(blocks, ddof=1) / np.sqrt(len(blocks)))
+        # Stationarity check: first vs second half of the post-burn tail must
+        # agree within 2x the combined block error, else more steps needed.
+        h1, h2 = np.array_split(tail, 2)
+        s_comb = np.hypot(h1.std(ddof=1) / np.sqrt(max(len(h1), 2)),
+                          h2.std(ddof=1) / np.sqrt(max(len(h2), 2)))
+        drift = abs(h1.mean() - h2.mean())
+        status = 'CONVERGED' if drift < 2 * max(s_comb, 1e-9) else 'NOT CONVERGED'
+        print(f'  dmu={d}: tail halves {h1.mean():.1f} vs {h2.mean():.1f} '
+              f'(drift {drift:.1f}, 2s={2 * s_comb:.1f}) {status}')
 
     fig, ax = plt.subplots(figsize=(5, 3.4), constrained_layout=True)
     ax.errorbar(args.delta_mus, cov, yerr=err, fmt='o-', capsize=4)
