@@ -83,3 +83,27 @@ def test_accept_swap_uses_grand_potential_not_bare_energy():
     # delta = (0.5 - 1.0)(2 - 5) = 1.5  -> p = 1 -> accept at u=0.5
     # bare-E delta = (0.5 - 1.0)(20 - 10) = -5 -> p ~ 0.0067 -> would reject
     assert re._accept_swap(0, 1) is True
+
+
+def test_consolidated_status_line(caplog):
+    """One console line covers all replicas; per-replica detail stays in files."""
+    import logging
+    from types import SimpleNamespace
+
+    from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
+
+    pt = BatchedReplicaExchange.__new__(BatchedReplicaExchange)
+    pt.gcmc_steps = 100
+    pt.exchange_attempts = [4, 4]
+    pt.exchange_successes = [1, 1]
+    pt.logger = logging.getLogger('mcpy.ensembles.batched_replica_exchange')
+    pt.replicas = [
+        SimpleNamespace(atoms=[None] * 42, E_old=-10.5),
+        SimpleNamespace(atoms=[None] * 44, E_old=-11.25),
+    ]
+    with caplog.at_level(logging.INFO,
+                         logger='mcpy.ensembles.batched_replica_exchange'):
+        pt._log_status(30)
+    assert len(caplog.records) == 1
+    msg = caplog.records[0].getMessage()
+    assert 'RE 30/100' in msg and '42' in msg and '44' in msg and '25%' in msg
