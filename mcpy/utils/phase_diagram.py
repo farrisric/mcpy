@@ -499,7 +499,11 @@ def plot_phase_diagram(
                 f"{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$" for sym in metal_symbols
             )
             if n_ads > 0:
-                title += f"{adsorbate}$_{{{n_ads}}}$"
+                # Molecule-aware: with a proxy-counted adsorbate (e.g. CO via
+                # its C atom) the label names the molecule, parenthesized so
+                # (CO)_3 reads as three molecules rather than C-O3.
+                unit = label if len(label) == 1 else f"({label})"
+                title += f"{unit}$_{{{n_ads}}}$"
             axs.set_title(
                 title, fontsize=11, fontweight="bold",
                 bbox=dict(facecolor="white", edgecolor=colors[i],

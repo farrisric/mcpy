@@ -215,7 +215,7 @@ def library_phase_diagram(args, formula, e_co):
         T=args.T,
         dmu_range=(min(args.delta_mus) - pad, max(args.delta_mus) + pad),
         rotation='12z,-75x',
-        system_label=formula,
+        gamma_in_ev=True,
         outfile=out,
         adsorbate_label='CO',
         atoms_per_reservoir_molecule=1,
