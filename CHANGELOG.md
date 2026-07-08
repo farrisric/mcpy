@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-08
+
+### Added
+- **Molecular GCMC**: `MoleculeInsertionMove` and `MoleculeDeletionMove` exchange whole rigid molecules (any ASE-buildable template) with the reservoir, using the textbook rigid-molecule acceptance (per-species in-cell molecule count, de Broglie wavelength from the total molecular mass, full molecular chemical potential with orientations sampled uniformly). Atomic moves keep their documented convention; the two coexist (`docs/gcmc_acceptance_convention.rst`).
+- `MoleculeDisplacementMove`: rigid translate+rotate of one molecule, with an optional `max_angle` rotation cap for strongly anchored adsorbates (measured on CO/CuPd: acceptance 5% -> 42.5%, roughly 2x faster convergence than exchange-only sampling).
+- Molecule bookkeeping via a per-atom `molecule_id` array: rolls back with the existing rejection snapshot, shrinks correctly on deletion, and round-trips through extxyz trajectories (declared in `Properties=`), making molecular runs restartable.
+- Atomic and molecular species can coexist in one simulation (e.g. dissociative O at `mu_O = mu_O2/2` alongside molecular O2): atomic insertions tag their atoms as free, atomic deletions never touch molecule members.
+- `SetUnits` accepts a `molecules` dict (name -> ASE template) for molecular masses and wavelengths, rejecting isomer compositions and atomic/molecular name collisions.
+- `plot_phase_diagram`: `adsorbate_label` and `atoms_per_reservoir_molecule` for molecular adsorbates (correct pressure-axis exponent and axis labels; molecule-aware structure-thumbnail formulas such as `(CO)_n`).
+- LAMMPS cross-validation benchmarks (`benchmark/lammps_gcmc_parity.py`, `benchmark/mace_gcmc_parity.py`) and a public `benchmark/README.md`: mcpy matches LAMMPS `fix gcmc` on Lennard-Jones (atomic and rigid-dimer, all stages within 1.4 sigma) and matches `pair_style mace` energies pointwise; the one disagreement was isolated to a trial-insertion defect in the LAMMPS-MACE fork.
+- Examples: `examples/gcmc_molecule_mace.py` (molecular adsorption on Ag(111) with MACE) and `examples/re_gcmc_co_cupd_batched.py` (CO on a CuPd nanoparticle: batched replica exchange over a mu ladder, trajectory-seeded restarts, coverage isotherm, snapshots, and the library phase diagram).
+- Teaching notebooks: GCMC basics, molecular GCMC, and the CO/CuPd replica-exchange workflow (executed outputs included).
+- Consolidated console logging for `BatchedReplicaExchange`: one status line per write interval covering all replicas (per-replica detail stays in the per-replica outfiles); disable with `consolidate_logging=False`.
+
+### Fixed
+- `MoleculeDisplacementMove` rejects displacements that would carry a molecule's center of mass out of the region cell: the boundary was a one-way door that stranded molecules outside the grand-canonical bookkeeping (detailed-balance violation caught in review with an end-to-end reproduction).
+- Atomic `InsertionMove` next to molecular species: ASE's `extend` zero-pads missing arrays, silently attaching the inserted atom to molecule id 0; inserted atoms are now explicitly tagged free.
+- `BatchedReplicaExchange`'s swap criterion now counts molecular species in the grand potential (it delegated to a symbol count that is always zero for molecular names).
+- The MPI `ReplicaExchange` raises `NotImplementedError` for molecular species instead of silently accepting every mu-ladder swap; `BatchedReplicaExchange` is the supported path (and units-less ensembles still pass the guard).
+- The extxyz trajectory writer declares `molecule_id` in `Properties=` so `ase.io.read` recovers it (it was silently dropped).
+
+### Changed
+- The phase-diagram pressure twin-axis exponent is configurable per reservoir stoichiometry (`atoms_per_reservoir_molecule`); the historical dissociative-diatomic behaviour remains the default.
+
 ## [1.2.0] - 2026-06-22
 
 ### Added
