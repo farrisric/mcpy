@@ -91,7 +91,7 @@ def main():
         steps=args.relax_steps,
         fmax=args.fmax,
         device=args.device,
-        compile_model=False,
+        compile_model=True,
         max_neighbors=args.max_neighbors,
         optimizer=args.optimizer,
     )

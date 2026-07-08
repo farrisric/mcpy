@@ -90,7 +90,7 @@ production: monitor the insertion-move acceptance ratio and the reported
 Automated calibration with `compute_radii.py`
 ---------------------------------------------
 
-The script `mcpy/utils/compute_radii.py` automates the workflow above for FCC(111) hosts:
+The script `scripts/compute_radii.py` automates the workflow above for FCC(111) hosts:
 
 - builds a periodic FCC(111) slab of the chosen metal,
 - repeatedly inserts a trial atom into a `CustomCell` placed over the surface,
@@ -129,7 +129,7 @@ Run
 
 .. code-block:: bash
 
-   python mcpy/utils/compute_radii.py /path/to/your_mace_model.model
+   python scripts/compute_radii.py /path/to/your_mace_model.model
 
 Interpretation
 ~~~~~~~~~~~~~~

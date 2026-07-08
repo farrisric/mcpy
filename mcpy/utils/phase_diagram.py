@@ -1,4 +1,5 @@
 import argparse
+import functools
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -8,15 +9,24 @@ from ase.io import read
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.gridspec import GridSpec
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 200,
-        # "font.family": "sans-serif",
-        "font.sans-serif": "Arial",
-        "font.size": 14,
-        "mathtext.default": "regular",
-    }
-)
+# Applied per-call via _with_mpl_style, never at import time: importing mcpy
+# must not rewrite the host application's global rcParams.
+_MPL_STYLE = {
+    "figure.dpi": 200,
+    "font.sans-serif": "Arial",
+    "font.size": 14,
+    "mathtext.default": "regular",
+}
+
+
+def _with_mpl_style(func):
+    """Run ``func`` inside an rc_context so the style (and any rcParams the
+    function sets while plotting) is reverted on return."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with mpl.rc_context(_MPL_STYLE):
+            return func(*args, **kwargs)
+    return wrapper
 
 
 def free_en(en_dft, n_host, n_oxygen, e_host, e_o2, delta_mu_o, delta_mu_host, area):
@@ -28,6 +38,7 @@ def from_mu_to_press(mu, T=500, mu_ref=-0.5, p_0=1, k_b=0.00008617, U_dft=-9.861
     return np.exp(((mu - mu_ref - U_dft) * 2) / (k_b * T)) * p_0
 
 
+@_with_mpl_style
 def analyze_phase_diagram_results(
     trajectory_path="relaxed_structures.xyz",
     host_symbol="Ag",
@@ -242,6 +253,7 @@ def _flatten_frames(frames):
     return flat
 
 
+@_with_mpl_style
 def plot_phase_diagram(
     frames,
     adsorbate="H",
@@ -260,6 +272,8 @@ def plot_phase_diagram(
     k_b=8.617e-5,
     gamma_in_ev=False,
     adsorbate_count_fn=None,
+    adsorbate_label=None,
+    atoms_per_reservoir_molecule=2,
 ):
     """Build a grand-canonical adsorbate phase diagram for one configuration.
 
@@ -303,6 +317,15 @@ def plot_phase_diagram(
     gamma_in_ev : bool
         Report the unnormalized formation energy in eV instead of the default
         per-atom (nano) or per-area (surface) value in meV.
+    adsorbate_label : str | None
+        Species name used in the axis labels. Defaults to ``adsorbate`` —
+        pass e.g. ``"CO"`` when the adsorbate is counted via a proxy atom.
+    atoms_per_reservoir_molecule : int
+        Adsorbed units per reservoir gas molecule, used in the pressure
+        conversion of the twin axis. The default 2 is the dissociative
+        diatomic convention (atomic H or O from an H2/O2 reservoir,
+        mu_atom = mu_gas/2). Use 1 for molecular adsorbates (CO, H2O, ...)
+        whose reservoir molecule is the adsorbed unit itself.
     adsorbate_count_fn : callable | None
         Optional ``atoms -> int`` returning the adsorbate count for a frame.
         Use when the adsorbate symbol also occurs in an inert sublattice (e.g.
@@ -401,8 +424,13 @@ def plot_phase_diagram(
     cnorm = Normalize(vmin=0.0, vmax=max(max(ratios), 0.5))
     colors = [cmap(cnorm(r)) for r in ratios]
 
+    label = adsorbate_label if adsorbate_label is not None else adsorbate
+    n_res = float(atoms_per_reservoir_molecule)
+    gas_label = (label if atoms_per_reservoir_molecule == 1
+                 else f'{label}_{atoms_per_reservoir_molecule}')
+
     def _press(dmu):
-        return 10.0 ** (2.0 * dmu / (k_b * T * np.log(10.0)))
+        return 10.0 ** (n_res * dmu / (k_b * T * np.log(10.0)))
 
     n_p = len(phase_order)
     if show_structures:
@@ -439,14 +467,14 @@ def plot_phase_diagram(
     y_floor = 50.0 * gamma_scale / 1000.0
     ax.set_xlim(dmu_grid[0], dmu_grid[-1])
     ax.set_ylim(min_g.min() - 0.25 * max(span, y_floor), min_g.max() + 1.2 * max(span, y_floor))
-    ax.set_xlabel(r"$\Delta\mu_{%s}(T,p)$ [eV]" % adsorbate, fontsize=18)
+    ax.set_xlabel(r"$\Delta\mu_{%s}(T,p)$ [eV]" % label, fontsize=18)
     ax.set_ylabel(rf"${symbol}$ [{unit}]", fontsize=18)
     ax.tick_params(direction="in", labelsize=14)
 
     ax2 = ax.twiny()
     ax2.plot(np.log10(_press(dmu_grid)), min_g, lw=0)
     ax2.set_xlabel(
-        rf"log$_{{10}}$ $(p_{{{adsorbate}_2}}/p_0)$, T = {int(T)} K", fontsize=16, labelpad=10
+        rf"log$_{{10}}$ $(p_{{{gas_label}}}/p_0)$, T = {int(T)} K", fontsize=16, labelpad=10
     )
     ax2.set_xlim(np.log10(_press(dmu_grid[0])), np.log10(_press(dmu_grid[-1])))
     ax2.tick_params(direction="in", labelsize=13)
@@ -467,13 +495,17 @@ def plot_phase_diagram(
             for sp in axs.spines.values():
                 sp.set_edgecolor(colors[i])
                 sp.set_linewidth(3.5)
-            label = "".join(
+            title = "".join(
                 f"{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$" for sym in metal_symbols
             )
             if n_ads > 0:
-                label += f"{adsorbate}$_{{{n_ads}}}$"
+                # Molecule-aware: with a proxy-counted adsorbate (e.g. CO via
+                # its C atom) the label names the molecule, parenthesized so
+                # (CO)_3 reads as three molecules rather than C-O3.
+                unit = label if len(label) == 1 else f"({label})"
+                title += f"{unit}$_{{{n_ads}}}$"
             axs.set_title(
-                label, fontsize=11, fontweight="bold",
+                title, fontsize=11, fontweight="bold",
                 bbox=dict(facecolor="white", edgecolor=colors[i],
                           linewidth=2.0, boxstyle="round,pad=0.3"),
             )

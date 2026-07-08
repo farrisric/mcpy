@@ -59,9 +59,8 @@ def overlap_volume(r1, r2, d):
     if d <= abs(r1 - r2):
         return (4/3) * math.pi * min(r1, r2)**3
 
-    part1 = (math.pi * (r1 + r2 - d)**2 * (d**2 + 2*d*(r1 + r2) - 3*(r1 - r2)**2)) / (12 * d)
-    part2 = (math.pi * (r1 + r2 - d)**2 * (d**2 + 2*d*(r1 + r2) - 3*(r1 - r2)**2)) / (12 * d)
-    return part1 + part2
+    return (math.pi * (r1 + r2 - d)**2
+            * (d**2 + 2*d*(r1 + r2) - 3*(r1 - r2)**2)) / (12 * d)
 
 
 def total_volume_with_overlap(spheres, positions):
@@ -82,20 +81,22 @@ def get_p_at_support(support: Atoms, particle: Atoms,
                      contact_surface: str = '100', gap: float = 2.0,
                      vacuum_z: float = 10.0) -> Atoms:
     """
-    Place an Ag truncated octahedron on top of a support.
+    Place a nanoparticle on top of a support. The passed ``particle`` is
+    modified in place (cell cleared, rotated/translated into position); the
+    support is copied.
 
     Parameters
     ----------
     support : Atoms
         The slab/support (its cell a,b are reused; z-PBC disabled).
-    layers : int
-        Octahedron size parameter for ASE Octahedron.
-    cutoff : float
-        Cutoff for ASE Octahedron (Å).
+    particle : Atoms
+        The nanoparticle to place. Mutated in place.
     contact_surface : {'100','111'}
         Which facet should contact the support.
     gap : float
         Vertical clearance between support top z and particle bottom z (Å).
+    vacuum_z : float
+        Vacuum padding added along z after combining (Å).
 
     Returns
     -------

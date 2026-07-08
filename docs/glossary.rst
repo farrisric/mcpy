@@ -68,9 +68,10 @@ page that mentions one of these terms links back here on first use.
        criterion. Mandatory for the hybrid GCMC workflow.
 
    Replica
-       One independent GCMC trajectory in a Replica-Exchange run, mapped
-       to one MPI rank. Replicas differ in temperature, chemical
-       potential, or both.
+       One independent GCMC trajectory in a Replica-Exchange run — one
+       MPI rank each in ``ReplicaExchange``, or one slot of a single
+       process in ``BatchedReplicaExchange``. Replicas differ in
+       temperature or chemical potential.
 
    Replica Exchange
        A wrapper around several GCMC replicas that periodically attempts

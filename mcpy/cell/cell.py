@@ -65,3 +65,11 @@ class Cell(BaseCell):
         :return: A list of species present in the custom cell.
         """
         return list(self.species_radii.keys())
+
+    def is_point_inside(self, point):
+        """The box cell spans the whole periodic cell: every point is inside.
+
+        Exists so molecule moves can call ``is_point_inside`` uniformly on
+        any cell type (the region cells implement a real test).
+        """
+        return True

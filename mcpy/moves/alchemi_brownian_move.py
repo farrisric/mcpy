@@ -43,14 +43,17 @@ class AlchemiBrownianMove(BaseMove):
         self.name = 'AlchemiBrownian'
 
     def do_trial_move(self, atoms: Atoms):
-        atoms_new = atoms.copy()
+        # Mutates ``atoms`` in place, like every GCMC move: the ensemble
+        # scores the object it passed in and rolls back from its arrays
+        # snapshot on rejection. Running the MD on a copy would leave the
+        # ensemble's atoms untouched and turn the move into a silent no-op.
         md_seed = self.rng.random.randrange(2 ** 31)
         self.calculator.run_md(
-            atoms_new,
+            atoms,
             temperature=self.temperature,
             friction=self.friction,
             dt=self.dt,
             steps=self.steps,
             seed=md_seed,
         )
-        return atoms_new, 0, 'X'
+        return atoms, 0, 'X'

@@ -9,6 +9,13 @@ class DisplacementMove(BaseMove):
 
     Mutates one atom's position in place. The ensemble rolls back via the
     pre-trial arrays snapshot if the move is rejected.
+
+    ``constraints`` is a static list of atom *indices* excluded from
+    displacement. GCMC insertions append at the end and deletions renumber
+    everything after the removed index, so the convention is: constrained
+    atoms (e.g. the support) must come FIRST in the Atoms object, before any
+    GCMC-exchangeable species. Then deletions only ever touch higher indices
+    and the constrained indices stay valid for the whole run.
     """
 
     def __init__(self,

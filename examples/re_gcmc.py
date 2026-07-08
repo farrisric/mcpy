@@ -15,6 +15,7 @@ from mcpy.utils.logging import configure as configure_logging
 
 configure_logging()
 
+from mcpy.calculators import BaseCalculator  # noqa: E402
 from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
 from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
@@ -58,9 +59,10 @@ def main():
     cell_ag_o = Cell(atoms, custom_height=5.5, bottom_z=12.8 - 2.11,
                      species_radii={'Ag': 2.11, 'O': 0})
 
-    calculator = mace_mp(device=args.device)
-    calculator.steps = args.rel_max_steps
-    calculator.fmax = args.rel_fmax
+    # BaseCalculator wraps the bare ASE calculator with an LBFGS relaxation
+    # before each energy evaluation (a bare mace_mp would never relax).
+    calculator = BaseCalculator(mace_mp(device=args.device),
+                                steps=args.rel_max_steps, fmax=args.rel_fmax)
 
     species = ['Ag', 'O']
     mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}

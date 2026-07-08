@@ -4,26 +4,24 @@ Installation
 Requirements
 ------------
 
-- Python >= 3.9
-- NumPy, SciPy, ASE
-- (Optional) An MLIP backend such as MACE, NequIP, or ACE
-- (Optional) `mpi4py` for replica-exchange runs
-
-From PyPI
----------
-
-.. code-block:: bash
-
-   pip install mcpy
+- Python >= 3.11
+- ASE >= 3.23 (pulls in NumPy, SciPy, matplotlib)
+- (Optional) An MLIP backend such as MACE (``.[mace]``) or NVIDIA Alchemi (``.[alchemi]``)
+- (Optional) `mpi4py` for MPI replica-exchange runs
 
 From source
 -----------
+
+``mcpy`` is not published on PyPI (the ``mcpy`` name there is an unrelated
+macro library) — install from the repository:
 
 .. code-block:: bash
 
    git clone https://github.com/farrisric/mcpy.git
    cd mcpy
-   pip install -e .[dev]
+   pip install -e .
+
+Add the ``test`` extra to run the test suite (``pip install -e .[test]``).
 
 Verify the installation
 -----------------------
@@ -35,11 +33,12 @@ Verify the installation
 MLIP backends
 -------------
 
-Install only the backends you intend to use. For example, MACE:
+Install only the backends you intend to use. For MACE
+(``MACECalculator`` / ``MACE_F_Calculator`` and the bundled examples):
 
 .. code-block:: bash
 
-   pip install mace-torch
+   pip install -e .[mace]
 
 GPU support follows each backend's own installation guide.
 
@@ -49,8 +48,9 @@ NVIDIA Alchemi backend (optional)
 For GPU-native MACE evaluation, ``mcpy`` ships an optional ``AlchemiCalculator``
 and ``AlchemiFCalculator`` backed by `nvalchemi-toolkit
 <https://github.com/NVIDIA/nvalchemi-toolkit>`_. Recommended for systems
-with **≥500 atoms** on CUDA — benchmarks on an RTX 5090 show ~2x speedup at
-586 atoms and ~4x speedup at 976 atoms vs ``mace_mp`` + ASE.
+with **≥500 atoms** on CUDA — the repository benchmark measured a **3.08x
+speedup on a 586-atom GCMC run** (20 steps, MACE+LBFGS vs Alchemi+FIRE,
+RTX 5090; see the README).
 
 Install via the ``alchemi`` extra:
 

@@ -106,7 +106,9 @@ class AlchemiFCalculator:
         Parameters
         ----------
         atoms : ase.Atoms
-            Starting geometry. Not mutated (a copy is used internally).
+            Starting geometry. Mutated in place: positions are updated to
+            the relaxed configuration (FixAtoms rows restored). The GCMC
+            ensembles rely on this write-back.
 
         Returns
         -------

@@ -93,12 +93,8 @@ def test_library_loggers_use_module_name():
 # ---------------------------------------------------------------------------
 
 def _lib_modules():
-    """All .py files inside mcpy/ that ship as library code (excludes script)."""
-    skip = {"compute_radii.py"}  # script, basicConfig is correctly under __main__
-    for path in LIB_ROOT.rglob("*.py"):
-        if path.name in skip:
-            continue
-        yield path
+    """All .py files inside mcpy/ that ship as library code."""
+    yield from LIB_ROOT.rglob("*.py")
 
 
 def test_no_basicconfig_in_library():
@@ -115,8 +111,8 @@ def test_no_basicconfig_in_library():
 
 
 def test_compute_radii_basicconfig_under_main_guard():
-    """The single allowed basicConfig must live under ``if __name__``."""
-    path = LIB_ROOT / "utils" / "compute_radii.py"
+    """The calibration script's basicConfig must live under ``if __name__``."""
+    path = REPO_ROOT / "scripts" / "compute_radii.py"
     text = path.read_text()
     # Find the offset of the main guard and any basicConfig call.
     guard_idx = text.find("if __name__ == '__main__':")

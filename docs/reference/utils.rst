@@ -117,6 +117,6 @@ the function docstring for the full set of thermodynamic-reference parameters.
 compute_radii
 -------------
 
-``mcpy/utils/compute_radii.py`` is a calibration script, not a library API. It
+``scripts/compute_radii.py`` is a calibration script, not a library API. It
 automates the ``species_radii`` workflow for FCC(111) hosts. Configuration and
 usage are documented in :doc:`../species_radii`.

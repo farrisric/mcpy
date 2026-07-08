@@ -7,6 +7,11 @@ from .cell import Cell
 class SphericalCell(Cell):
     """
     A class representing a spherical cell for nanoparticles.
+
+    .. warning::
+       Construction TRANSLATES the passed atoms in place so their center of
+       mass sits at the origin (the cell center). Use :class:`DomeCell` for
+       supported systems where the atoms must not be moved.
     """
 
     def __init__(self, atoms, vacuum, species_radii, mc_sample_points=100_000, seed=None):

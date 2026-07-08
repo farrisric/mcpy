@@ -31,6 +31,7 @@ Code
    from ase.cluster import Octahedron
    from mace.calculators import mace_mp
 
+   from mcpy.calculators import BaseCalculator
    from mcpy.cell import SphericalCell
    from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
    from mcpy.moves import DeletionMove, InsertionMove, PermutationMove
@@ -56,7 +57,9 @@ Code
        mc_sample_points=100_000,
    )
 
-   calculator = mace_mp(device='cuda')
+   # BaseCalculator relaxes with LBFGS before each energy evaluation;
+   # a bare mace_mp would return unrelaxed energies.
+   calculator = BaseCalculator(mace_mp(device='cuda'), steps=100, fmax=0.05)
 
    move_selector = MoveSelector(
        [1, 1, 1],
@@ -65,9 +68,7 @@ Code
         PermutationMove(species=['Au', 'Pt'], seed=seed_perm)],
    )
 
-   # Reference mu_H from molecular H2 with stricter relaxation.
-   calculator.steps = 100
-   calculator.fmax = 0.05
+   # Reference mu_H from molecular H2.
    e_h2 = calculator.get_potential_energy(molecule('H2'))
    mus = {'H': e_h2 / 2 + delta_mu_H}
 

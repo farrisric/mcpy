@@ -1,5 +1,4 @@
 """Tests for InsertionMove.max_atoms and DeletionMove.min_atoms limits."""
-import numpy as np
 from ase import Atoms
 
 from mcpy.cell.cell import Cell

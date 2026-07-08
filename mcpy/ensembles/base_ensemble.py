@@ -278,13 +278,23 @@ def write_xyz(atoms, energy, file_or_path, extra: str = ''):
     num_atoms = len(atoms)
     cell_str = " ".join(f"{v:.8f}" for v in cell.ravel())
 
+    mol_ids = atoms.arrays.get('molecule_id')
+
     comment = f'energy={energy:.6f}'
     if extra:
         comment += f' {extra}'
-    comment += f' Lattice="{cell_str}"\n'
+    comment += f' Lattice="{cell_str}"'
+    if mol_ids is not None:
+        comment += ' Properties=species:S:1:pos:R:3:molecule_id:I:1'
+    comment += '\n'
     parts = [f"{num_atoms}\n", comment]
-    for s, p in zip(symbols, positions):
-        parts.append(f"{s} {p[0]} {p[1]} {p[2]}\n")
+
+    for i, (s, p) in enumerate(zip(symbols, positions)):
+        line = f"{s} {p[0]} {p[1]} {p[2]}"
+        if mol_ids is not None:
+            line += f" {mol_ids[i]}"
+        line += "\n"
+        parts.append(line)
     text = "".join(parts)
 
     if isinstance(file_or_path, str):

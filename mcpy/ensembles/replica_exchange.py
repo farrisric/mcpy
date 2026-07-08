@@ -30,6 +30,14 @@ class ReplicaExchange:
         by including ``rank`` in the traj/outfile paths), otherwise all
         ranks race on the same files.
         """
+        if temperatures is None and mus is None:
+            raise ValueError("Provide either temperatures or mus (one per rank).")
+        if temperatures is not None and mus is not None:
+            # A joint (T, mu) ladder would need the full exchange criterion
+            # with both the (beta2-beta1)(E2-E1) and the mu*N terms; neither
+            # implemented rule covers it.
+            raise ValueError("Pass temperatures OR mus, not both.")
+
         if MPI is None:
             raise ImportError("mpi4py is required for ReplicaExchange. Please install it.")
 
@@ -46,6 +54,19 @@ class ReplicaExchange:
             assert len(mus) == self.size, "Number of mus must match MPI ranks."
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
+
+        # getattr chain: CanonicalEnsemble has no ``units`` attribute (it
+        # stores ``_beta`` directly) and is a supported temperature-ladder
+        # ensemble here, so a units-less ensemble must pass the guard.
+        if getattr(getattr(self.gcmc, 'units', None), 'molecules', None):
+            raise NotImplementedError(
+                "ReplicaExchange (MPI) does not support molecular species: "
+                "its per-species swap bookkeeping (_exchange_prob_T / "
+                "_exchange_prob_mu) counts atoms by symbol via "
+                "`atoms.symbols.count(specie)`, which is always 0 for a "
+                "molecular name such as 'H2O'. Use BatchedReplicaExchange "
+                "instead."
+            )
 
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval

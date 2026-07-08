@@ -10,6 +10,7 @@ from .base_ensemble import BaseEnsemble
 from ..utils.random_number_generator import RandomNumberGenerator
 from ..utils.set_unit_constant import SetUnits
 from ..moves.move_selector import MoveSelector
+from ..moves.molecule_utils import find_molecules
 from ..cell import Cell
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                  species: List[str],
                  temperature: float,
                  move_selector: MoveSelector,
+                 molecules: Optional[Dict[str, Atoms]] = None,
                  random_seed: Optional[int] = None,
                  traj_file: Optional[str] = 'trajectory.xyz',
                  traj_mode: str = 'w',
@@ -55,7 +57,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         self.units = SetUnits(units_type,
                               temperature=temperature,
-                              species=species)
+                              species=species,
+                              molecules=molecules)
 
         self.initial_atoms = len(self.atoms)
         self.n_atoms = len(self.atoms)
@@ -102,6 +105,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             self.exchange_attempts = state["exchange_attempts"]
         if "exchange_successes" in state:
             self.exchange_successes = state["exchange_successes"]
+        # The configuration changed under the cells: refresh their free
+        # volumes now, or the next insertion/deletion acceptance would use
+        # the previous configuration's volume (GCMC only recalculates on
+        # accepted moves).
+        self.calculate_cells_volume(self.atoms)
 
     def get_outfile_header(self) -> str:
         return (
@@ -128,8 +136,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             + "\n" + "-" * self._table_width + "\n"
         )
 
-    def write_outfile(self) -> None:
-        """Write one row: step, N, energy, per-interval acceptance ratios."""
+    def write_outfile(self, step: int = None, energy: float = None) -> None:
+        """Write one row: step, N, energy, per-interval acceptance ratios.
+
+        ``step``/``energy`` are accepted for compatibility with the
+        :class:`BaseEnsemble` signature but ignored — GCMC always logs its
+        own ``_step``/``E_old`` so the row matches the sampler state.
+        """
         if self._outfile is None or self._outfile_handle is None:
             return
         if self._last_logged_step == self._step:
@@ -155,11 +168,18 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
     def _minimum_score(self, atoms: Atoms, energy: float) -> float:
         """Grand potential Ω = E − Σ μ_i N_i. Comparing raw E across moves
-        that change N is not meaningful in the grand canonical ensemble."""
+        that change N is not meaningful in the grand canonical ensemble.
+        Molecular species count molecules, atomic species count atoms."""
         score = energy
         symbols = atoms.get_chemical_symbols()
         for specie, mu in self._mu.items():
-            score -= mu * symbols.count(specie)
+            if specie in self.units.molecules:
+                template = self.units.molecules[specie]
+                n = len(find_molecules(
+                    atoms, sorted(template.get_chemical_symbols())))
+            else:
+                n = symbols.count(specie)
+            score -= mu * n
         return score
 
     def _acceptance_condition(self,
@@ -170,9 +190,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                               n_atoms: int = None) -> bool:
         """Metropolis / de-Broglie acceptance test for displacement, insertion,
         and deletion moves. ``n_atoms`` is the particle count fed to the de
-        Broglie combinatorial factor; the GCMC loop passes the total atom count
-        before the move (the original convention, kept for consistency with the
-        group's published runs -- see docs/gcmc_acceptance_convention.rst)."""
+        Broglie combinatorial factor. Atomic moves pass the pre-move total
+        atom count (the original convention, kept for consistency with the
+        group's published runs); molecule moves pass their pre-move in-cell
+        molecule count via ``MoveSelector.get_exchange_count()`` -- see
+        docs/gcmc_acceptance_convention.rst."""
         if delta_particles == 0:
             if potential_diff <= 0:
                 return True
@@ -223,20 +245,35 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
             atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
 
-            if not atoms_new:
+            if atoms_new is False or atoms_new is None:
                 # Move couldn't be proposed (e.g. empty cell). The move did
                 # not mutate ``atoms``; MoveSelector already recorded the
-                # failure so it won't depress the acceptance ratio.
+                # failure so it won't depress the acceptance ratio. Identity
+                # check, not truthiness: an empty Atoms (last atom deleted)
+                # is falsy but is a real proposal that must be scored.
                 continue
+
+            if atoms_new is not atoms:
+                raise RuntimeError(
+                    f"move '{self.move_selector.get_name()}' returned a "
+                    "different Atoms object; GCMC moves must mutate the "
+                    "passed atoms in place (copy-based moves are for "
+                    "CanonicalEnsemble only)"
+                )
 
             E_new = self.compute_energy(atoms)
             delta_E = E_new - self.E_old
             volume = self.move_selector.get_volume()
-            # de Broglie particle count: total atom count before the move.
-            # ``self.n_atoms`` is updated only on acceptance, so it still holds
-            # the pre-move total here. See docs/gcmc_acceptance_convention.rst.
+            # de Broglie particle count. Molecule moves report their in-cell
+            # molecule count via ``get_exchange_count`` (textbook convention);
+            # atomic moves return None and fall back to the total atom count
+            # before the move (``self.n_atoms`` is updated only on acceptance).
+            # See docs/gcmc_acceptance_convention.rst.
+            n_exchange = self.move_selector.get_exchange_count()
+            if n_exchange is None:
+                n_exchange = self.n_atoms
             if self._acceptance_condition(delta_E, delta_particles, volume,
-                                          species, self.n_atoms):
+                                          species, n_exchange):
                 if self._wrap_on_accept:
                     atoms.wrap()
                 self.n_atoms = len(atoms)

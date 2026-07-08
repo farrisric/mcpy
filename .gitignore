@@ -19,6 +19,8 @@ wheels/
 *.pt
 *.pth
 
+# Internal benchmarks and profiling (collaborators only, not for the public repo)
+benchmark/internal/
 # Benchmark outputs (local only; regenerate with the benchmark/*.py scripts)
 benchmark/benchmark_results/
 benchmark/*.csv

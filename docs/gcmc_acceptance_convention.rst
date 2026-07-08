@@ -150,3 +150,52 @@ Where this lives in the code and tests
 - ``tests/test_custom_cell_region.py`` —
   ``test_subsurface_oxygen_is_excluded_from_deletion_candidates`` documents the
   buried-O caveat.
+
+
+Molecular moves
+---------------
+
+Rigid-molecule insertion/deletion (:class:`mcpy.moves.MoleculeInsertionMove`,
+:class:`mcpy.moves.MoleculeDeletionMove`) do **not** use the total-atom
+convention above. They use the textbook rigid-molecule form: ``N`` is the
+number of molecules of the exchanged species whose center of mass lies inside
+the move's cell, reported by the move itself through
+``MoveSelector.get_exchange_count()``. :math:`\Lambda` is computed from the
+total molecular mass, and ``delta_particles`` remains :math:`\pm 1` (one
+molecule per move).
+
+Orientations are sampled uniformly, so the rotational partition function is
+absorbed into :math:`\mu`: the chemical potential passed for a molecular
+species must be the **full** molecular chemical potential (translational,
+rotational, and internal contributions of the reference reservoir included).
+
+Atomic moves are unaffected: for them ``get_exchange_count()`` returns
+``None`` and the ensembles fall back to the total-atom count documented
+above.
+
+The textbook form above holds for ``min_insert=None``. When ``min_insert``
+is set, ``MoleculeInsertionMove`` retries the random position/orientation
+draw (up to 1000 times) against the cell's ``species_radii`` atoms until it
+clears that minimum separation, which effectively restricts the *proposal*
+to the non-overlapping volume; the *acceptance* test still divides by the
+full cell volume ``V``. This is the same proposal/acceptance mismatch
+already noted above for atomic moves (see "What LAMMPS does" -- mcpy's free
+volume is used for the combinatorial factor but insertion points are still
+sampled over the full cell box): at high density it over-accepts insertions
+by roughly :math:`V/V_\text{accessible}`.
+
+Atomic and molecular species of the same element can coexist (e.g. atomic O
+alongside O2 molecules): an atomic :class:`mcpy.moves.InsertionMove` tags its
+inserted atom as free (``molecule_id = -1``, guarding against ASE's zero-fill
+when extending arrays), and an atomic :class:`mcpy.moves.DeletionMove` only
+picks free atoms, never molecule members. Displacement-type moves are not
+molecule-aware: they can drag a member atom individually, which is
+thermodynamically valid with a relaxing calculator but departs from the
+rigid-molecule picture.
+
+The MPI :class:`mcpy.ensembles.ReplicaExchange` does not support molecular
+species either: its per-species swap bookkeeping counts atoms by symbol
+(``atoms.symbols.count(specie)``), which is always 0 for a molecular name, so
+its constructor raises ``NotImplementedError`` when the wrapped GCMC ensemble
+has molecular species configured; :class:`mcpy.ensembles.BatchedReplicaExchange`
+is the supported replica-exchange path for molecular GCMC.

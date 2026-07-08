@@ -161,7 +161,8 @@ from its mass and the temperature through the expression given in the acceptance
 rules above, evaluated in Å.
 
 In ``'LJ'`` units every constant equals one. The Boltzmann and Planck constants
-are 1, all masses are 1, and :math:`\Lambda = 1` for every species. The de
+are 1, all masses are 1, and :math:`\Lambda = 1` for every species, so
+:math:`\beta = 1/T^*` with :math:`T^*` the reduced temperature. The de
 Broglie factors then drop out of the insertion and deletion rules, leaving their
 reduced-unit forms.
 

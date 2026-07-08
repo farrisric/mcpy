@@ -1,5 +1,4 @@
 import logging
-import random
 import time
 
 import numpy as np
@@ -7,6 +6,7 @@ from ase import Atoms
 from ase.units import kB as boltzmann_constant
 
 from .base_ensemble import BaseEnsemble
+from ..utils.random_number_generator import RandomNumberGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,10 @@ class CanonicalEnsemble(BaseEnsemble):
                          minima_file=minima_file,
                          minima_mode=minima_mode)
 
-        if random_seed is not None:
-            random.seed(random_seed)
+        # Acceptance draws come from an ensemble-owned generator; the global
+        # ``random`` module is never seeded or drawn from (BaseEnsemble
+        # promises as much).
+        self._rng_acceptance = RandomNumberGenerator(seed=self._random_seed + 2)
 
         self.lowest_energy = float('inf')
         self._current_energy = None
@@ -106,7 +108,7 @@ class CanonicalEnsemble(BaseEnsemble):
         if self._temperature <= 1e-16:
             return False
         p = np.exp(-potential_diff / (boltzmann_constant * self._temperature))
-        return p > random.random()
+        return p > self._rng_acceptance.get_uniform()
 
     def relax(self, atoms) -> Atoms:
         atoms.info['key_value_pairs'] = {}
@@ -122,7 +124,7 @@ class CanonicalEnsemble(BaseEnsemble):
         new_atoms = self.atoms.copy()
         result = self.move_selector.do_trial_move(new_atoms)
         mutated = result[0] if isinstance(result, tuple) else result
-        if not mutated:
+        if mutated is False or mutated is None:
             return None
         if self.constraints:
             mutated.set_constraint(self.constraints)
@@ -145,8 +147,6 @@ class CanonicalEnsemble(BaseEnsemble):
             self.atoms = new_atoms
             self._current_energy = potential_f
             self.move_selector.acceptance_counter()
-            # Log the accepted configuration's energy, not the running minimum.
-            self.write_coordinates(self.atoms, self._current_energy)
             self._record_minimum(self.atoms, self._current_energy)
             return 1
         return 0
@@ -178,3 +178,7 @@ class CanonicalEnsemble(BaseEnsemble):
             self.logger.debug("step=%d E=%s lowest_E=%s accepted=%d t=%.2fs",
                               self._step, self._current_energy, self.lowest_energy,
                               self._accepted_trials, self._last_step_seconds)
+
+        if self._step % self._trajectory_write_interval == 0:
+            # Current accepted configuration (unchanged on a rejected step).
+            self.write_coordinates(self.atoms, self._current_energy)

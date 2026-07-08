@@ -50,6 +50,7 @@ class BatchedReplicaExchange:
         write_out_interval: int = 20,
         seed: int = 31,
         global_minimum_file: Optional[str] = 'global_minimum.xyz',
+        consolidate_logging: bool = True,
     ) -> None:
         if temperatures is None and mus is None:
             raise ValueError("Provide either temperatures or mus (one per replica).")
@@ -92,14 +93,27 @@ class BatchedReplicaExchange:
         self._outfile = outfile
         self._outfile_handle = None
         self._global_minimum_file = global_minimum_file
+        # With many replicas the per-replica GCMC lifecycle logs interleave
+        # into an unreadable console stream; by default they are silenced for
+        # the duration of run() and replaced by one consolidated status line
+        # per write interval. Per-replica detail still goes to each replica's
+        # own outfile and to the replica-exchange log.
+        self._consolidate_logging = consolidate_logging
 
     # ------------------------------------------------------------------ run
 
     def run(self) -> None:
+        import logging as _logging
+        quiet = _logging.getLogger('mcpy.ensembles.base_ensemble')
+        prior_level = quiet.level
+        if self._consolidate_logging:
+            quiet.setLevel(_logging.WARNING)
+
         for r in self.replicas:
             r.initialize_run()
         self._initialize_outfile()
         self._rebatch_initial_energies()
+        self._log_status(0)
 
         try:
             for step in range(self.gcmc_steps):
@@ -110,11 +124,16 @@ class BatchedReplicaExchange:
 
                 if step % self.write_out_interval == 0:
                     self._write_outfile(step)
+                    if step > 0:
+                        self._log_status(step)
 
                 self._re_step += 1
         finally:
             for r in self.replicas:
                 r.finalize_run()
+            if self._consolidate_logging:
+                quiet.setLevel(prior_level)
+            self._log_summary()
             if self._outfile_handle is not None:
                 try:
                     self._outfile_handle.close()
@@ -204,9 +223,18 @@ class BatchedReplicaExchange:
             atoms_new, delta_particles, species = (
                 result if isinstance(result, tuple) else (result, 0, None)
             )
-            if atoms_new:
-                trial_meta[i] = (delta_particles, species)
-            # else: move couldn't propose — atoms unchanged, snapshot harmless
+            if atoms_new is False or atoms_new is None:
+                # Move couldn't propose — atoms unchanged, snapshot harmless.
+                # Identity check, not truthiness: an empty Atoms (last atom
+                # deleted) is falsy but is a real proposal.
+                continue
+            if atoms_new is not r.atoms:
+                raise RuntimeError(
+                    f"move '{r.move_selector.get_name()}' returned a "
+                    "different Atoms object; GCMC moves must mutate the "
+                    "passed atoms in place"
+                )
+            trial_meta[i] = (delta_particles, species)
 
         viable = [i for i in active if i in trial_meta]
         if not viable:
@@ -219,11 +247,15 @@ class BatchedReplicaExchange:
             delta_particles, species = trial_meta[i]
             delta_E = float(E_new) - r.E_old
             volume = r.move_selector.get_volume()
-            # de Broglie particle count: total atom count before the move
-            # (``r.n_atoms`` is updated only on acceptance). See
+            # de Broglie particle count: molecule moves report their in-cell
+            # molecule count, atomic moves fall back to the pre-move total
+            # atom count (``r.n_atoms`` is updated only on acceptance). See
             # docs/gcmc_acceptance_convention.rst.
+            n_exchange = r.move_selector.get_exchange_count()
+            if n_exchange is None:
+                n_exchange = r.n_atoms
             if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                       r.n_atoms):
+                                       n_exchange):
                 if r._wrap_on_accept:
                     r.atoms.wrap()
                 r.n_atoms = len(r.atoms)
@@ -272,12 +304,15 @@ class BatchedReplicaExchange:
 
     @staticmethod
     def _grand_potential(r) -> float:
-        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ."""
-        mu = getattr(r, '_mu', None)
-        if not mu:
-            return r.E_old
-        counts = Counter(r.atoms.get_chemical_symbols())
-        return r.E_old - sum(mu_s * counts[s] for s, mu_s in mu.items())
+        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ.
+
+        Delegates to the replica's own ``_minimum_score``, which is exactly
+        this same grand-potential definition and already counts molecules
+        correctly for molecular mu keys (via ``find_molecules``) instead of
+        ``atoms.get_chemical_symbols()``, which is always 0 for a molecular
+        name such as ``'H2O'``.
+        """
+        return r._minimum_score(r.atoms, r.E_old)
 
     def _swap_states(self, i: int, j: int) -> None:
         """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to
@@ -318,6 +353,27 @@ class BatchedReplicaExchange:
         except OSError:
             self.logger.exception("Error opening output file %s", self._outfile)
             raise
+
+    def _log_status(self, step: int) -> None:
+        """One consolidated console line for all replicas."""
+        n = ' '.join(f'{len(r.atoms):4d}' for r in self.replicas)
+        e = ' '.join(f'{r.E_old:10.2f}' for r in self.replicas)
+        att = sum(self.exchange_attempts)
+        acc = sum(self.exchange_successes)
+        swap = f'{acc / att:.0%}' if att else 'n/a'
+        self.logger.info('RE %d/%d | N: %s | E(eV): %s | swap acc %s',
+                         step, self.gcmc_steps, n, e, swap)
+
+    def _log_summary(self) -> None:
+        """Final consolidated summary: per-replica move acceptances."""
+        for i, r in enumerate(self.replicas):
+            ratios = ' '.join(
+                f'{x:.0%}' if x == x else 'n/a'
+                for x in r.move_selector.total_ratios()
+            )
+            self.logger.info(
+                'replica %d done: steps=%d N=%d E=%.4f eV | move acc: %s',
+                i, r._step, len(r.atoms), r.E_old, ratios)
 
     def _write_outfile(self, step: int) -> None:
         if self._outfile_handle is None:

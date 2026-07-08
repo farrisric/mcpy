@@ -23,6 +23,13 @@
 ## Features
 
 - Grand Canonical Monte Carlo simulations
+- **Molecular adsorbates**: whole-molecule insertion/deletion and rigid
+  translate+rotate displacement moves (O2, H2O, CO, NH3, any ASE-buildable
+  template), with per-atom `molecule_id` bookkeeping that survives rollback,
+  trajectories, and restarts — cross-validated against LAMMPS `fix gcmc`
+  (see `benchmark/README.md`)
+- Atomic and molecular species can coexist in one simulation (e.g. dissociative
+  O at mu_O = mu_O2/2 alongside molecular O2)
 - Integration with ASE for atomic simulations
 - Support for MACE calculator potential and other calculators
 - **Optional NVIDIA Alchemi backend** (`nvalchemi-toolkit`) for GPU-native MACE
@@ -45,6 +52,12 @@ Alternatively, you can install the package in editable mode:
 
 ```sh
 pip install -e .
+```
+
+To use the MACE calculators (and run the bundled examples), add the `mace` extra:
+
+```sh
+pip install -e .[mace]
 ```
 
 ### Optional: NVIDIA Alchemi backend (large systems on CUDA)
@@ -93,13 +106,12 @@ conda install mpi4py
 Core:
 
 - `ase>=3.23.0`
-- `mace-torch>=0.3.9`
-- `scikit-learn>=1.6.1`
 
 Optional:
 
+- `mace-torch>=0.3.9` — MACE calculators (install via `.[mace]`)
 - `nvalchemi-toolkit[mace]>=0.1.0` — GPU-native MACE (install via `.[alchemi]`)
-- `mpi4py>=4.0.1` — replica exchange (install via conda)
+- `mpi4py>=4.0.3` — replica exchange (install via conda)
 
 ## Usage
 
@@ -156,6 +168,44 @@ gcmc = GrandCanonicalEnsemble(
 
 gcmc.run(1000000)
 ```
+
+### Molecular GCMC
+
+Whole molecules are exchanged with the reservoir by passing an ASE template:
+the chemical potential is the full molecular chemical potential
+(`mu = E(molecule) + delta_mu`; orientations are sampled uniformly, so the
+rotational partition function is absorbed into `mu` — see
+`docs/gcmc_acceptance_convention.rst`).
+
+```python
+from ase.build import molecule
+
+from mcpy.moves import (MoleculeInsertionMove, MoleculeDeletionMove,
+                        MoleculeDisplacementMove)
+
+co = molecule('CO')
+e_co = calculator.get_potential_energy(molecule('CO', cell=[20.0] * 3))
+
+moves = MoveSelector(
+    [2, 2, 1],
+    [MoleculeInsertionMove(scell, co, 'CO', seed=1, min_insert=1.3),
+     MoleculeDeletionMove(scell, co, 'CO', seed=2),
+     MoleculeDisplacementMove(scell, co, 'CO', seed=3,
+                              max_displacement=0.6, max_angle=0.6)],
+)
+
+gcmc = GrandCanonicalEnsemble(
+    atoms=atoms, cells=[scell], calculator=calculator,
+    mu={'CO': e_co - 0.65},
+    molecules={'CO': co},          # registers the molecular species
+    units_type='metal', species=[], temperature=400.0,
+    move_selector=moves)
+```
+
+Runnable examples: `examples/gcmc_molecule_mace.py` (O2 on Ag(111); any g2 molecule via `--molecule`) and
+`examples/re_gcmc_co_cupd_batched.py` (CO on a CuPd nanoparticle with batched
+replica exchange and a phase diagram). The notebooks in `notebooks/` walk
+through the machinery step by step.
 
 ## Contributing
 
