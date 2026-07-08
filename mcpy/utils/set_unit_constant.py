@@ -30,6 +30,12 @@ class SetUnits:
 
         compositions = {}
         for name, template in self.molecules.items():
+            if name in self.species:
+                raise ValueError(
+                    f"'{name}' is both an atomic species and a molecular "
+                    'species; the molecular mass would silently overwrite '
+                    'the atomic one. Use a distinct molecular name.'
+                )
             key = tuple(sorted(template.get_chemical_symbols()))
             if key in compositions:
                 raise ValueError(

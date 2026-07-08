@@ -576,3 +576,10 @@ def test_molecule_displacement_capped_rotation():
     # Rigidity still holds.
     np.testing.assert_allclose(np.linalg.norm(v_after),
                                np.linalg.norm(v_before), atol=1e-10)
+
+
+def test_setunits_rejects_atomic_molecular_name_collision():
+    with pytest.raises(ValueError, match='both an atomic species'):
+        SetUnits('metal', temperature=300.0, species=['O'],
+                 molecules={'O': Atoms('O2', positions=[[0, 0, 0],
+                                                        [0, 0, 1.2]])})

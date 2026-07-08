@@ -43,8 +43,12 @@ def parse_args():
     p.add_argument('--octa-length', type=int, default=4,
                    help='Octahedron length (4,1 -> 38 atoms; 9,3 -> 405)')
     p.add_argument('--octa-cutoff', type=int, default=1)
-    p.add_argument('--gcmc-steps', type=int, default=80)
-    p.add_argument('--exchange-interval', type=int, default=8)
+    p.add_argument('--gcmc-steps', type=int, default=80,
+                   help='GCMC steps per replica')
+    p.add_argument('--exchange-interval', type=int, default=8,
+                   help='Steps between replica-exchange attempts; use >= 50 '
+                        'for per-mu coverage curves (small values over-mix '
+                        'the ladder)')
     p.add_argument('--checkpoint', default='medium-mpa-0')
     p.add_argument('--rel-steps', type=int, default=30)
     p.add_argument('--rel-fmax', type=float, default=0.1)
@@ -58,7 +62,8 @@ def parse_args():
                    help='Max rotation angle of the rigid move (rad); '
                         'None = full uniform rotation')
     p.add_argument('--no-compile', action='store_true')
-    p.add_argument('--seed', type=int, default=7)
+    p.add_argument('--seed', type=int, default=7,
+                   help='Master seed for moves, RE, and the Pd placement')
     p.add_argument('--outdir',
                    default=os.path.expanduser('~/mcpy_tmp_runs/co_cupd'),
                    help='Output directory (kept outside the git repo)')
