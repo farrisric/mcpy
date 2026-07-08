@@ -54,8 +54,8 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    :caption: Diving deeper
    :maxdepth: 1
 
-   ensembles
    cells
+   ensembles
    species_radii
    moves
    molecular_adsorbates

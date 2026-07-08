@@ -5,12 +5,8 @@ A *move* in `mcpy` proposes a new atomic configuration. The ensemble then evalua
 corresponding acceptance rule -- Metropolis for number-conserving moves, de-Broglie for
 insertions and deletions -- and either commits the new configuration or rolls back.
 
-Every move follows the `BaseMove` interface and exposes:
-
-- `do_trial_move(atoms)` -- propose a trial structure (and, for number-changing moves,
-  signal the change via `delta_particles`),
-- volume hooks via the attached cell (`get_volume`, `calculate_volume`).
-
+Every move exposes `do_trial_move(atoms)`, which proposes a trial structure and, for
+number-changing moves, signals the change via `delta_particles`.
 A run typically mixes several move types using a `MoveSelector`.
 
 

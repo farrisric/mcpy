@@ -1,35 +1,26 @@
 Simulating molecular adsorbates
 ===============================
 
-Intent
-------
-
 Molecular moves exchange whole molecules such as CO, O\ :sub:`2`, or
 H\ :sub:`2`\ O with the reservoir instead of single atoms.
-An atomic move set cannot represent a CO reservoir at all, and it would tear
-an O\ :sub:`2` admolecule apart one atom at a time with no way to keep the
-pair thermodynamically consistent.
 Read this page when your adsorbate is a molecule, when you need to set a
 molecular chemical potential, or when atomic and molecular species share one
 simulation.
 
 
-Design decisions
-----------------
+How it works
+------------
 
 **Molecules move as rigid bodies.**
 The insertion proposal places the template at a random position with a
 uniform random orientation, and the displacement proposal translates and
 rotates a molecule without bending it.
-Internal vibrations contribute nothing to which adsorption sites are
-sampled, so proposing them would only lower acceptance.
 With a relaxing calculator the molecule still relaxes after placement, so
 the rigid template is a starting point, not a frozen geometry.
 
 **mu means the full molecular chemical potential.**
 Orientations are proposed uniformly, which absorbs the rotational partition
 function into the chemical potential rather than into the acceptance rule.
-The practical consequence is a one-line recipe.
 Compute the molecule's energy in a box with your production calculator and
 pass ``mu = E(molecule) + delta_mu``, where ``delta_mu`` carries the
 translational, rotational, and pressure contributions of the reference
@@ -51,11 +42,10 @@ value and free atoms carrying ``-1``.
 Deletion removes a whole id group, and the array shrinks with the structure,
 so membership never drifts out of sync with the atom list.
 
-**Rollback reuses the existing arrays snapshot.**
-The ensembles already restore all per-atom arrays when a trial is rejected,
-and ``molecule_id`` is such an array.
-Molecular moves therefore needed no new rejection machinery, and a rejected
-molecular trial leaves the bookkeeping bit-identical to before the proposal.
+**Rollback restores the bookkeeping.**
+The ensembles restore all per-atom arrays when a trial is rejected, and
+``molecule_id`` is such an array, so a rejected molecular trial leaves the
+bookkeeping bit-identical to before the proposal.
 
 **Trajectories carry molecule_id for restarts.**
 The extended-XYZ writer declares the array in ``Properties=``, so

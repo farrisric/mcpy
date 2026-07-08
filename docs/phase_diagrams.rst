@@ -1,9 +1,6 @@
 Building phase diagrams from GCMC output
 ========================================
 
-Intent
-------
-
 A phase diagram turns the trajectories of a chemical-potential sweep into a
 stability map with phase boundaries.
 Raw GCMC energies are not comparable across conditions, because each run
@@ -23,8 +20,8 @@ nanoparticles alike.
    :sub:`2` pressure at 500 K on the top axis.
 
 
-Design decisions
-----------------
+How it works
+------------
 
 **Each frame maps to a line in Delta mu.**
 For a frame with energy :math:`E` and :math:`n` adsorbate atoms, the
@@ -43,16 +40,14 @@ between winners are the phase boundaries the function reports.
 
 **The clean frame anchors the reference.**
 The lowest-energy adsorbate-free frame in the input becomes
-:math:`E_{\mathrm{ref}}`, which makes the whole diagram self-contained
-rather than dependent on an externally tabulated clean-surface energy.
+:math:`E_{\mathrm{ref}}`, so the whole diagram is self-contained.
 The function raises an error when no adsorbate-free frame is present, so
 keep the starting configuration of one run in the input even after dropping
 equilibration.
 
 **Trajectories supply the candidate structures.**
-GCMC has already sampled the configurations the reservoir favours, so the
-diagram is built from every production frame rather than from a hand-picked
-set.
+The diagram is built from every production frame rather than from a
+hand-picked set.
 Frames written by mcpy carry their energy on the comment line, and the
 function reads it back without re-evaluating anything.
 

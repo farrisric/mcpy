@@ -21,22 +21,8 @@ lower-score configuration is observed, it is appended to (or overwrites) a dedic
 
 The remainder of this page describes each one, the acceptance criteria they implement, the
 free-volume estimator used by GCMC insertion/deletion, and the running-minimum output.
-
-
-`BaseEnsemble`
---------------
-
-Shared infrastructure used by every concrete ensemble:
-
-- storage of `atoms`, `cells`, and the ASE-compatible calculator,
-- single-point energy evaluation (optionally preceded by a local relaxation),
-- trajectory and log writers driven by `trajectory_write_interval` and
-  `outfile_write_interval`,
-- initialization, finalization, and step-counter management,
-- a running-minimum hook (``_record_minimum``) that snapshots the best-so-far configuration
-  and optionally writes it to ``minima_file`` -- see :ref:`running-minima`.
-
-`BaseEnsemble` is abstract -- you instantiate one of the concrete subclasses below.
+Every ensemble stores the atoms, cells, and calculator, writes the trajectory and log at the
+configured intervals, and tracks the running minimum (see :ref:`running-minima`).
 
 
 `CanonicalEnsemble`

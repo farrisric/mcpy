@@ -6,20 +6,11 @@ estimator decides whether a sampled point is occupied. Because :math:`V_{\mathrm
 the GCMC insertion and deletion acceptance terms directly (see :ref:`free-volume`), the
 quality of these radii is a sensitive input -- not a tuning knob to leave at default values.
 
-This page describes how to choose them in a reproducible way.
-
-
-Idea
-----
-
 The exclusion radius for a host species should reflect the **shortest adsorbate-host distance
-that survives a local relaxation** with the calculator used in production. In the thesis
-that motivates this library, this radius is denoted :math:`r_{\mathrm{relax}}` and is
-identified as the position of the first maximum in the radial distribution function (RDF) of
-the adsorbate around host atoms, taken over an ensemble of relaxed insertion trials.
-
-In other words: every value of `species_radii` should be tied to the specific
-calculator and relaxation settings used during production. Re-calibrate if either changes.
+that survives a local relaxation** with the calculator used in production (the thesis behind
+this library denotes it :math:`r_{\mathrm{relax}}`). Every value of `species_radii` is tied to
+the specific calculator and relaxation settings used during production; re-calibrate if either
+changes.
 
 
 Free-volume estimate (recap)
@@ -49,108 +40,68 @@ See :ref:`free-volume` for the role of :math:`V_{\mathrm{free}}` in the GCMC acc
    exclusion disks of radius :math:`r_{\mathrm{Ag}}` (dotted circles); the
    free fraction of the window sets :math:`V_{\mathrm{free}}`.
 
-The insertion region itself is chosen to focus sampling on chemically relevant volumes:
 
-- **Surface slabs** -- a sub-region spanning the full :math:`(x, y)` extent of the cell and
-  a finite thickness along :math:`z` (e.g. ~5.5 Å) covering the topmost atomic layer and a
-  thin vacuum gap.
-- **Nanoparticles** -- a sphere centred on the particle, with a small vacuum margin
-  (e.g. ~3 Å) between the outermost atom and the boundary so insertions stay close to the
-  surface.
+Measure the radius from relaxed insertions
+------------------------------------------
 
-
-Reference workflow: O on Ag
----------------------------
-
-For oxygen insertions on silver surfaces the recommended workflow is:
-
-1. Build representative Ag slabs covering the facets and coverages relevant to your study.
-2. Place a single O atom at many candidate sites (top, bridge, hollow, plus randomised
-   lateral positions and heights).
-3. Relax each structure with the *same* calculator and convergence settings used in
-   production.
-4. For every relaxed structure, record the nearest O-Ag distance.
-5. Aggregate the distribution and read off a conservative minimum stable O-Ag distance --
-   for example, the first peak of the RDF or the lower edge of its dominant mode.
-
-The resulting distance defines the O/Ag exclusion scale used in `species_radii`.
-
-
-Mapping pair distances to element-wise radii
---------------------------------------------
-
-`species_radii` stores per-element radii, while the measurement above produces a *pair*
-distance. Either of the following conventions is used in the reference application; just be
-consistent across a project:
-
-- **All on the host species** -- put the full pair distance on the host and zero on the
-  adsorbate. For O on Ag::
-
-      species_radii = {"Ag": d_min_O_Ag, "O": 0.0}
-
-- **Split between species** -- divide the pair distance equally::
-
-      species_radii = {"Ag": 0.5 * d_min_O_Ag, "O": 0.5 * d_min_O_Ag}
-
-Regardless of choice, validate the calibration with a short pilot run before launching
-production: monitor the insertion-move acceptance ratio and the reported
-:math:`V_{\mathrm{free}}` -- both should be stable and non-degenerate.
-
-
-Automated calibration with `compute_radii.py`
----------------------------------------------
-
-The script `scripts/compute_radii.py` automates the workflow above for FCC(111) hosts:
-
-- builds a periodic FCC(111) slab of the chosen metal,
-- repeatedly inserts a trial atom into a `CustomCell` placed over the surface,
-- relaxes each insertion with the supplied MACE model,
-- records the nearest-neighbour distance before and after relaxation,
-- saves the distance pairs and writes a histogram/KDE plot for visual inspection.
-
-Inputs
-~~~~~~
-
-- a path to a trained MACE model (passed as the single command-line argument).
-
-Outputs (one set per inserted species)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- ``<species>_distances.npy`` -- pairs of ``(d_insertion, d_relaxed)`` nearest-neighbour
-  distances.
-- ``dist_hist.png`` -- histogram and KDE of the relaxed distances, used to pick a
-  conservative exclusion distance.
-- ``insertion.log`` -- progress and per-trial diagnostics.
-
-Configuration
-~~~~~~~~~~~~~
-
-Edit the top of `compute_radii.py` to match your system before running:
-
-- `metal_species` (e.g. `"Ag"`),
-- `gas_species` (e.g. `"O"`),
-- `lattice_param`,
-- `cell_bottom`, `cell_height` -- defines the rectangular insertion sub-slab,
-- `n_trials`,
-- `relax_max_steps`, `relax_fmax` -- relaxation convergence.
-
-Run
-~~~
-
-.. code-block:: bash
-
-   python scripts/compute_radii.py /path/to/your_mace_model.model
-
-Interpretation
-~~~~~~~~~~~~~~
-
-Inspect ``<species>_distances.npy`` and ``dist_hist.png``. Identify the first peak of the
-relaxed distribution -- that is your :math:`r_{\mathrm{relax}}`. Then translate it into
-element-wise radii using one of the conventions above:
+Drop a trial adsorbate at random positions above the surface, relax each trial with your
+production calculator, and record the nearest adsorbate-host distance that survives:
 
 .. code-block:: python
 
-   species_radii = {"Ag": d_min_O_Ag, "O": 0.0}
+   import numpy as np
+   from ase.build import fcc111
+   from ase.constraints import FixAtoms
+   from ase.optimize import LBFGS
 
-The same script and procedure apply to other host/adsorbate pairs by changing
-`metal_species` and `gas_species`.
+   rng = np.random.default_rng(11)
+   slab0 = fcc111('Ag', a=4.085, size=(3, 3, 3), vacuum=8.0, periodic=True)
+   z_top = slab0.positions[:, 2].max()
+
+   distances = []
+   for _ in range(150):
+       slab = slab0.copy()
+       slab.set_constraint(FixAtoms(indices=[a.index for a in slab if a.tag == 3]))
+       slab.append('O')
+       slab.positions[-1] = [rng.uniform(0, slab.cell[0, 0]),
+                             rng.uniform(0, slab.cell[1, 1]),
+                             z_top + rng.uniform(1.0, 3.5)]
+       slab.calc = calculator          # your production calculator
+       LBFGS(slab, logfile=None).run(fmax=0.1, steps=50)
+       d = slab.get_distances(len(slab) - 1, range(len(slab) - 1), mic=True)
+       distances.append(d.min())
+
+   r_relax = np.percentile(distances, 5)   # edge of the first peak
+
+.. figure:: _static/fig_species_radii.png
+   :alt: Histogram of relaxed nearest O-Ag distances with the first-peak edge marked.
+   :width: 85%
+   :align: center
+
+   The histogram this loop produces (O on Ag(111); EMT stands in for the
+   production calculator, generated by ``docs/make_figures.py``). The sharp
+   first peak collects the chemisorbed outcomes; its lower edge is
+   :math:`r_{\mathrm{relax}}`.
+
+The far cluster of large distances comes from trials that relaxed away without binding --
+ignore it and read off the lower edge of the first peak.
+``scripts/compute_radii.py`` packages this loop for FCC(111) hosts with a MACE model.
+
+
+Use the value in a simulation
+-----------------------------
+
+Put the measured pair distance on the host species and zero on the adsorbate (or split it
+equally between the two -- either convention works if used consistently):
+
+.. code-block:: python
+
+   cell = CustomCell(
+       atoms,
+       custom_height=5.0,
+       bottom_z=atoms.positions[:, 2].max() + 0.5,
+       species_radii={'Ag': r_relax, 'O': 0.0},
+   )
+
+Validate with a short pilot run before production: the insertion acceptance ratio and the
+reported :math:`V_{\mathrm{free}}` should both be stable and non-degenerate.

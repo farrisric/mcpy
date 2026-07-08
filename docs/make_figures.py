@@ -35,6 +35,13 @@ VERMILION = '#D55E00'
 GREEN = '#009E73'
 PURPLE = '#CC79A7'
 
+# EMT demo chemical potential. EMT's toy O-Ag energetics are bistable
+# (near-empty below ~ -0.25 eV, multilayer condensation above ~ -0.2 eV),
+# so the demo drives at -0.2 eV and caps the O population at one monolayer
+# with max_atoms; deletions still fire, so the plateau fluctuates.
+MU_O_DEMO = -0.2
+MAX_O_DEMO = 9  # one O per top-layer Ag on the 3x3 slab
+
 ATOM_COLORS = {'Ag': '#BFBFBF', 'O': VERMILION, 'Al': '#8FA8C8', 'Cu': '#C87B4B', 'Pd': '#2E7E85'}
 ATOM_RADII = {'Ag': 1.45, 'O': 0.66, 'Al': 1.21, 'Cu': 1.32, 'Pd': 1.39}
 
@@ -185,8 +192,8 @@ def fig_free_volume():
     plt.close(fig)
 
 
-def run_emt_gcmc(workdir):
-    """The EMT smoke-test run from docs/examples/gcmc_simulations.rst."""
+def _run_one_emt_gcmc(outdir, mu, seed=0, steps=1000):
+    """One capped EMT GCMC run of the tutorial setup; returns the trajectory."""
     from ase.build import fcc111
     from ase.calculators.emt import EMT
     from ase.constraints import FixAtoms
@@ -203,38 +210,43 @@ def run_emt_gcmc(workdir):
                       bottom_z=atoms.positions[:, 2].max() + 0.5,
                       species_radii={'Ag': 2.75, 'O': 0.0})
     calculator = BaseCalculator(calculator=EMT(), steps=20, fmax=0.1)
-    ss = np.random.SeedSequence(0)
+    ss = np.random.SeedSequence(seed)
     s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
     moves = MoveSelector(
         [1, 1],
-        [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1),
+        [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1,
+                       max_atoms=MAX_O_DEMO),
          DeletionMove(cell, species=['O'], seed=s2)])
-    # EMT's O-Ag binding is shallow (about -0.05 eV per adsorbed O), so the
-    # chemical potential must sit near that scale for insertions to accept.
     gcmc = GrandCanonicalEnsemble(
         atoms=atoms, cells=[cell], calculator=calculator,
-        mu={'O': -0.2}, units_type='metal', species=['O'], temperature=500.0,
+        mu={'O': mu}, units_type='metal', species=['O'], temperature=500.0,
         move_selector=moves,
-        outfile=str(workdir / 'gcmc_demo.out'),
-        traj_file=str(workdir / 'gcmc_demo.xyz'))
-    gcmc.run(steps=1000)
-    return workdir / 'gcmc_demo.xyz'
+        outfile=str(outdir / 'gcmc.out'),
+        traj_file=str(outdir / 'gcmc.xyz'))
+    gcmc.run(steps=steps)
+    return outdir / 'gcmc.xyz'
 
 
-def fig_run(traj_path):
+def run_emt_gcmc(workdir):
+    """The single-condition EMT demo run behind the run-evolution figures."""
+    return _run_one_emt_gcmc(Path(workdir), mu=MU_O_DEMO, seed=0)
+
+
+def fig_run(traj_path, mu_o=-0.25):
     """Run-evolution curves and snapshot strip from the EMT trajectory."""
     from ase.io import read
 
     traj = read(traj_path, index=':')
-    n_o = [sum(a.symbol == 'O' for a in f) for f in traj]
-    energy = [f.info.get('energy', f.get_potential_energy()) for f in traj]
+    n_o = np.array([sum(a.symbol == 'O' for a in f) for f in traj])
+    energy = np.array([f.info.get('energy', f.get_potential_energy()) for f in traj])
+    grand = energy - mu_o * n_o
     steps = np.arange(len(traj))
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(7, 5), sharex=True)
     a1.plot(steps, n_o, color=BLUE, linewidth=1.4)
     a1.set_ylabel(r'$N_\mathrm{O}$ on slab')
-    a2.plot(steps, energy, color=ORANGE, linewidth=1.4)
-    a2.set_ylabel('Energy (eV)')
+    a2.plot(steps, grand, color=ORANGE, linewidth=1.4)
+    a2.set_ylabel(r'$\Omega = E - \mu_\mathrm{O} N_\mathrm{O}$ (eV)')
     a2.set_xlabel('GCMC step')
     for ax in (a1, a2):
         ax.grid(alpha=0.3)
@@ -257,6 +269,88 @@ def fig_run(traj_path):
         ax.set_title(f'step {k}   $N_\\mathrm{{O}}$ = {n}')
     fig.savefig(STATIC / 'fig_run_snapshots.png')
     plt.close(fig)
+
+
+def fig_radii(n_trials=150):
+    """Calibration figure for species_radii: relaxed nearest-neighbour
+    distances of trial O insertions on Ag(111) (EMT stand-in for the
+    production calculator)."""
+    from ase.build import fcc111
+    from ase.calculators.emt import EMT
+    from ase.constraints import FixAtoms
+    from ase.optimize import LBFGS
+
+    rng = np.random.default_rng(11)
+    slab0 = fcc111('Ag', a=4.085, size=(3, 3, 3), vacuum=8.0, periodic=True)
+    bottom = [a.index for a in slab0 if a.tag == 3]
+    z_top = slab0.positions[:, 2].max()
+
+    distances = []
+    for _ in range(n_trials):
+        slab = slab0.copy()
+        slab.set_constraint(FixAtoms(indices=bottom))
+        pos = [rng.uniform(0, slab.cell[0, 0]), rng.uniform(0, slab.cell[1, 1]),
+               z_top + rng.uniform(1.0, 3.5)]
+        slab.append('O')
+        slab.positions[-1] = pos
+        slab.calc = EMT()
+        try:
+            LBFGS(slab, logfile=None).run(fmax=0.1, steps=50)
+        except Exception:
+            continue
+        d = slab.get_distances(len(slab) - 1, range(len(slab) - 1), mic=True)
+        distances.append(d.min())
+
+    distances = np.array(distances)
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.hist(distances, bins=30, color=SKY, edgecolor='white')
+    r = np.percentile(distances, 5)
+    ax.axvline(r, color=VERMILION, linewidth=1.6, linestyle='--',
+               label=f'first peak edge $r$ = {r:.2f} Å')
+    ax.set_xlabel('nearest O-Ag distance after relaxation (Å)')
+    ax.set_ylabel('count')
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(STATIC / 'fig_species_radii.png')
+    plt.close(fig)
+
+
+# On EMT's energy scale (e_o2/2 is +0.46 eV) adsorption turns favourable
+# around an absolute mu_O of -0.2 eV, i.e. dmu around -0.65.
+SWEEP_DMUS = (-0.75, -0.70, -0.65, -0.60, -0.55)
+
+
+def run_emt_sweep(workdir):
+    """The tutorial's mu sweep, EMT edition: one capped GCMC run per dmu."""
+    from ase.build import molecule
+    from ase.calculators.emt import EMT
+
+    workdir = Path(workdir)
+    o2 = molecule('O2', cell=[12.0] * 3)
+    o2.calc = EMT()
+    e_o2 = o2.get_potential_energy()
+    for dmu in SWEEP_DMUS:
+        outdir = workdir / f'dmu_{dmu:+.2f}'
+        outdir.mkdir(parents=True, exist_ok=True)
+        _run_one_emt_gcmc(outdir, mu=e_o2 / 2 + dmu, seed=int(abs(dmu) * 100))
+    return e_o2
+
+
+def fig_sweep_phase_diagram(sweep_dir, e_o2):
+    """The tutorial's own phase-diagram call, run on the EMT demo sweep."""
+    from ase.io import read
+
+    from mcpy.utils.phase_diagram import plot_phase_diagram
+
+    sweep_dir = Path(sweep_dir)
+    clean = read(sweep_dir / f'dmu_{SWEEP_DMUS[0]:+.2f}/gcmc.xyz', index='0')
+    frames = [clean] + [
+        read(sweep_dir / f'dmu_{d:+.2f}/gcmc.xyz', index='500:')
+        for d in SWEEP_DMUS]
+    plot_phase_diagram(
+        frames, adsorbate='O', metal_symbols=('Ag',), mu_ref=e_o2 / 2,
+        kind='surface', T=500.0, dmu_range=(-0.7, -0.3),
+        outfile=str(STATIC / 'fig_phase_diagram_emt_sweep.png'))
 
 
 def extract_notebook_figures():
@@ -294,8 +388,11 @@ if __name__ == '__main__':
     STATIC.mkdir(exist_ok=True)
     fig_cells()
     fig_free_volume()
+    fig_radii()
     extract_notebook_figures()
     with tempfile.TemporaryDirectory() as td:
         traj = run_emt_gcmc(Path(td))
-        fig_run(traj)
+        fig_run(traj, mu_o=MU_O_DEMO)
+        e_o2 = run_emt_sweep(Path(td) / 'sweep')
+        fig_sweep_phase_diagram(Path(td) / 'sweep', e_o2)
     print(f'Figures written to {STATIC}')

@@ -1,9 +1,6 @@
 Computing energies and relaxing trial moves
 ============================================
 
-Intent
-------
-
 For each trial configuration the Monte Carlo loop asks the calculator for an
 energy. In `mcpy` the answer usually includes a short local relaxation first. A
 calculator wrapper takes the trial structure, runs a capped geometry
@@ -22,20 +19,20 @@ Read this page when choosing a backend, deciding how much relaxation to spend
 per trial, or scaling a run onto a GPU.
 
 
-Design decisions
-----------------
+How it works
+------------
 
 **Relaxation runs inside energy evaluation.** Every wrapper exposes one method,
 ``get_potential_energy(atoms)``, and performs the relaxation there. The energy
 handed to the Metropolis or de Broglie acceptance rule is therefore always the
-relaxed energy. Keeping the two steps together removes any risk of comparing a
-relaxed energy against an unrelaxed one, which would corrupt detailed balance.
+relaxed energy, and a relaxed value is never compared against an unrelaxed one.
 
-**Any ASE calculator works through** ``BaseCalculator``. `mcpy` does not require
-a bespoke energy backend. ``BaseCalculator`` wraps a configured ASE calculator
-and drives an LBFGS relaxation around it, so a DFT code, a classical potential,
-or an MLIP such as NequIP or ACE plugs in without new code. The MACE and Alchemi
-classes are conveniences over this same pattern.
+**Any ASE calculator works through** ``BaseCalculator(calculator, steps, fmax)``.
+It wraps a configured ASE calculator and drives an LBFGS relaxation around it
+(up to ``steps`` iterations or until the maximum force drops below ``fmax`` in
+eV/Å), so a DFT code, a classical potential, or an MLIP such as NequIP or ACE
+plugs in without new code. The MACE and Alchemi classes below are conveniences
+over this same pattern.
 
 **Caps bound the relaxation, they do not converge it.** Each trial relaxes for
 at most ``steps`` optimizer iterations or until the maximum force drops below
@@ -79,19 +76,6 @@ forward pass per move, faster on one GPU than launching a separate context per
 replica. A ``chunk_size`` argument splits that batch into sub-batches, which caps
 peak GPU memory at one chunk and so frees the replica count from the memory
 budget (see :ref:`controlling-gpu-memory`).
-
-
-Driving any ASE calculator
---------------------------
-
-``BaseCalculator(calculator, steps, fmax)``
-   The general adapter. Give it a constructed ASE calculator, a maximum number
-   of LBFGS steps, and a force tolerance in eV/Å. Use it for any potential
-   without a dedicated wrapper, including DFT codes and MLIPs other than MACE.
-
-``BaseCalculator.get_potential_energy(atoms)``
-   Attaches the calculator to ``atoms``, runs LBFGS up to ``steps`` or ``fmax``,
-   and returns the relaxed energy. The ``atoms`` object is relaxed in place.
 
 
 Running MACE potentials

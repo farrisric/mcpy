@@ -7,20 +7,19 @@ provides random points for insertion, classifies atoms as "inside" the active re
 returns the accessible volume :math:`V_{\mathrm{free}}` used by the GCMC acceptance rules
 (see :ref:`free-volume`).
 
-Five cell types are exported from `mcpy.cell`:
+Four cell geometries are exported from `mcpy.cell`:
 
 .. code-block:: python
 
-   from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell, NullCell
+   from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell
 
 .. figure:: _static/fig_cells.png
    :alt: Side views of the four cell geometries with the active region shaded.
    :width: 100%
    :align: center
 
-   The four non-trivial cell geometries (side views). The shaded region is
-   where insertion points are drawn; ``NullCell`` has no region and is not
-   shown.
+   The four cell geometries (side views). The shaded region is where
+   insertion points are drawn.
 
 
 Choosing exclusion radii (`species_radii`)
@@ -170,21 +169,6 @@ Key parameters:
 A worked end-to-end run is in :doc:`examples/gcmc_dome_supported`.
 
 
-`NullCell` -- placeholder
--------------------------
-
-`NullCell` is a no-op cell. Its volume is zero and it provides no insertion points. Use it
-as a placeholder where the API requires a cell-like object but no insertion region is
-needed (e.g. a pure-displacement canonical run).
-
-.. code-block:: python
-
-   from mcpy.cell import NullCell
-
-   null_cell = NullCell()
-   V = null_cell.get_volume()  # 0
-
-
 Choosing the right cell
 -----------------------
 
@@ -192,4 +176,3 @@ Choosing the right cell
 - `CustomCell` -- slab/surface windows inside a periodic box.
 - `SphericalCell` -- isolated clusters and nanoparticles.
 - `DomeCell` -- nanoparticles supported on a substrate (keeps insertions on the particle).
-- `NullCell` -- placeholder for runs that need no insertion region.
