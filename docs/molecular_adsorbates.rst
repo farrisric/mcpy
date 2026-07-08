@@ -30,8 +30,7 @@ reservoir.
 The combinatorial :math:`N` in the insertion and deletion rules is the
 number of molecules of that species with center of mass inside the move's
 cell, and the de Broglie wavelength comes from the total molecular mass.
-This is the textbook rigid-molecule convention and matches LAMMPS
-``fix gcmc``.
+This is the textbook rigid-molecule convention.
 Atomic moves keep mcpy's historical total-atom-count convention, and the two
 coexist in one run.
 :doc:`gcmc_acceptance_convention` records why the conventions differ.

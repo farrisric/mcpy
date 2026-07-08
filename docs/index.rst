@@ -59,7 +59,6 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    species_radii
    moves
    molecular_adsorbates
-   calculators
    phase_diagrams
    gcmc_acceptance_convention
 

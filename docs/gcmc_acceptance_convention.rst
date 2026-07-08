@@ -4,7 +4,7 @@ GCMC acceptance: the de Broglie particle count
 This note records a deliberate, non-obvious convention in the grand-canonical
 acceptance test, the discussion behind it, and the change history. It exists so
 the choice is not silently "fixed" by a future contributor who (correctly)
-notices it departs from the textbook/LAMMPS form.
+notices it departs from the textbook form.
 
 .. contents::
    :local:
@@ -40,7 +40,7 @@ total atom count (the convention mcpy uses)
     the fixed substrate. This is what ``do_gcmc_step`` and
     ``BatchedReplicaExchange`` pass today (``self.n_atoms`` / ``r.n_atoms``).
 
-per-species exchangeable count (textbook / LAMMPS)
+per-species exchangeable count (textbook)
     ``N`` = number of atoms *of the exchanged species* inside the insertion
     region (the move's cell). This is the physically standard choice.
 
@@ -53,37 +53,16 @@ that factor. The interaction with all those atoms enters the acceptance through
 :math:`\Delta E` (the total potential energy change), not through ``N``.
 
 
-What LAMMPS does
-----------------
+Two related conventions to keep in mind:
 
-``fix gcmc`` (``src/MC/fix_gcmc.cpp``) uses exactly the per-species, in-region
-count. Its acceptance lines are::
-
-    // insertion
-    random < zz*volume*exp(-beta*insertion_energy)/(ngas+1)
-    // deletion
-    random < ngas*exp(beta*deletion_energy)/(zz*volume)
-    // activity
-    zz = exp(beta*chemical_potential)/pow(lambda,3.0);
-
-so :math:`p_\text{ins} = V/((n_\text{gas}+1)\Lambda^3)\,e^{-\beta(\Delta U-\mu)}`,
-identical in form to mcpy. ``ngas`` is built by ``update_gas_atoms_list()``,
-which keeps only atoms passing both the group/type filter (``mask[i] & groupbit``,
-restricted to the exchanged type) and the region test (``region->match(...)``).
-LAMMPS also confirms two further conventions mcpy shares or should note:
-
-- ``mu`` is the **full** chemical potential, including the ideal/:math:`\Lambda`
-  term (``zz = exp(beta*mu)/lambda^3``). So ``mu`` must be referenced on the
-  calculator's absolute energy scale (e.g. an O\ :sub:`2` gas reference at the
-  target ``T`` and ``p``).
-- ``volume`` is the **geometric** region volume (MC-sampled only to handle odd
-  region shapes); it does **not** exclude space occupied by atoms. mcpy instead
-  uses a *free* volume (``cell_volume * (1 - occupied_fraction)``) while still
-  sampling insertion points over the full cell box — an internal inconsistency
-  LAMMPS does not have.
-
-Sources: https://docs.lammps.org/fix_gcmc.html and
-https://github.com/lammps/lammps/blob/develop/src/MC/fix_gcmc.cpp
+- ``mu`` is the **full** chemical potential, including the
+  ideal/:math:`\Lambda` term. So ``mu`` must be referenced on the
+  calculator's absolute energy scale (e.g. an O\ :sub:`2` gas reference at
+  the target ``T`` and ``p``).
+- mcpy uses a *free* volume (``cell_volume * (1 - occupied_fraction)``) in
+  the combinatorial factor while still sampling insertion points over the
+  full cell box, so the proposal and acceptance volumes differ at high
+  density.
 
 
 Why mcpy keeps the total atom count
@@ -179,10 +158,8 @@ draw (up to 1000 times) against the cell's ``species_radii`` atoms until it
 clears that minimum separation, which effectively restricts the *proposal*
 to the non-overlapping volume; the *acceptance* test still divides by the
 full cell volume ``V``. This is the same proposal/acceptance mismatch
-already noted above for atomic moves (see "What LAMMPS does" -- mcpy's free
-volume is used for the combinatorial factor but insertion points are still
-sampled over the full cell box): at high density it over-accepts insertions
-by roughly :math:`V/V_\text{accessible}`.
+already noted above for atomic moves: at high density it over-accepts
+insertions by roughly :math:`V/V_\text{accessible}`.
 
 Atomic and molecular species of the same element can coexist (e.g. atomic O
 alongside O2 molecules): an atomic :class:`mcpy.moves.InsertionMove` tags its

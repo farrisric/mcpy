@@ -153,7 +153,7 @@ off the nearest hollow site, and evaluated as placed it carries a repulsive
 energy that would reject nearly every insertion.
 Relaxing first lets acceptance reflect the chemistry of the nearby minimum
 instead of the luck of the draw, which is what makes GCMC workable on a dense
-metal surface (see :doc:`calculators` for the full story).
+metal surface (see :doc:`reference/calculators` for the calculator options).
 
 ``steps`` and ``fmax`` cap the relaxation budget.
 Forty optimizer steps to a loose 0.1 eV/Å tolerance is enough to absorb the
