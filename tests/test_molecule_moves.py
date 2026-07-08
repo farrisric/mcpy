@@ -583,3 +583,48 @@ def test_setunits_rejects_atomic_molecular_name_collision():
         SetUnits('metal', temperature=300.0, species=['O'],
                  molecules={'O': Atoms('O2', positions=[[0, 0, 0],
                                                         [0, 0, 1.2]])})
+
+
+class _ZWindowCell(Cell):
+    """Bounded stub region: COM must sit in a z window."""
+
+    def __init__(self, atoms, z_lo, z_hi):
+        super().__init__(atoms)
+        self.z_lo, self.z_hi = z_lo, z_hi
+
+    def is_point_inside(self, point):
+        return self.z_lo <= point[2] < self.z_hi
+
+
+def test_molecule_displacement_cannot_escape_region():
+    # Detailed balance at the region boundary: a displacement that would move
+    # the COM outside must be rejected as a failed proposal, otherwise the
+    # boundary is a one-way door and molecules strand outside the cell
+    # (invisible to deletion but still counted in the grand potential).
+    for seed in range(30):
+        atoms = _water_box()
+        cell = _ZWindowCell(atoms, 4.0, 6.0)  # H2O COM starts near z=5
+        move = MoleculeDisplacementMove(cell, _water_template(), 'H2O',
+                                        seed=seed, max_displacement=3.0)
+        result, delta, name = move.do_trial_move(atoms)
+        com = molecule_com(atoms, np.array([0, 1, 2]))
+        if result is False:
+            # rejected proposal must not have mutated anything
+            np.testing.assert_allclose(com[2], molecule_com(
+                _water_box(), np.array([0, 1, 2]))[2])
+        else:
+            assert 4.0 <= com[2] < 6.0, f'escaped region (seed {seed})'
+
+
+def test_molecule_displacement_mic_rigidity():
+    # Molecule straddling a periodic boundary stays rigid under displacement.
+    atoms = Atoms('O2', positions=[[5, 5, 9.8], [5, 5, 0.6]],
+                  cell=[10, 10, 10], pbc=True)
+    atoms.new_array('molecule_id', np.array([0, 0]))
+    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 0.8]])
+    move = MoleculeDisplacementMove(Cell(atoms), o2, 'O2', seed=4,
+                                    max_displacement=0.5)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is atoms
+    d = atoms.get_distance(0, 1, mic=True)
+    np.testing.assert_allclose(d, 0.8, atol=1e-9)

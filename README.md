@@ -202,7 +202,7 @@ gcmc = GrandCanonicalEnsemble(
     move_selector=moves)
 ```
 
-Runnable examples: `examples/gcmc_molecule_mace.py` (CO on Ag(111)) and
+Runnable examples: `examples/gcmc_molecule_mace.py` (O2 on Ag(111); any g2 molecule via `--molecule`) and
 `examples/re_gcmc_co_cupd_batched.py` (CO on a CuPd nanoparticle with batched
 replica exchange and a phase diagram). The notebooks in `notebooks/` walk
 through the machinery step by step.

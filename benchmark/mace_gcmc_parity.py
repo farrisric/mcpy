@@ -37,10 +37,12 @@ T = 400.0
 KB = 8.617333e-5
 BETA = 1.0 / (KB * T)
 
-SCRATCH = os.environ.get('MACE_PARITY_SCRATCH',
-                         os.path.dirname(os.path.abspath(__file__)))
-TORCH_LIB = os.path.expanduser(
-    '~/miniconda3/envs/mcpy/lib/python3.14/site-packages/torch/lib')
+# Directory containing the libtorch shared libraries the patched LAMMPS
+# links against; override for a different environment.
+TORCH_LIB = os.environ.get(
+    'MACE_PARITY_TORCH_LIB',
+    os.path.expanduser(
+        '~/miniconda3/envs/mcpy/lib/python3.14/site-packages/torch/lib'))
 
 
 # --------------------------------------------------------------------------

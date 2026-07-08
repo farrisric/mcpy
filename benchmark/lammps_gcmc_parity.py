@@ -221,7 +221,7 @@ def run_mcpy(calc, moves, probs, mu, species, molecules, steps, seed,
     return n_series, e_series
 
 
-def seeded_atoms(n, seed, spacing_ok=True):
+def seeded_atoms(n, seed):
     rng = np.random.default_rng(seed)
     pos = rng.uniform(0.9, L - 0.9, size=(n, 3))
     return Atoms(f'H{n}', positions=pos, cell=[L, L, L], pbc=True)

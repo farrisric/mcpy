@@ -1,6 +1,6 @@
 import numpy as np
 from ase import Atoms
-from ase.geometry import find_mic
+from ase.geometry import find_mic, wrap_positions
 
 from .base_move import BaseMove
 from .molecule_utils import find_molecules, molecule_com, random_rotation_matrix
@@ -58,6 +58,15 @@ class MoleculeDisplacementMove(BaseMove):
             rz = 2.0 * self.rng.get_uniform() - 1.0
             rsq = rx * rx + ry * ry + rz * rz
         shift = np.array([rx, ry, rz]) * self.max_displacement
+        # Reject displacements that carry the COM out of the region: the
+        # reverse proposal would have zero probability (the molecule stops
+        # being a candidate), so crossing would be a one-way door that
+        # strands molecules outside the grand-canonical bookkeeping.
+        new_com = com + shift
+        if np.any(np.asarray(atoms.pbc)):
+            new_com = wrap_positions([new_com], atoms.cell, pbc=atoms.pbc)[0]
+        if not self.cell.is_point_inside(new_com):
+            return False, 0, self.name
         if self.max_angle is None:
             rotation = random_rotation_matrix(self.rng)
         else:

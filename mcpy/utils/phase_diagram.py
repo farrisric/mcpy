@@ -426,7 +426,8 @@ def plot_phase_diagram(
 
     label = adsorbate_label if adsorbate_label is not None else adsorbate
     n_res = float(atoms_per_reservoir_molecule)
-    gas_label = f'{label}_2' if atoms_per_reservoir_molecule == 2 else label
+    gas_label = (label if atoms_per_reservoir_molecule == 1
+                 else f'{label}_{atoms_per_reservoir_molecule}')
 
     def _press(dmu):
         return 10.0 ** (n_res * dmu / (k_b * T * np.log(10.0)))
@@ -494,13 +495,13 @@ def plot_phase_diagram(
             for sp in axs.spines.values():
                 sp.set_edgecolor(colors[i])
                 sp.set_linewidth(3.5)
-            label = "".join(
+            title = "".join(
                 f"{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$" for sym in metal_symbols
             )
             if n_ads > 0:
-                label += f"{adsorbate}$_{{{n_ads}}}$"
+                title += f"{adsorbate}$_{{{n_ads}}}$"
             axs.set_title(
-                label, fontsize=11, fontweight="bold",
+                title, fontsize=11, fontweight="bold",
                 bbox=dict(facecolor="white", edgecolor=colors[i],
                           linewidth=2.0, boxstyle="round,pad=0.3"),
             )
