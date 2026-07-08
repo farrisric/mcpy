@@ -21,7 +21,7 @@ Prerequisites
 - A MACE checkpoint, or any ASE calculator (the script defaults to
   ``mace_mp`` on CUDA — swap for EMT or another calculator for a quick
   smoke test).
-- See :doc:`../first_simulation` for the minimal API walkthrough.
+- See :doc:`../getting_started` for the minimal API walkthrough.
 
 Code
 ----

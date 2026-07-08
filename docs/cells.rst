@@ -13,6 +13,15 @@ Five cell types are exported from `mcpy.cell`:
 
    from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell, NullCell
 
+.. figure:: _static/fig_cells.png
+   :alt: Side views of the four cell geometries with the active region shaded.
+   :width: 100%
+   :align: center
+
+   The four non-trivial cell geometries (side views). The shaded region is
+   where insertion points are drawn; ``NullCell`` has no region and is not
+   shown.
+
 
 Choosing exclusion radii (`species_radii`)
 ------------------------------------------

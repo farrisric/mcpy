@@ -3,20 +3,23 @@ Minimal GCMC on an Ag(111) slab
 
 Shortest possible GCMC example using only EMT, suitable for a quick smoke
 test of the install. For a calibrated MLIP-based run see
-:doc:`../first_simulation` and the tutorial in
-:doc:`../tutorials/oxidation_phase_diagram`.
+:doc:`../getting_started`.
 
 Goal
 ----
 
 Run 500 GCMC steps of oxygen insertion/deletion on a clean Ag(111) slab at
-:math:`T = 500\,\mathrm{K}` and :math:`\mu_{\mathrm{O}} = -5.0\,\mathrm{eV}`,
+:math:`T = 500\,\mathrm{K}` and :math:`\mu_{\mathrm{O}} = -0.2\,\mathrm{eV}`,
 using EMT so it runs anywhere without GPUs or MACE checkpoints.
 
 .. note::
 
    EMT is **only** for plumbing tests — its O–Ag interaction is not
    physical. Swap in MACE (or any ASE calculator) for production.
+   EMT also has its own energy scale: adsorbing one O changes the energy by
+   only about :math:`-0.05` eV, so :math:`\mu_{\mathrm{O}}` must sit near
+   that value. An MLIP-scale chemical potential such as :math:`-5` eV never
+   accepts an insertion on EMT.
 
 Code
 ----
@@ -60,7 +63,7 @@ Code
        atoms=atoms,
        cells=[cell],
        calculator=calculator,
-       mu={'O': -5.0},
+       mu={'O': -0.2},
        units_type='metal',
        species=['O'],
        temperature=500.0,
@@ -101,6 +104,5 @@ analyzer — see :doc:`phase_diagram_analysis`.
 Next steps
 ----------
 
-- Replace EMT with a MACE checkpoint: see :doc:`../first_simulation`.
-- Sweep :math:`\mu_{\mathrm{O}}` to build a phase diagram:
-  :doc:`../tutorials/oxidation_phase_diagram`.
+- Replace EMT with a MACE checkpoint and sweep :math:`\mu_{\mathrm{O}}` to
+  build a phase diagram: see :doc:`../getting_started`.

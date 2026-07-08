@@ -15,7 +15,7 @@ try:
     release = importlib.metadata.version('mcpy')
 except importlib.metadata.PackageNotFoundError:
     # docs built without the package installed
-    release = '1.2.0'
+    release = '1.3.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

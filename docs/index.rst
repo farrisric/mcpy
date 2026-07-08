@@ -48,24 +48,25 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    :maxdepth: 1
 
    installation
-   first_simulation
+   getting_started
 
 .. toctree::
-   :caption: Background
+   :caption: Diving deeper
    :maxdepth: 1
 
    ensembles
    cells
    species_radii
    moves
+   molecular_adsorbates
    calculators
+   phase_diagrams
    gcmc_acceptance_convention
 
 .. toctree::
    :caption: Tutorials
    :maxdepth: 1
 
-   tutorials/oxidation_phase_diagram
    tutorials/cluster_install_iqtc
 
 .. toctree::
@@ -73,6 +74,7 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    :maxdepth: 1
 
    examples
+   notebooks
 
 .. toctree::
    :caption: API reference

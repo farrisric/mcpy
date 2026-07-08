@@ -39,6 +39,16 @@ For completeness, the estimator used by every cell object in `mcpy` is:
 
 See :ref:`free-volume` for the role of :math:`V_{\mathrm{free}}` in the GCMC acceptance terms.
 
+.. figure:: _static/fig_free_volume.png
+   :alt: Sample points in a slab window classified as free or occupied.
+   :width: 85%
+   :align: center
+
+   The estimator at work in a ``CustomCell`` window over an Ag(111) slab
+   (2D schematic). Each random point (dots) is classified against the
+   exclusion disks of radius :math:`r_{\mathrm{Ag}}` (dotted circles); the
+   free fraction of the window sets :math:`V_{\mathrm{free}}`.
+
 The insertion region itself is chosen to focus sampling on chemically relevant volumes:
 
 - **Surface slabs** -- a sub-region spanning the full :math:`(x, y)` extent of the cell and

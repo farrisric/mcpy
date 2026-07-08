@@ -138,6 +138,15 @@ Outputs
   acceptance ratio of each registered move. The interval counters are reset after every
   write; cumulative ratios are reported at the end of the run.
 
+.. figure:: _static/fig_lj_equilibration.png
+   :alt: Particle count against MC trial for a Lennard-Jones GCMC run.
+   :width: 85%
+   :align: center
+
+   The signature of a converged GCMC run: the particle count climbs from
+   the empty box and settles into a fluctuating steady state (Lennard-Jones
+   gas, 30 000 trials, from the executed GCMC-basics notebook).
+
 
 Setting a unit system
 ---------------------

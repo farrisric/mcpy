@@ -57,42 +57,9 @@ replaces the geometric :math:`V` of the textbook expressions (see :doc:`species_
 Phase diagrams from GCMC ensembles
 ----------------------------------
 
-For oxidation studies, the relevant thermodynamic potential is the oxygen-dependent
-formation Gibbs energy. For an Ag-O configuration of energy :math:`E` containing
-:math:`n_{\mathrm{Ag}}` silver and :math:`n_{\mathrm{O}}` oxygen atoms,
-
-.. math::
-
-   \Delta G = \bigl(E - n_{\mathrm{Ag}}\,\mu_{\mathrm{Ag}} - n_{\mathrm{O}}\,\mu_{\mathrm{O}}\bigr)
-              - E_{\mathrm{ref}},
-
-where :math:`E_{\mathrm{ref}}` is the energy of a reference clean Ag system (slab or
-nanoparticle). For surfaces, normalising by the slab area :math:`A` yields the surface
-Gibbs energy
-
-.. math::
-
-   \gamma = \frac{E - n_{\mathrm{Ag}}\,\mu_{\mathrm{Ag}} - n_{\mathrm{O}}\,\mu_{\mathrm{O}}}{A}
-             - \gamma_{\mathrm{ref}},
-   \qquad
-   \gamma_{\mathrm{ref}} = E_{\mathrm{ref}}/A.
-
-The oxygen chemical potential is varied to mimic a range of environmental conditions:
-
-.. math::
-
-   \mu_{\mathrm{O}}(T, p) =
-   \frac{1}{2}\, E^{\mathrm{DFT}}_{\mathrm{O}_2}
-   + \Delta \mu_{\mathrm{O}}(T)
-   + \frac{1}{2} k_B T \ln\!\left(\frac{p}{p_0}\right),
-
-with :math:`\Delta \mu_{\mathrm{O}}(T)` a tabulated temperature-dependent correction and
-:math:`p_0` the reference pressure (typically 1 atm).
-
-Plotting :math:`\Delta G` (or :math:`\gamma`) against :math:`\mu_{\mathrm{O}}` for each
-candidate configuration produces the phase diagram; the lower envelope (convex hull) is the
-set of thermodynamically stable phases, and crossings between curves locate the phase
-transitions.
+The formation-energy construction, the lower-envelope logic, and the
+post-processing utilities are described in :doc:`phase_diagrams`.
+The replica-exchange examples below end in exactly that analysis.
 
 
 Examples by workflow
