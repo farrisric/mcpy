@@ -610,8 +610,8 @@ def test_molecule_displacement_cannot_escape_region():
         com = molecule_com(atoms, np.array([0, 1, 2]))
         if result is False:
             # rejected proposal must not have mutated anything
-            np.testing.assert_allclose(com[2], molecule_com(
-                _water_box(), np.array([0, 1, 2]))[2])
+            np.testing.assert_allclose(atoms.positions,
+                                       _water_box().positions)
         else:
             assert 4.0 <= com[2] < 6.0, f'escaped region (seed {seed})'
 
