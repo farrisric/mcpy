@@ -56,7 +56,6 @@ jobs:
     # secret (readthedocs.org -> account settings -> API tokens).
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     steps:
       - name: Trigger Read the Docs build
         env:
