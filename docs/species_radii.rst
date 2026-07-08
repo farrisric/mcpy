@@ -35,10 +35,11 @@ See :ref:`free-volume` for the role of :math:`V_{\mathrm{free}}` in the GCMC acc
    :width: 85%
    :align: center
 
-   The estimator at work in a ``CustomCell`` window over an Ag(111) slab
-   (2D schematic). Each random point (dots) is classified against the
-   exclusion disks of radius :math:`r_{\mathrm{Ag}}` (dotted circles); the
-   free fraction of the window sets :math:`V_{\mathrm{free}}`.
+   The estimator at work in a ``CustomCell`` over an Ag(111) slab, sampled
+   by the cell itself (``docs/make_figures.py``). Each point drawn by
+   ``cell.get_random_point()`` is classified against the exclusion disks of
+   radius :math:`r_{\mathrm{Ag}}` (dotted circles); the free fraction sets
+   the :math:`V_{\mathrm{free}}` that ``cell.get_volume()`` returns.
 
 
 Measure the radius from relaxed insertions

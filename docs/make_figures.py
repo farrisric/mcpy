@@ -157,28 +157,42 @@ def fig_cells():
 
 
 def fig_free_volume():
-    """Free-volume estimator schematic: exclusion disks and sample points."""
+    """Free-volume figure built with the tutorial's own CustomCell: points
+    come from cell.get_random_point() and the free volume from the cell's
+    estimator."""
     from ase.build import fcc111
+    from scipy.spatial import cKDTree
 
-    rng = np.random.default_rng(7)
-    slab = fcc111('Ag', a=4.085, size=(4, 1, 3), vacuum=8.0, periodic=False)
+    from mcpy.cell import CustomCell
+
     r_ag = 2.75
-    bottom_z = slab.positions[:, 2].max() + 0.5
     height = 5.0
-    x0, x1 = -1.0, slab.positions[:, 0].max() + 2.0
+    slab = fcc111('Ag', a=4.085, size=(4, 4, 3), vacuum=8.0, periodic=True)
+    bottom_z = slab.positions[:, 2].max() + 0.5
+    cell = CustomCell(slab, custom_height=height, bottom_z=bottom_z,
+                      species_radii={'Ag': r_ag, 'O': 0.0},
+                      mc_sample_points=100_000, seed=7)
+    cell.calculate_volume(slab)
+    v_free, v_cell = cell.get_volume(), cell.cell_volume
 
-    pts = np.c_[rng.uniform(x0, x1, 500), rng.uniform(bottom_z, bottom_z + height, 500)]
-    xz = slab.positions[:, [0, 2]]
-    occ = (np.linalg.norm(pts[:, None] - xz[None], axis=2) <= r_ag).any(axis=1)
+    pts = np.array([cell.get_random_point() for _ in range(600)])
+    # classify the plotted points exactly as the cell's estimator does
+    tree = cKDTree(cell._periodic_images(slab))
+    dists, _ = tree.query(pts - cell.offset, k=1)
+    occ = dists <= r_ag
 
     fig, ax = plt.subplots(figsize=(7, 4.4))
     draw_atoms_2d(ax, slab)
-    for p in xz[xz[:, 1] > slab.positions[:, 2].max() - 1]:
+    top = slab.positions[slab.positions[:, 2] > bottom_z - 1.2]
+    for p in top[:, [0, 2]]:
         ax.add_patch(Circle(p, r_ag, facecolor='none', edgecolor='gray',
                             linestyle=':', linewidth=1.0, zorder=1))
+    x0, x1 = pts[:, 0].min(), pts[:, 0].max()
     shade(ax, Rectangle((x0, bottom_z), x1 - x0, height))
-    ax.scatter(*pts[~occ].T, s=8, color=GREEN, zorder=4, label='free')
-    ax.scatter(*pts[occ].T, s=8, color=VERMILION, zorder=4, label='occupied')
+    ax.scatter(pts[~occ][:, 0], pts[~occ][:, 2], s=8, color=GREEN,
+               zorder=4, label='free')
+    ax.scatter(pts[occ][:, 0], pts[occ][:, 2], s=8, color=VERMILION,
+               zorder=4, label='occupied')
     ax.legend(loc='upper left', bbox_to_anchor=(1.01, 1.0), frameon=False)
     ax.set_xlim(x0 - 3.5, x1 + 3.5)
     ax.set_ylim(slab.positions[:, 2].min() - 2, bottom_z + height + 1.5)
@@ -186,8 +200,10 @@ def fig_free_volume():
     ax.set_yticks([])
     for s in ax.spines.values():
         s.set_visible(False)
-    ax.set_title('Random points in the cell window, classified by the '
-                 f'exclusion radius ($r_\\mathrm{{Ag}}$ = {r_ag} Å)')
+    ax.set_title('CustomCell sampling (side view): '
+                 f'$V_\\mathrm{{free}}$ = {v_free:.0f} of {v_cell:.0f} '
+                 f'$\\mathrm{{\\AA^3}}$ '
+                 f'({100 * (1 - v_free / v_cell):.0f}% occupied)')
     fig.savefig(STATIC / 'fig_free_volume.png')
     plt.close(fig)
 

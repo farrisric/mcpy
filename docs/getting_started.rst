@@ -79,10 +79,11 @@ derive them for your own potential and system.
    :width: 85%
    :align: center
 
-   The ``CustomCell`` window above the slab (2D schematic). The cell samples
-   random points in the shaded window and classifies each one against the
-   exclusion radii; only the free fraction counts toward
-   :math:`V_{\mathrm{free}}`.
+   The ``CustomCell`` built above, sampled by its own machinery
+   (``docs/make_figures.py``): the dots are draws from
+   ``cell.get_random_point()``, classified by the cell's estimator, and the
+   :math:`V_{\mathrm{free}}` in the title is what ``cell.get_volume()``
+   reports and the acceptance rule uses.
 
 .. code-block:: python
 
