@@ -33,11 +33,7 @@
 - Integration with ASE for atomic simulations
 - Support for MACE calculator potential and other calculators
 - **Optional NVIDIA Alchemi backend** (`nvalchemi-toolkit`) for GPU-native MACE
-  evaluation and FIRE relaxation — **3.08x speedup on 586-atom GCMC**
-  (20 steps, MACE+LBFGS vs Alchemi+FIRE, RTX 5090)
-- **Single-GPU batched replica exchange** with a `chunk_size` knob that caps
-  peak GPU memory at one chunk (independent of replica count), plus an
-  `energy_only` fast path for the no-relaxation calculator
+  evaluation and FIRE relaxation — **3x speedup**
 - Configurable simulation parameters and logging
 
 ## Installation
@@ -80,8 +76,7 @@ GCMC insertions/deletions change the atom count every accepted move, so each
 relaxation allocates differently sized tensors. PyTorch's CUDA caching allocator
 reserves a fresh block-set per size and pools it, so reserved GPU memory drifts
 far above the live footprint over a long run (live stays ~model-sized; reserved
-can climb to the card limit and cause spurious OOM). It is allocator
-fragmentation, not a leak.
+can climb to the card limit and cause spurious OOM).
 
 Launch long runs with expandable segments, which grows one segment in place
 instead of a pool per size:
