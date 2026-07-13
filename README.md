@@ -22,7 +22,7 @@
 
 ## Features
 
-- Grand Canonical Monte Carlo simulations
+- Basin Hopping, Canonical & Grand Canonical Monte Carlo simulations
 - **Molecular adsorbates**: whole-molecule insertion/deletion and rigid
   translate+rotate displacement moves (O2, H2O, CO, NH3, any ASE-buildable
   template), with per-atom `molecule_id` bookkeeping that survives rollback,
