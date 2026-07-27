@@ -1,7 +1,24 @@
+import re
 import warnings
 
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
+
+
+def _abbreviate(class_name):
+    """Short but still distinct label for a move class.
+
+    A plain three-character slice collapses ``MoleculeInsertionMove``,
+    ``MoleculeDeletionMove`` and ``MoleculeDisplacementMove`` to the same
+    'Mol', which makes the outfile's acceptance-ratio header unreadable for
+    molecular runs. Split the CamelCase name, drop the trailing 'Move', and
+    keep three letters per remaining word: 'MolIns', 'MolDel', 'MolDis'.
+    Single-word moves are unchanged ('Ins', 'Del', 'Dis', 'Per').
+    """
+    words = re.findall('[A-Z][a-z0-9]*', class_name) or [class_name]
+    if len(words) > 1 and words[-1] == 'Move':
+        words = words[:-1]
+    return ''.join(word[:3] for word in words)
 
 
 class MoveSelector:
@@ -35,7 +52,7 @@ class MoveSelector:
     def __init__(self, probabilities, move_list, seed=None, n_moves=None):
         assert len(probabilities) == len(move_list)
         self.move_list = move_list
-        self.move_list_names = [move.__class__.__name__[:3] for move in move_list]
+        self.move_list_names = [_abbreviate(move.__class__.__name__) for move in move_list]
         if n_moves is None:
             n_moves = max(1, round(sum(probabilities)))
         if n_moves < 1:

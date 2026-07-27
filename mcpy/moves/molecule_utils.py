@@ -42,8 +42,10 @@ def find_molecules(atoms, template_symbols, cell=None):
 
     ``template_symbols`` is the sorted list of the template's chemical
     symbols. When ``cell`` is given, only molecules whose center of mass
-    lies inside it (``cell.is_point_inside``) are returned; ``None`` skips
-    the spatial filter (used by the grand-potential bookkeeping).
+    the cell counts as exchangeable (``cell.is_point_exchangeable``) are
+    returned; ``None`` skips the spatial filter (used by the grand-potential
+    bookkeeping). The exchangeable region is not always the proposal region:
+    see :meth:`mcpy.cell.Cell.is_point_exchangeable`.
     """
     ids = atoms.arrays.get('molecule_id')
     if ids is None:
@@ -56,7 +58,8 @@ def find_molecules(atoms, template_symbols, cell=None):
         members = np.where(ids == mid)[0]
         if sorted(symbols[members]) != list(template_symbols):
             continue
-        if cell is not None and not cell.is_point_inside(molecule_com(atoms, members)):
+        if cell is not None and not cell.is_point_exchangeable(
+                molecule_com(atoms, members)):
             continue
         groups.append(members)
     return groups

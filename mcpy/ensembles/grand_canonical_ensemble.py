@@ -98,13 +98,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.atoms = state["atoms"]
         self.E_old = state["energy"]
         self.n_atoms = state["n_atoms"]
-        # Restore optional bookkeeping if present (used by restart, not by RE).
-        if "step" in state:
-            self._step = state["step"]
-        if "exchange_attempts" in state:
-            self.exchange_attempts = state["exchange_attempts"]
-        if "exchange_successes" in state:
-            self.exchange_successes = state["exchange_successes"]
+        # Only the configuration travels. Step count and exchange statistics
+        # describe the *slot*, not the config: ``ReplicaExchange`` passes a
+        # full ``get_state()`` dict here on every accepted swap, so restoring
+        # them would trade the two ranks' swap tallies back and forth and make
+        # the per-rank "Accepted Exchange (%)" column meaningless.
         # The configuration changed under the cells: refresh their free
         # volumes now, or the next insertion/deletion acceptance would use
         # the previous configuration's volume (GCMC only recalculates on
@@ -143,12 +141,17 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         :class:`BaseEnsemble` signature but ignored — GCMC always logs its
         own ``_step``/``E_old`` so the row matches the sampler state.
         """
-        if self._outfile is None or self._outfile_handle is None:
-            return
         if self._last_logged_step == self._step:
             return  # already wrote this step (e.g. finalize_run after a triggered write)
         acceptance_ratios = self.move_selector.interval_ratios()
+        # Reset before the disabled-outfile bail-out: the counters are
+        # per-write-interval, so skipping the reset when there is nothing to
+        # write turns interval_ratios() into total_ratios() for the rest of
+        # the run.
         self.move_selector.reset_counters()
+        if self._outfile is None or self._outfile_handle is None:
+            self._last_logged_step = self._step
+            return
         ratio_str = ", ".join(
             f"{r * 100:.1f}%" if not np.isnan(r) else "N/A"
             for r in acceptance_ratios
@@ -246,11 +249,18 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
 
             if atoms_new is False or atoms_new is None:
-                # Move couldn't be proposed (e.g. empty cell). The move did
-                # not mutate ``atoms``; MoveSelector already recorded the
-                # failure so it won't depress the acceptance ratio. Identity
-                # check, not truthiness: an empty Atoms (last atom deleted)
-                # is falsy but is a real proposal that must be scored.
+                # Move couldn't be proposed (e.g. empty cell). MoveSelector
+                # already recorded the failure so it won't depress the
+                # acceptance ratio. Identity check, not truthiness: an empty
+                # Atoms (last atom deleted) is falsy but is a real proposal
+                # that must be scored.
+                #
+                # Restore the snapshot rather than trusting the sentinel to
+                # mean "nothing was touched": a move that mutates before
+                # bailing would otherwise leave the configuration changed
+                # while ``E_old`` still describes the previous one.
+                atoms.arrays = saved_arrays
+                atoms.set_constraint(saved_constraints)
                 continue
 
             if atoms_new is not atoms:

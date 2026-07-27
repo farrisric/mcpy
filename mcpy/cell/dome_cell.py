@@ -121,11 +121,7 @@ class DomeCell(SphericalCell):
             self.volume = dome_fraction * self.sphere_volume
             return
 
-        symbols = atoms.get_chemical_symbols()
-        radii = np.fromiter(
-            (self.species_radii[s] for s in symbols),
-            dtype=float, count=n_atoms,
-        )
+        radii = self._radii_for(atoms)
         positions = atoms.positions
 
         covered = np.zeros(len(pts), dtype=bool)

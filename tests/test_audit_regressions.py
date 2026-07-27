@@ -398,3 +398,137 @@ def test_import_does_not_mutate_matplotlib_rcparams():
         "matplotlib.rcParams['figure.dpi']\n"
     )
     subprocess.run([sys.executable, '-c', code], check=True)
+
+
+# --------------------------------------------------------------------------
+# 2026-07-27 review
+# --------------------------------------------------------------------------
+
+# A move that mutates and then reports failure must not corrupt the sampler
+# (bug: the ensembles trusted the sentinel to mean "atoms untouched" and
+# skipped the rollback, leaving the config out of step with E_old)
+
+class _DirtyBailingMove(BaseMove):
+    """Contract violator: mutates the atoms, then returns the ``False``
+    'could not propose' sentinel."""
+
+    def __init__(self, seed=1):
+        super().__init__(NullCell(), ['X'], seed)
+
+    def do_trial_move(self, atoms):
+        atoms.positions += 1.0
+        return False, 0, 'X'
+
+
+def _h2():
+    return Atoms('H2', positions=[[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+                 cell=[10.0, 10.0, 10.0])
+
+
+def test_gcmc_rolls_back_a_move_that_mutates_then_reports_failure():
+    atoms = _h2()
+    before = atoms.positions.copy()
+    g = _gcmc(atoms, [NullCell()], MoveSelector([1], [_DirtyBailingMove()]),
+              {'H': 0.0})
+    energy_before = g.E_old
+    g.do_gcmc_step()
+    np.testing.assert_allclose(g.atoms.positions, before)
+    assert g.E_old == energy_before
+
+
+def test_batched_re_rolls_back_a_move_that_mutates_then_reports_failure():
+    from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
+
+    atoms = _h2()
+    before = atoms.positions.copy()
+    replica = _gcmc(atoms, [NullCell()],
+                    MoveSelector([1], [_DirtyBailingMove()]), {'H': 0.0})
+
+    class _BatchCalc(StubCalc):
+        def get_potential_energies(self, atoms_list):
+            return np.array([self.get_potential_energy(a) for a in atoms_list])
+
+    pt = BatchedReplicaExchange.__new__(BatchedReplicaExchange)
+    pt.replicas = [replica]
+    pt.calculator = _BatchCalc()
+    pt._batched_single_move([0])
+    np.testing.assert_allclose(replica.atoms.positions, before)
+
+
+# Replica exchange swaps configurations, not slot bookkeeping (bug: get_state
+# emitted step/exchange counters and set_state restored them, so accepted
+# swaps traded the two ranks' tallies)
+
+def test_gcmc_set_state_keeps_local_step_and_exchange_counters():
+    g = _gcmc(_h2(), [NullCell()], MoveSelector([1], [_DirtyBailingMove()]),
+              {'H': 0.0})
+    g._step, g.exchange_attempts, g.exchange_successes = 40, 8, 3
+
+    partner = _gcmc(_h2(), [NullCell()],
+                    MoveSelector([1], [_DirtyBailingMove()]), {'H': 0.0})
+    partner._step, partner.exchange_attempts, partner.exchange_successes = 40, 8, 7
+    g.set_state(partner.get_state())
+
+    assert (g._step, g.exchange_attempts, g.exchange_successes) == (40, 8, 3)
+    assert g.atoms is partner.atoms  # the configuration still travels
+
+
+def test_canonical_set_state_keeps_local_step_and_exchange_counters(tmp_path):
+    mc = _canonical(tmp_path)
+    mc._step, mc.exchange_attempts, mc.exchange_successes = 12, 4, 1
+    mc.set_state({'atoms': _h2(), 'energy': -1.0, 'step': 99,
+                  'exchange_attempts': 40, 'exchange_successes': 39})
+    assert (mc._step, mc.exchange_attempts, mc.exchange_successes) == (12, 4, 1)
+    assert mc._current_energy == -1.0
+
+
+# Per-interval acceptance counters are cleared even with the outfile disabled
+# (bug: write_outfile returned before reset_counters, so interval_ratios()
+# silently degraded into total_ratios())
+
+def test_interval_ratios_reset_with_outfile_disabled():
+    atoms = _h2()
+    g = _gcmc(atoms, [NullCell()], MoveSelector([1], [DisplacementMove(
+        species=['H'], seed=5, max_displacement=0.1)]), {'H': 0.0})
+    assert g._outfile is None
+    g.do_gcmc_step()
+    assert g.move_selector.move_counter == [1]
+    g.write_outfile()
+    assert g.move_selector.move_counter == [0]
+    assert g.move_selector.move_counter_total == [1]  # cumulative untouched
+
+
+# Distinct outfile labels for the molecule moves (bug: a 3-character slice
+# collapsed every Molecule*Move to 'Mol')
+
+def test_move_labels_distinguish_the_molecule_moves():
+    from mcpy.moves.move_selector import _abbreviate
+
+    assert _abbreviate('MoleculeInsertionMove') == 'MolIns'
+    assert _abbreviate('MoleculeDeletionMove') == 'MolDel'
+    assert _abbreviate('MoleculeDisplacementMove') == 'MolDis'
+    labels = [_abbreviate(n) for n in ('MoleculeInsertionMove',
+                                       'MoleculeDeletionMove',
+                                       'MoleculeDisplacementMove')]
+    assert len(set(labels)) == 3
+
+
+def test_move_labels_unchanged_for_single_word_moves():
+    """Atomic runs keep the labels their existing outfiles were written with."""
+    from mcpy.moves.move_selector import _abbreviate
+
+    for name in ('InsertionMove', 'DeletionMove', 'DisplacementMove',
+                 'PermutationMove', 'ShakeMove', 'BrownianMove'):
+        assert _abbreviate(name) == name[:3]
+
+
+# A missing exclusion radius names the species (bug: bare KeyError from inside
+# the free-volume sampler)
+
+def test_missing_species_radius_raises_a_named_error():
+    atoms = Atoms('Cu2O', positions=[[0, 0, 0], [2, 0, 0], [0, 2, 0]],
+                  cell=[10.0, 10.0, 10.0])
+    cell = CustomCell(atoms, custom_height=5.0, bottom_z=0.0,
+                      species_radii={'Cu': 2.4}, mc_sample_points=64, seed=0)
+    with pytest.raises(ValueError, match=r"no radius for \['O'\]"):
+        cell.calculate_volume(atoms)
