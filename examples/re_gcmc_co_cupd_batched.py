@@ -64,6 +64,13 @@ def parse_args():
     p.add_argument('--mol-disp-angle', type=float, default=None,
                    help='Max rotation angle of the rigid move (rad); '
                         'None = full uniform rotation')
+    p.add_argument('--chunk-size', type=int, default=None,
+                   help='Relax at most this many replicas per forward pass. '
+                        'Peak GPU memory follows the largest chunk rather '
+                        'than the replica count, which is what makes a wide '
+                        'ladder fit: acceptance-equalized spacing needs ~29 '
+                        'rungs here, and 29 x ~460 atoms is several times the '
+                        'whole-batch ceiling. None relaxes the whole batch.')
     p.add_argument('--no-compile', action='store_true')
     p.add_argument('--seed', type=int, default=7,
                    help='Master seed for moves, RE, and the Pd placement')
@@ -111,6 +118,7 @@ def main():
         steps=args.rel_steps,
         fmax=args.rel_fmax,
         compile_model=not args.no_compile,
+        chunk_size=args.chunk_size,
     )
 
     e_co = calculator.get_potential_energy(
