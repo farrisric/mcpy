@@ -61,11 +61,14 @@ class MoleculeDisplacementMove(BaseMove):
         # Reject displacements that carry the COM out of the region: the
         # reverse proposal would have zero probability (the molecule stops
         # being a candidate), so crossing would be a one-way door that
-        # strands molecules outside the grand-canonical bookkeeping.
+        # strands molecules outside the grand-canonical bookkeeping. The
+        # region tested is the exchangeable one -- the same predicate that
+        # decides candidacy in ``find_molecules`` -- so the door stays
+        # two-way for every cell type.
         new_com = com + shift
         if np.any(np.asarray(atoms.pbc)):
             new_com = wrap_positions([new_com], atoms.cell, pbc=atoms.pbc)[0]
-        if not self.cell.is_point_inside(new_com):
+        if not self.cell.is_point_exchangeable(new_com):
             return False, 0, self.name
         if self.max_angle is None:
             rotation = random_rotation_matrix(self.rng)

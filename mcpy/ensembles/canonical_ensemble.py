@@ -95,12 +95,8 @@ class CanonicalEnsemble(BaseEnsemble):
         # config swap, without relying on the pickled .info surviving MPI.
         self.atoms.info.setdefault("key_value_pairs", {})
         self.atoms.info["key_value_pairs"]["potential_energy"] = state["energy"]
-        if "step" in state:
-            self._step = state["step"]
-        if "exchange_attempts" in state:
-            self.exchange_attempts = state["exchange_attempts"]
-        if "exchange_successes" in state:
-            self.exchange_successes = state["exchange_successes"]
+        # Step count and exchange statistics stay with the slot, not the
+        # config -- see GrandCanonicalEnsemble.set_state.
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:

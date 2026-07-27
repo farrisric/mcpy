@@ -78,3 +78,46 @@ def test_displacement_n_steps_exceeds_movable_raises():
     move = DisplacementMove(species=['Au'], seed=1, n_steps=5)
     with pytest.raises(ValueError):
         move.do_trial_move(atoms)
+
+
+# --------------------------------------------------------------------------
+# A trial must be all-or-nothing (bug: a multi-swap trial could apply k swaps
+# and then report the "couldn't propose" sentinel, which the ensembles read as
+# "the atoms were not touched" -- so the config changed while E_old did not)
+# --------------------------------------------------------------------------
+
+def test_permutation_absent_species_does_not_abort_a_multi_swap_trial():
+    """Declaring a species that is not in the system must not turn a later
+    iteration into a mid-trial bail-out. Species counts are swap-invariant, so
+    the usable pair is resolved once, up front."""
+    for seed in range(200):
+        atoms = _balanced_alloy()
+        before = atoms.get_atomic_numbers().copy()
+        move = PermutationMove(species=['Au', 'Pt', 'Ag'], seed=seed, n_swaps=3)
+        result, delta, _ = move.do_trial_move(atoms)
+        assert result is atoms, f'seed={seed} bailed out mid-trial'
+        assert delta == 0
+        assert not np.array_equal(atoms.get_atomic_numbers(), before)
+
+
+def test_permutation_without_two_present_species_is_a_clean_no_op():
+    """The one case that genuinely cannot propose must leave the atoms
+    byte-identical, since the ensembles skip the rollback on that path."""
+    atoms = Atoms('Au4', positions=[[0, 0, 0], [2, 0, 0], [0, 2, 0], [0, 0, 2]])
+    before = atoms.get_atomic_numbers().copy()
+    move = PermutationMove(species=['Au', 'Pt'], seed=1, n_swaps=3)
+    result, delta, name = move.do_trial_move(atoms)
+    assert result is False
+    assert (delta, name) == (0, 'X')
+    np.testing.assert_array_equal(atoms.get_atomic_numbers(), before)
+
+
+def test_permutation_stream_unchanged_when_every_species_is_present():
+    """Filtering to the present species must be a no-op for a healthy setup,
+    or previously published runs would no longer reproduce."""
+    results = []
+    for species in (['Au', 'Pt'], ['Au', 'Pt']):
+        atoms = _balanced_alloy()
+        PermutationMove(species=species, seed=11, n_swaps=5).do_trial_move(atoms)
+        results.append(atoms.get_atomic_numbers().copy())
+    np.testing.assert_array_equal(*results)

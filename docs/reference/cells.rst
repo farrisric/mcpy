@@ -32,8 +32,17 @@ The full ASE simulation box as the active region. Random points are sampled
 uniformly in fractional coordinates. Its volume is the fixed box volume, so
 ``calculate_volume`` does no free-volume sampling.
 
-- ``species_radii`` (dict, optional): per-element exclusion radii.
+- ``species_radii`` (dict, optional): per-element exclusion radii. Every
+  species the system can hold needs one, including species inserted during the
+  run; a missing entry raises ``ValueError`` from ``calculate_volume``.
 - ``seed`` (int, optional): cell-local RNG seed.
+
+Every cell exposes two point-membership predicates. ``is_point_inside(point)``
+bounds the *proposal* region -- the one ``get_random_point`` samples.
+``is_point_exchangeable(point)`` bounds the region the reservoir may take
+molecules back from, and is what the molecule moves use to pick candidates.
+They coincide for every cell except ``CustomCell``; see
+:doc:`../gcmc_acceptance_convention`.
 
 
 CustomCell

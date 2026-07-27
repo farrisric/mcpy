@@ -66,6 +66,28 @@ class Cell(BaseCell):
         """
         return list(self.species_radii.keys())
 
+    def _radii_for(self, atoms):
+        """Per-atom exclusion radii for the free-volume samplers.
+
+        Raises a message that names the missing symbols instead of the bare
+        ``KeyError`` a dict lookup would throw from inside the sampler. The
+        check lives here rather than in ``__init__`` because GCMC inserts
+        species that are absent when the cell is built.
+
+        :return: ndarray of radii, one per atom, in ``atoms`` order.
+        """
+        symbols = atoms.get_chemical_symbols()
+        missing = sorted(set(symbols) - set(self.species_radii))
+        if missing:
+            raise ValueError(
+                f'{type(self).__name__}.species_radii has no radius for '
+                f'{missing}. Every species the system can contain needs one, '
+                f'including species inserted during the run; got '
+                f'{sorted(self.species_radii)}.'
+            )
+        return np.fromiter((self.species_radii[s] for s in symbols),
+                           dtype=float, count=len(symbols))
+
     def is_point_inside(self, point):
         """The box cell spans the whole periodic cell: every point is inside.
 
@@ -73,3 +95,17 @@ class Cell(BaseCell):
         any cell type (the region cells implement a real test).
         """
         return True
+
+    def is_point_exchangeable(self, point):
+        """Whether a molecule whose center of mass sits at ``point`` may be
+        exchanged with the reservoir (counted, deleted, displaced).
+
+        The point counterpart of :meth:`get_atoms_specie_inside_cell`, and the
+        predicate the molecule moves use. It is separate from
+        :meth:`is_point_inside` because a region may deliberately accept
+        molecules it would never *propose* — :class:`CustomCell` drops the z
+        upper bound so a desorbed molecule stays deletable instead of
+        accumulating forever. Cells whose two regions coincide (the box, the
+        sphere, the dome) inherit this delegation unchanged.
+        """
+        return self.is_point_inside(point)

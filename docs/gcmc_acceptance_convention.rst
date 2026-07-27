@@ -152,6 +152,21 @@ Atomic moves are unaffected: for them ``get_exchange_count()`` returns
 ``None`` and the ensembles fall back to the total-atom count documented
 above.
 
+Because molecular moves *do* use the per-species count, they are exposed to
+the runaway mode described in the previous section: any escape route out of
+the counted region undercounts ``N`` and inflates
+:math:`V/((N+1)\Lambda^3)`. Molecule candidacy therefore goes through
+``cell.is_point_exchangeable(com)``, not ``cell.is_point_inside(com)``. The
+two differ for :class:`mcpy.cell.CustomCell`, whose exchangeable region drops
+the z upper bound exactly as ``get_atoms_specie_inside_cell`` already does for
+single atoms, so a molecule that desorbs above the cell top stays both
+countable and deletable. The floor exclusion is kept on both paths: molecules
+that sink below ``bottom_z`` remain excluded, and the buried-species
+irreversibility noted above applies to them unchanged.
+:class:`mcpy.moves.MoleculeDisplacementMove` tests the same predicate for its
+one-way-door guard, so the candidacy region and the region a molecule may be
+displaced within always agree.
+
 The textbook form above holds for ``min_insert=None``. When ``min_insert``
 is set, ``MoleculeInsertionMove`` retries the random position/orientation
 draw (up to 1000 times) against the cell's ``species_radii`` atoms until it

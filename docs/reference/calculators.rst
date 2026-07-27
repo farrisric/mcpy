@@ -89,7 +89,11 @@ chunk_size=None)``, and ``run_md(...)``.
   ``get_potential_energies``; caps peak GPU memory at one chunk. ``None``
   evaluates the whole batch in one pass. See :doc:`../calculators`.
 - ``energy_only`` (bool): drop force computation (no autograd graph) for a
-  ~12% memory saving. Energy is unchanged; forces are unavailable.
+  ~12% memory saving. Energy is unchanged; forces are unavailable. The switch
+  lives on the model's own config, so it cannot be scoped to one calculator:
+  combining it with a pre-loaded ``MACEWrapper`` (which other calculators may
+  share, including a relaxing ``AlchemiFCalculator``) raises ``ValueError``.
+  Pass a checkpoint path instead so this calculator loads its own model.
 
 
 AlchemiFCalculator

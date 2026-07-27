@@ -46,9 +46,12 @@ def parse_args():
     p.add_argument('--gcmc-steps', type=int, default=80,
                    help='GCMC steps per replica')
     p.add_argument('--exchange-interval', type=int, default=8,
-                   help='Steps between replica-exchange attempts; use >= 50 '
-                        'for per-mu coverage curves (small values over-mix '
-                        'the ladder)')
+                   help='Steps between replica-exchange attempts. Frequent '
+                        'exchange is fine: a correct swap rule leaves each '
+                        "rung's distribution intact. (The old advice to use "
+                        '>= 50 here was working around the mu-ladder swap '
+                        'bug, which accepted every swap and so did flatten '
+                        'the coverage curve the more often it ran.)')
     p.add_argument('--checkpoint', default='medium-mpa-0')
     p.add_argument('--rel-steps', type=int, default=30)
     p.add_argument('--rel-fmax', type=float, default=0.1)

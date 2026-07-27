@@ -75,12 +75,7 @@ class CustomCell(Cell):
         cart_coords = frac_coords @ self.dimensions  # in cell frame
 
         positions = self._periodic_images(atoms)
-        symbols = atoms.get_chemical_symbols()
-        radii = np.fromiter(
-            (self.species_radii[s] for s in symbols),
-            dtype=float, count=n_atoms,
-        )
-        radii = np.tile(radii, len(positions) // n_atoms)
+        radii = np.tile(self._radii_for(atoms), len(positions) // n_atoms)
 
         covered = np.zeros(self.mc_sample_points, dtype=bool)
         for r in np.unique(radii):
@@ -143,6 +138,21 @@ class CustomCell(Cell):
         """
         frac = (point - self.offset) @ self._dim_inv
         return bool(np.all((frac >= 0.0) & (frac < 1.0)))
+
+    def is_point_exchangeable(self, point):
+        """Same asymmetry as :meth:`get_atoms_specie_inside_cell`: inside the
+        xy footprint and at or above the cell floor, with the z upper bound
+        dropped.
+
+        Without this a molecule that desorbs above the cell top would stop
+        being a deletion candidate *and* would drop out of the per-species
+        count in the acceptance factor ``V/((N+1)Λ³)`` -- the runaway
+        insertion mode described in docs/gcmc_acceptance_convention.rst.
+        Molecules below the floor stay excluded, like atoms.
+        """
+        frac = (point - self.offset) @ self._dim_inv
+        return bool(np.all(frac[:2] >= 0.0) and np.all(frac[:2] < 1.0)
+                    and frac[2] >= 0.0)
 
     def get_species(self):
         """

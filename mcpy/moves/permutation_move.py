@@ -33,12 +33,18 @@ class PermutationMove(BaseMove):
         """
         nums = atoms.arrays['numbers']
         symbols = np.asarray(atoms.get_chemical_symbols())
+        # Resolve the usable species once, up front. A swap preserves every
+        # species count, so a species absent now stays absent for the whole
+        # trial: bailing out from inside the loop would leave the earlier
+        # swaps applied while returning the "couldn't propose" sentinel, which
+        # the ensembles read as "the atoms were not touched".
+        present = [s for s in self.species if np.any(symbols == s)]
+        if len(present) < 2:
+            return False, 0, 'X'
         for _ in range(self.n_swaps):
-            species_pair = self.rng.random.sample(self.species, 2)
+            species_pair = self.rng.random.sample(present, 2)
             indices_a = np.where(symbols == species_pair[0])[0]
             indices_b = np.where(symbols == species_pair[1])[0]
-            if len(indices_a) == 0 or len(indices_b) == 0:
-                return False, 0, 'X'
             i = int(self.rng.random.choice(indices_a))
             j = int(self.rng.random.choice(indices_b))
             nums[i], nums[j] = nums[j], nums[i]

@@ -36,6 +36,9 @@ from .base_ensemble import write_xyz
 
 logger = logging.getLogger(__name__)
 
+# Below this many attempts an all-accept / all-reject tally says nothing.
+_SWAP_DEGENERACY_MIN_ATTEMPTS = 20
+
 
 class BatchedReplicaExchange:
     def __init__(
@@ -224,9 +227,12 @@ class BatchedReplicaExchange:
                 result if isinstance(result, tuple) else (result, 0, None)
             )
             if atoms_new is False or atoms_new is None:
-                # Move couldn't propose — atoms unchanged, snapshot harmless.
-                # Identity check, not truthiness: an empty Atoms (last atom
-                # deleted) is falsy but is a real proposal.
+                # Move couldn't propose. Identity check, not truthiness: an
+                # empty Atoms (last atom deleted) is falsy but is a real
+                # proposal. Restore rather than trust the sentinel to mean
+                # "nothing was touched" (see GrandCanonicalEnsemble).
+                r.atoms.arrays = snapshots[i]
+                r.atoms.set_constraint(constraint_snapshots[i])
                 continue
             if atoms_new is not r.atoms:
                 raise RuntimeError(
@@ -284,21 +290,37 @@ class BatchedReplicaExchange:
                 self.exchange_successes[j] += 1
 
     def _accept_swap(self, i: int, j: int) -> bool:
-        """Temperature-RE Metropolis: P = exp((β_j - β_i)(Φ_j - Φ_i)).
+        """Replica-exchange Metropolis for a temperature *or* a μ ladder.
 
         Replicas here are grand-canonical (fixed μ, fluctuating N), so configs
-        at different temperatures must be compared through the grand potential
-        Φ = E - Σ_s μ_s N_s rather than bare energy. With no chemical potential
-        this reduces to the standard energy-only swap.
+        must be compared through the grand potential Φ = E - Σ_s μ_s N_s rather
+        than bare energy. Exchanging config X (slot i) with config Y (slot j)
+        changes the joint weight by
+
+            ln(w'/w) = β_i Φ_X^(i) + β_j Φ_Y^(j) - β_i Φ_Y^(i) - β_j Φ_X^(j)
+
+        where Φ_Z^(k) is configuration Z scored with slot k's chemical
+        potentials. The cross terms are what makes this work on both ladders:
+        with a shared μ it collapses to the familiar (β_j - β_i)(Φ_j - Φ_i),
+        but on a μ ladder (one shared temperature) that shortened form is
+        identically zero and would accept every swap, destroying the ladder.
+        With shared β it reduces to β Σ_s (μ_i,s - μ_j,s)(N_Y,s - N_X,s), the
+        rule ``ReplicaExchange._exchange_prob_mu`` implements for MPI.
         """
         ri, rj = self.replicas[i], self.replicas[j]
         beta_i, beta_j = ri.units.beta, rj.units.beta
-        phi_i, phi_j = self._grand_potential(ri), self._grand_potential(rj)
-        delta = (beta_j - beta_i) * (phi_j - phi_i)
-        p = min(1.0, float(np.exp(delta)))
+        phi_ii = self._grand_potential(ri)                 # config X, μ of i
+        phi_jj = self._grand_potential(rj)                 # config Y, μ of j
+        phi_ji = ri._minimum_score(rj.atoms, rj.E_old)     # config Y, μ of i
+        phi_ij = rj._minimum_score(ri.atoms, ri.E_old)     # config X, μ of j
+        delta = (beta_i * phi_ii + beta_j * phi_jj
+                 - beta_i * phi_ji - beta_j * phi_ij)
+        # exp() overflows to inf for a large positive delta; short-circuit.
+        p = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
-            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_i=%.3f Phi_j=%.3f delta=%.3f p=%.3f",
-            i, j, beta_i, beta_j, phi_i, phi_j, delta, p,
+            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f "
+            "Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f",
+            i, j, beta_i, beta_j, phi_ii, phi_jj, phi_ji, phi_ij, delta, p,
         )
         return self.rng.get_uniform() < p
 
@@ -364,8 +386,42 @@ class BatchedReplicaExchange:
         self.logger.info('RE %d/%d | N: %s | E(eV): %s | swap acc %s',
                          step, self.gcmc_steps, n, e, swap)
 
+    def _warn_if_ladder_degenerate(self) -> None:
+        """Flag a ladder that stopped behaving like one.
+
+        A ladder accepting *every* swap is not exchanging information between
+        rungs, it is averaging them together; one accepting *none* leaves each
+        replica sampling in isolation. Neither shows up as an error, and the
+        all-accept case in particular yields a plausible-looking but
+        μ-independent isotherm, so it needs saying out loud.
+
+        Checked once on the whole-run tally rather than live: a ladder whose
+        replicas have not differentiated yet (identical starting configs, an
+        adsorbate that has not begun to adsorb) legitimately accepts every
+        early swap, and a warning that fires during equilibration would be
+        noise. The trade is that this is a post-mortem.
+        """
+        attempts, successes = sum(self.exchange_attempts), sum(self.exchange_successes)
+        if attempts < _SWAP_DEGENERACY_MIN_ATTEMPTS:
+            return
+        if successes == attempts:
+            reason = ('every swap was accepted -- neighbouring rungs are '
+                      'indistinguishable, so the ladder averages over them '
+                      'and per-rung results lose their T/mu dependence')
+        elif successes == 0:
+            reason = ('no swap was ever accepted -- rungs are too far apart '
+                      'to exchange, so each replica sampled in isolation')
+        else:
+            return
+        self.logger.warning(
+            'replica-exchange ladder looks degenerate: %d/%d swaps accepted. '
+            'Widen or tighten the %s spacing.',
+            successes, attempts, 'mu' if self.mus is not None else 'temperature')
+        self.logger.warning('  %s', reason)
+
     def _log_summary(self) -> None:
         """Final consolidated summary: per-replica move acceptances."""
+        self._warn_if_ladder_degenerate()
         for i, r in enumerate(self.replicas):
             ratios = ' '.join(
                 f'{x:.0%}' if x == x else 'n/a'

@@ -86,7 +86,7 @@ def test_find_molecules_missing_array_and_cell_filter():
     assert find_molecules(plain, ['H', 'H']) == []
 
     class _NowhereCell:
-        def is_point_inside(self, point):
+        def is_point_exchangeable(self, point):
             return False
 
     atoms = _water_box()
@@ -448,13 +448,13 @@ def test_write_xyz_molecule_id_roundtrip(tmp_path):
 
 
 def test_find_molecules_queries_com_point():
-    """The point handed to cell.is_point_inside must be the molecule's
+    """The point handed to cell.is_point_exchangeable must be the molecule's
     center of mass, not e.g. the first member's position."""
     atoms = _water_box()
     recorded = {}
 
     class _RecordingCell:
-        def is_point_inside(self, point):
+        def is_point_exchangeable(self, point):
             recorded['point'] = point
             return True
 

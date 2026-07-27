@@ -54,6 +54,20 @@ class AlchemiCalculator:
         energy_only: bool = False,
         head: Union[str, int, None] = None,
     ) -> None:
+        if energy_only and isinstance(checkpoint, MACEWrapper):
+            # energy_only mutates the wrapper's own model_config (below), and a
+            # pre-loaded wrapper is shared by every calculator built from it —
+            # including an AlchemiFCalculator whose FIRE relaxation needs the
+            # forces this would switch off. There is no way to scope the change
+            # to one calculator, so refuse instead of breaking the other one
+            # silently and order-dependently.
+            raise ValueError(
+                "energy_only=True cannot be combined with a pre-loaded "
+                "MACEWrapper: dropping 'forces' from its active outputs would "
+                "also disable forces for every other calculator sharing that "
+                "wrapper. Pass the checkpoint path so this calculator loads "
+                "its own model, or set energy_only on all of the sharers."
+            )
         self.device = device
         self.dtype = dtype
         self.max_neighbors = max_neighbors

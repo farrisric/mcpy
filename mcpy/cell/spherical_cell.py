@@ -121,11 +121,7 @@ class SphericalCell(Cell):
 
         pts = self._sample_sphere_points(self.mc_sample_points)
 
-        symbols = atoms.get_chemical_symbols()
-        radii = np.fromiter(
-            (self.species_radii[s] for s in symbols),
-            dtype=float, count=n_atoms,
-        )
+        radii = self._radii_for(atoms)
         positions = atoms.positions
 
         covered = np.zeros(self.mc_sample_points, dtype=bool)

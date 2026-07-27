@@ -64,3 +64,84 @@ def test_subsurface_oxygen_is_excluded_from_deletion_candidates():
 
     assert total_o == 2       # both O are present in the structure
     assert len(counted) == 1  # only the above-floor O is a deletion candidate
+
+
+# --------------------------------------------------------------------------
+# Exchangeable region vs proposal region (bug: molecules that desorbed above
+# the cell top stopped being deletion candidates AND dropped out of the
+# per-species de Broglie count, driving runaway insertion)
+# --------------------------------------------------------------------------
+
+def _point_at(cell, frac_z):
+    """A point in the middle of the footprint at fractional height ``frac_z``
+    (``> 1`` is above the cell top)."""
+    return np.array([0.5, 0.5, frac_z]) @ cell.dimensions + cell.offset
+
+
+def test_point_above_the_cell_top_is_exchangeable_but_not_inside():
+    """The two predicates are deliberately different: ``is_point_inside``
+    bounds the *proposal* region, ``is_point_exchangeable`` the region the
+    reservoir can take molecules back from -- the same asymmetry
+    ``get_atoms_specie_inside_cell`` already applies to single atoms."""
+    _, cell = make_cell()
+    escaped = _point_at(cell, 1.4)
+    assert not cell.is_point_inside(escaped)
+    assert cell.is_point_exchangeable(escaped)
+
+
+def test_point_below_the_cell_floor_is_neither():
+    _, cell = make_cell()
+    buried = _point_at(cell, -0.2)
+    assert not cell.is_point_inside(buried)
+    assert not cell.is_point_exchangeable(buried)
+
+
+def test_point_outside_the_xy_footprint_is_neither():
+    _, cell = make_cell()
+    outside = np.array([1.4, 0.5, 0.5]) @ cell.dimensions + cell.offset
+    assert not cell.is_point_inside(outside)
+    assert not cell.is_point_exchangeable(outside)
+
+
+def test_desorbed_molecule_stays_a_deletion_candidate():
+    """A CO whose center of mass drifts above the cell top must remain
+    findable, exactly as its individual C and O atoms already do. Otherwise it
+    can never be deleted and its absence from ``last_exchange_count`` inflates
+    V/((N+1)Lambda^3) -- the runaway insertion mode documented in
+    docs/gcmc_acceptance_convention.rst.
+    """
+    from ase import Atoms
+
+    from mcpy.moves.molecule_utils import find_molecules
+
+    atoms, cell = make_cell()
+    atoms.new_array('molecule_id', np.full(len(atoms), -1, dtype=int))
+    for mol_id, frac_z in enumerate((0.5, 1.4)):  # inside, and above the top
+        frag = Atoms('CO', positions=[[0, 0, 0], [0, 0, 1.13]])
+        frag.positions += _point_at(cell, frac_z)
+        frag.new_array('molecule_id', np.full(len(frag), mol_id, dtype=int))
+        atoms += frag
+
+    template = sorted(['C', 'O'])
+    assert len(find_molecules(atoms, template)) == 2
+    assert len(find_molecules(atoms, template, cell)) == 2
+    # The atomic path has always seen all four member atoms; the molecular
+    # path must not disagree with it.
+    assert len(cell.get_atoms_specie_inside_cell(atoms, ['C', 'O'])) == 4
+
+
+def test_buried_molecule_is_still_excluded():
+    """The floor exclusion is intentional (buried species are kept), so the
+    fix above must not open that side of the region too."""
+    from ase import Atoms
+
+    from mcpy.moves.molecule_utils import find_molecules
+
+    atoms, cell = make_cell()
+    atoms.new_array('molecule_id', np.full(len(atoms), -1, dtype=int))
+    frag = Atoms('CO', positions=[[0, 0, 0], [0, 0, 1.13]])
+    frag.positions += _point_at(cell, -0.5)
+    frag.new_array('molecule_id', np.zeros(len(frag), dtype=int))
+    atoms += frag
+
+    assert find_molecules(atoms, sorted(['C', 'O']), cell) == []
