@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-28
+
+### Fixed
+- **Batched replica exchange accepted every chemical-potential swap.** `BatchedReplicaExchange._accept_swap` implemented only the temperature-ladder criterion `(beta_j - beta_i)(Phi_j - Phi_i)`, which is identically zero when the replicas share a temperature: every mu-ladder swap was accepted with p = 1, configurations random-walked freely across the ladder, and no replica sampled its own mu. **Results produced by `BatchedReplicaExchange(..., mus=[...])` in 1.3.0 or earlier are invalid and need re-running**; temperature ladders were always correct, as was the MPI `ReplicaExchange`, which selected its mu criterion all along. The replacement carries the cross terms, `beta_i Phi_X^(i) + beta_j Phi_Y^(j) - beta_i Phi_Y^(i) - beta_j Phi_X^(j)`, where `Phi_Z^(k)` is a configuration scored with slot `k`'s chemical potentials; it reduces to the previous expression for a shared mu, to `beta (mu_i - mu_j)(N_j - N_i)` for a shared temperature, and additionally covers a joint (T, mu) ladder. The failure was not a statistical degradation: an EMT Ag(111)/Au ladder gives `N_Au = [0, 0, 0, 14]` with the fix and `[0, 0, 0, 0]` without it, because unconditional swapping averages the rungs together and erases the mu dependence entirely.
+- **`PermutationMove` could mutate the configuration and then report that it had not.** With `n_swaps > 1`, drawing a species absent from the system in a later iteration returned the "could not propose" sentinel after earlier swaps had already been applied; both GCMC loops read that sentinel as "the atoms were not touched" and skipped the rollback, leaving the configuration out of step with the stored energy for the rest of the run. The usable species are now resolved once, before any mutation (species counts are swap-invariant, so a species absent at the start is absent for the whole trial), and both ensembles restore their pre-trial snapshot on the sentinel path rather than trusting the contract.
+- Molecules whose center of mass drifted above a `CustomCell`'s top stopped being deletion candidates and dropped out of the per-species de Broglie count, inflating `V/((N+1)Lambda^3)` into the runaway insertion mode documented in `docs/gcmc_acceptance_convention.rst`. Molecule candidacy now goes through the new `is_point_exchangeable` predicate, which applies the same dropped z upper bound that `get_atoms_specie_inside_cell` already applied to single atoms; molecules below the cell floor stay excluded, as atoms do.
+- `AlchemiCalculator(energy_only=True)` discarded `'forces'` from a `model_config` that a pre-loaded `MACEWrapper` shares with every calculator built from it, silently disabling FIRE relaxation in an `AlchemiFCalculator` depending on construction order. The combination now raises with the workaround in the message.
+- `GrandCanonicalEnsemble.set_state` and `CanonicalEnsemble.set_state` restored the step count and exchange statistics from the incoming state. `ReplicaExchange` passes a full `get_state()` dict on every accepted swap, so the two ranks traded their swap tallies and the per-rank "Accepted Exchange (%)" column was meaningless. Only the configuration travels now.
+- Per-interval acceptance ratios were never cleared when the outfile was disabled, silently degrading `interval_ratios()` into `total_ratios()` for the rest of the run.
+- A missing `species_radii` entry raised a bare `KeyError` from inside the free-volume sampler; the error now names the cell and the missing species, and notes that species inserted during the run need radii too.
+
+### Added
+- `Cell.is_point_exchangeable(point)`: the point counterpart of `get_atoms_specie_inside_cell`, used by the molecule moves to decide which molecules the reservoir may take back. It defaults to `is_point_inside`, so the box, spherical and dome cells are unchanged; `CustomCell` overrides it. `MoleculeDisplacementMove` tests the same predicate for its region guard, so candidacy and displacement always agree on the region.
+- `BatchedReplicaExchange` warns at the end of a run when the whole-run swap tally is all-accept or all-reject, the two ways a ladder stops being a ladder. Checked on the whole-run tally rather than live, because replicas that have not differentiated yet legitimately accept every early swap.
+- `--chunk-size` on `examples/re_gcmc_co_cupd_batched.py`: peak GPU memory follows the largest chunk rather than the replica count, which is what lets a correctly spaced ladder run at all (an acceptance-equalized ladder for that system needs ~29 rungs, i.e. ~13k atoms in the relax batch, several times the whole-batch ceiling).
+- `docs/replica_exchange_ladder_spacing.rst`: how to detect a dead ladder (read second-half swap acceptance, never the cumulative column, which early free swaps inflate permanently), why uniform mu spacing cannot work across a coverage range (`dN/dmu` grows with coverage while `dmu` does not), and the `dmu = 1/sqrt(beta dN/dmu)` spacing rule with a reference implementation. Worked example on CO/Cu375Pd30 at 400 K: 29 rungs instead of 5 gives second-half acceptance of 18-65% (median 40%) with no dead pair, against three of four pairs at exactly zero accepted swaps on the uniform ladder, and GPU utilisation of 94-98% instead of 43%.
+- CI runs `flake8 mcpy/`, the lint command the contributor docs already specified but the workflow never invoked.
+
+### Changed
+- The outfile acceptance-ratio header abbreviates the molecule moves distinctly (`MolIns`, `MolDel`, `MolDis`) instead of collapsing all three to an indistinguishable `Mol`. Single-word move labels (`Ins`, `Del`, `Dis`, `Per`, `Sha`, `Bro`) are unchanged, so outfiles from atomic runs stay comparable across versions.
+
 ## [1.3.0] - 2026-07-08
 
 ### Added
@@ -87,6 +108,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial public release.
 
+[1.4.0]: https://github.com/farrisric/mcpy/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/farrisric/mcpy/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/farrisric/mcpy/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/farrisric/mcpy/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/farrisric/mcpy/releases/tag/v1.0.0
