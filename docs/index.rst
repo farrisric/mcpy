@@ -61,6 +61,7 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    molecular_adsorbates
    phase_diagrams
    gcmc_acceptance_convention
+   replica_exchange_ladder_spacing
 
 .. toctree::
    :caption: Tutorials
