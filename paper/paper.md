@@ -180,7 +180,11 @@ and surfaces under reactive atmospheres at near-DFT accuracy. The
 replica-exchange GCMC workflow was built during doctoral research at the
 Universitat de Barcelona [@farris2025thesis] and underpins a forthcoming manuscript on the oxidation
 thermodynamics of silver nanoparticles, with further application to additional
-catalytic metal/oxide systems. \autoref{fig:phase} shows
+catalytic metal/oxide systems. Simulations run with `mcpy` have contributed to
+the group's grand canonical modelling of nanostructured catalysts under reaction
+conditions, presented at recent international conferences on cluster science and
+on machine learning for materials [@telari2026csi; @bruix2026ai4am].
+\autoref{fig:phase} shows
 a representative result from this workflow: the hydrogenation phase diagram of a
 201-atom PdAg nanoparticle, in which `mcpy` recovers the progressive hydrogen
 loading of the particle as the chemical potential increases. By coupling
