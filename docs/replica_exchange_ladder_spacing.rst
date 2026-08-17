@@ -79,7 +79,9 @@ and neighbouring rungs exchange when their distributions overlap, i.e. when
 
    \Delta\mu(\mu) = \frac{1}{\sqrt{\beta\,dN/d\mu}} ,
    \qquad
-   n_\text{rungs} = \int \sqrt{\beta\,\frac{dN}{d\mu}}\; d\mu .
+   n_\text{gaps} = \int \sqrt{\beta\,\frac{dN}{d\mu}}\; d\mu ,
+   \qquad
+   n_\text{rungs} = n_\text{gaps} + 1 .
 
 Use :math:`dN/d\mu` from a measured isotherm, **not** the per-rung
 :math:`\sigma_N` observed in an unconverged run: a stuck rung reports a
@@ -118,14 +120,23 @@ is the disease being diagnosed.
        """
        beta = 1.0 / (8.617333e-5 * temperature)
        mu, n_ads = np.asarray(mu, float), np.asarray(n_ads, float)
+       order = np.argsort(mu)             # desorption scans arrive descending
+       mu, n_ads = mu[order], n_ads[order]
        slope = np.diff(n_ads) / np.diff(mu)          # dN/dmu per interval
        midpoints = 0.5 * (mu[1:] + mu[:-1])
 
        fine = np.linspace(mu_min, mu_max, 2001)
-       density = np.sqrt(beta * np.interp(fine, midpoints, slope))
+       # Clip noise-induced negative dN/dmu to zero: a NaN here would
+       # propagate into ``cumulative`` and crash np.interp cryptically.
+       density = np.sqrt(beta * np.maximum(np.interp(fine, midpoints, slope),
+                                           0.0))
        cumulative = np.concatenate([[0.0], np.cumsum(
            0.5 * (density[1:] + density[:-1]) * np.diff(fine))])
-       return np.interp(np.arange(0.0, cumulative[-1], 1.0), cumulative, fine)
+       # linspace, not arange: the ladder must reach mu_max, so the last gap
+       # shrinks rather than the top rung being dropped.
+       targets = np.linspace(0.0, cumulative[-1],
+                             int(np.ceil(cumulative[-1])) + 1)
+       return np.interp(targets, cumulative, fine)
 
 
 Calibration

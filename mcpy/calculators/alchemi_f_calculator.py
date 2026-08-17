@@ -97,6 +97,16 @@ class AlchemiFCalculator:
         self._optimizer_cls = _ALCHEMI_OPTIMIZERS[optimizer]
         self.optimizer_name = optimizer
         self.model = _load_model(checkpoint, device, dtype, enable_cueq, compile_model, head)
+        if 'forces' not in self.model.model_config.active_outputs:
+            # A model reused from an energy_only AlchemiCalculator (its
+            # ``.model`` attribute) has forces stripped; FIRE would only fail
+            # steps deep inside nvalchemi without naming the cause.
+            raise ValueError(
+                "the provided model has 'forces' disabled in its active "
+                'outputs (an energy_only AlchemiCalculator strips them), but '
+                'FIRE relaxation needs forces. Load a fresh wrapper for this '
+                'calculator instead of sharing an energy-only one.'
+            )
         self._nl_config = self.model.model_config.neighbor_config
 
     def get_potential_energy(self, atoms: Atoms) -> float:

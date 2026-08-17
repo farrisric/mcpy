@@ -75,6 +75,26 @@ class BatchedReplicaExchange:
                 gcmc_factory(mu=mu, rank=i) for i, mu in enumerate(self.mus)
             ]
 
+        # Batching shares one process across replicas, so nothing isolates
+        # them but the factory contract above. A factory written for the MPI
+        # class (module-level atoms/moves, safe under one-process-per-rank)
+        # silently corrupts every replica here; refuse it up front.
+        shared = [
+            attr for attr in ('atoms', 'move_selector')
+            if len({id(getattr(r, attr, None)) for r in self.replicas})
+            < self.n_replicas
+        ]
+        cell_ids = [id(c) for r in self.replicas for c in getattr(r, 'cells', [])]
+        if len(set(cell_ids)) < len(cell_ids):
+            shared.append('cells')
+        if shared:
+            raise ValueError(
+                f"replicas share {', '.join(shared)}; gcmc_factory must build "
+                'a fresh ensemble with its own atoms, cells and move_selector '
+                'per replica (see the module docstring). Shared objects mix '
+                'the replicas\' volumes, counters and RNG streams silently.'
+            )
+
         if not hasattr(calculator, 'get_potential_energies'):
             raise TypeError(
                 "calculator must implement get_potential_energies(atoms_list). "
@@ -92,6 +112,11 @@ class BatchedReplicaExchange:
 
         self.exchange_attempts = [0] * self.n_replicas
         self.exchange_successes = [0] * self.n_replicas
+        # Midpoint snapshot of the tallies, for the second-half per-rung
+        # degeneracy check (early free swaps inflate the cumulative rate
+        # forever -- docs/replica_exchange_ladder_spacing.rst).
+        self._mid_attempts = None
+        self._mid_successes = None
 
         self._outfile = outfile
         self._outfile_handle = None
@@ -120,6 +145,9 @@ class BatchedReplicaExchange:
 
         try:
             for step in range(self.gcmc_steps):
+                if step == self.gcmc_steps // 2:
+                    self._mid_attempts = list(self.exchange_attempts)
+                    self._mid_successes = list(self.exchange_successes)
                 self._batched_gcmc_step()
 
                 if step > 0 and step % self.exchange_interval == 0:
@@ -306,6 +334,12 @@ class BatchedReplicaExchange:
         identically zero and would accept every swap, destroying the ladder.
         With shared β it reduces to β Σ_s (μ_i,s - μ_j,s)(N_Y,s - N_X,s), the
         rule ``ReplicaExchange._exchange_prob_mu`` implements for MPI.
+
+        At unequal temperatures the grand-canonical weight also carries the
+        de Broglie factors Λ_s^(-3 N_s), and Λ depends on T, so swapping
+        configurations with different particle counts shifts the joint weight
+        by a further 3 Σ_s (N_X,s - N_Y,s) ln(Λ_i,s / Λ_j,s). The term
+        vanishes on a μ ladder (shared T) and in LJ units (Λ = 1).
         """
         ri, rj = self.replicas[i], self.replicas[j]
         beta_i, beta_j = ri.units.beta, rj.units.beta
@@ -315,6 +349,17 @@ class BatchedReplicaExchange:
         phi_ij = rj._minimum_score(ri.atoms, ri.E_old)     # config X, μ of j
         delta = (beta_i * phi_ii + beta_j * phi_jj
                  - beta_i * phi_ji - beta_j * phi_ij)
+        if beta_i != beta_j:
+            delta += self._de_broglie_cross_term(ri, rj)
+        if not np.isfinite(delta):
+            # A NaN would silently reject every draw from here on (the old
+            # min(1, exp(delta)) form silently *accepted*); a dead rung must
+            # not be quieter than a diverged relaxation.
+            self.logger.warning(
+                'swap %d<->%d: non-finite acceptance exponent (delta=%r); '
+                'rejecting. A NaN/inf replica energy usually means a '
+                'diverged relaxation.', i, j, delta)
+            return False
         # exp() overflows to inf for a large positive delta; short-circuit.
         p = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
@@ -323,6 +368,23 @@ class BatchedReplicaExchange:
             i, j, beta_i, beta_j, phi_ii, phi_jj, phi_ji, phi_ij, delta, p,
         )
         return self.rng.get_uniform() < p
+
+    @staticmethod
+    def _de_broglie_cross_term(ri, rj) -> float:
+        """3 Σ_s (N_X,s - N_Y,s) ln(Λ_i,s / Λ_j,s) for configs X (slot i) and
+        Y (slot j). Species are counted exactly as the replicas' own
+        acceptance counts them (molecules for molecular μ keys, atoms
+        otherwise), via ``GrandCanonicalEnsemble._species_count``. A replica
+        without μ (e.g. canonical) exchanges nothing with a reservoir and
+        contributes no Λ factors."""
+        term = 0.0
+        for specie in getattr(ri, '_mu', None) or {}:
+            dn = (ri._species_count(ri.atoms, specie)
+                  - rj._species_count(rj.atoms, specie))
+            if dn:
+                term += 3.0 * dn * np.log(
+                    ri.units.lambda_dbs[specie] / rj.units.lambda_dbs[specie])
+        return term
 
     @staticmethod
     def _grand_potential(r) -> float:
@@ -400,8 +462,17 @@ class BatchedReplicaExchange:
         adsorbate that has not begun to adsorb) legitimately accepts every
         early swap, and a warning that fires during equilibration would be
         noise. The trade is that this is a post-mortem.
+
+        A ladder can also die at individual rungs while the others stay
+        alive, which the whole-run tally cannot show (those early free swaps
+        inflate it forever); ``_warn_dead_rungs`` covers that with the
+        second-half per-rung test from
+        docs/replica_exchange_ladder_spacing.rst.
         """
-        attempts, successes = sum(self.exchange_attempts), sum(self.exchange_successes)
+        # Both slots of a pair are tallied per attempt, so the slot sums are
+        # exactly twice the number of swap attempts; report attempts.
+        attempts = sum(self.exchange_attempts) // 2
+        successes = sum(self.exchange_successes) // 2
         if attempts < _SWAP_DEGENERACY_MIN_ATTEMPTS:
             return
         if successes == attempts:
@@ -412,12 +483,32 @@ class BatchedReplicaExchange:
             reason = ('no swap was ever accepted -- rungs are too far apart '
                       'to exchange, so each replica sampled in isolation')
         else:
+            self._warn_dead_rungs()
             return
         self.logger.warning(
-            'replica-exchange ladder looks degenerate: %d/%d swaps accepted. '
-            'Widen or tighten the %s spacing.',
-            successes, attempts, 'mu' if self.mus is not None else 'temperature')
-        self.logger.warning('  %s', reason)
+            'replica-exchange ladder looks degenerate: %d/%d swap attempts '
+            'accepted. Widen or tighten the %s spacing: %s',
+            successes, attempts,
+            'mu' if self.mus is not None else 'temperature', reason)
+
+    def _warn_dead_rungs(self) -> None:
+        """Per-rung second-half check: a rung whose swaps all fail after the
+        midpoint is dead even when the cumulative tally looks mixed (early
+        equilibration swaps accept freely and inflate it permanently)."""
+        if self._mid_attempts is None:
+            return
+        for k, (att0, suc0) in enumerate(
+                zip(self._mid_attempts, self._mid_successes)):
+            att = self.exchange_attempts[k] - att0
+            suc = self.exchange_successes[k] - suc0
+            # Half the whole-run floor: a rung sees roughly half the rounds.
+            if att >= _SWAP_DEGENERACY_MIN_ATTEMPTS // 2 and suc == 0:
+                self.logger.warning(
+                    'replica-exchange rung %d accepted no swaps in the second '
+                    'half of the run (0/%d): the ladder is dead there; '
+                    'respace the %s ladder around that rung '
+                    '(docs/replica_exchange_ladder_spacing.rst).',
+                    k, att, 'mu' if self.mus is not None else 'temperature')
 
     def _log_summary(self) -> None:
         """Final consolidated summary: per-replica move acceptances."""

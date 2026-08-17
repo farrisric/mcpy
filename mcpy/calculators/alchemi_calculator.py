@@ -56,7 +56,7 @@ class AlchemiCalculator:
     ) -> None:
         if energy_only and isinstance(checkpoint, MACEWrapper):
             # energy_only mutates the wrapper's own model_config (below), and a
-            # pre-loaded wrapper is shared by every calculator built from it —
+            # pre-loaded wrapper is shared by every calculator built from it --
             # including an AlchemiFCalculator whose FIRE relaxation needs the
             # forces this would switch off. There is no way to scope the change
             # to one calculator, so refuse instead of breaking the other one
@@ -65,8 +65,8 @@ class AlchemiCalculator:
                 "energy_only=True cannot be combined with a pre-loaded "
                 "MACEWrapper: dropping 'forces' from its active outputs would "
                 "also disable forces for every other calculator sharing that "
-                "wrapper. Pass the checkpoint path so this calculator loads "
-                "its own model, or set energy_only on all of the sharers."
+                "wrapper. Pass the checkpoint path instead, so this "
+                "calculator loads its own model."
             )
         self.device = device
         self.dtype = dtype
@@ -163,6 +163,15 @@ class AlchemiCalculator:
         model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
         in K. ``FixAtoms`` constraints are honored.
         """
+        if self.energy_only:
+            # The integrator would otherwise die steps deep inside nvalchemi
+            # ("NVTLangevin requires forces...") without naming the cause.
+            raise ValueError(
+                'run_md needs forces, but this calculator was built with '
+                'energy_only=True (forces are stripped from the model '
+                'outputs). Build a separate calculator without energy_only '
+                'for MD.'
+            )
         _run_langevin_md(
             self.model, self._nl_config, atoms,
             temperature=temperature, friction=friction, dt=dt, steps=steps,

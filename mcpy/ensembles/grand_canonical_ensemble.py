@@ -89,6 +89,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             "mu": self._mu,
             "temperature": self._temperature,
             "beta": self.units.beta,
+            "lambda_dbs": self.units.lambda_dbs,
             "step": self._step,
             "exchange_attempts": self.exchange_attempts,
             "exchange_successes": self.exchange_successes,
@@ -98,11 +99,16 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.atoms = state["atoms"]
         self.E_old = state["energy"]
         self.n_atoms = state["n_atoms"]
-        # Only the configuration travels. Step count and exchange statistics
-        # describe the *slot*, not the config: ``ReplicaExchange`` passes a
-        # full ``get_state()`` dict here on every accepted swap, so restoring
-        # them would trade the two ranks' swap tallies back and forth and make
-        # the per-rank "Accepted Exchange (%)" column meaningless.
+        # Step count and exchange statistics are restored only when the dict
+        # carries them, so the get_state()/set_state() restart round-trip is
+        # lossless. ``ReplicaExchange`` strips them before applying a swap:
+        # they describe the *slot*, not the config, and trading them between
+        # ranks made the per-rank "Accepted Exchange (%)" column meaningless.
+        self._step = state.get("step", self._step)
+        self.exchange_attempts = state.get(
+            "exchange_attempts", self.exchange_attempts)
+        self.exchange_successes = state.get(
+            "exchange_successes", self.exchange_successes)
         # The configuration changed under the cells: refresh their free
         # volumes now, or the next insertion/deletion acceptance would use
         # the previous configuration's volume (GCMC only recalculates on
@@ -169,20 +175,23 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         except (OSError, AttributeError):
             self.logger.exception("Error writing to file %s", self._outfile)
 
+    def _species_count(self, atoms: Atoms, specie: str) -> int:
+        """Particle count for one μ species: molecules for molecular keys,
+        atoms otherwise. The one counting convention shared by
+        ``_minimum_score`` and the replica-exchange swap criterion."""
+        if specie in self.units.molecules:
+            template = self.units.molecules[specie]
+            return len(find_molecules(
+                atoms, sorted(template.get_chemical_symbols())))
+        return atoms.get_chemical_symbols().count(specie)
+
     def _minimum_score(self, atoms: Atoms, energy: float) -> float:
         """Grand potential Ω = E − Σ μ_i N_i. Comparing raw E across moves
         that change N is not meaningful in the grand canonical ensemble.
         Molecular species count molecules, atomic species count atoms."""
         score = energy
-        symbols = atoms.get_chemical_symbols()
         for specie, mu in self._mu.items():
-            if specie in self.units.molecules:
-                template = self.units.molecules[specie]
-                n = len(find_molecules(
-                    atoms, sorted(template.get_chemical_symbols())))
-            else:
-                n = symbols.count(specie)
-            score -= mu * n
+            score -= mu * self._species_count(atoms, specie)
         return score
 
     def _acceptance_condition(self,

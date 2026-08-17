@@ -455,11 +455,15 @@ def test_batched_re_rolls_back_a_move_that_mutates_then_reports_failure():
     np.testing.assert_allclose(replica.atoms.positions, before)
 
 
-# Replica exchange swaps configurations, not slot bookkeeping (bug: get_state
-# emitted step/exchange counters and set_state restored them, so accepted
-# swaps traded the two ranks' tallies)
+# Replica exchange swaps configurations, not slot bookkeeping (bug: accepted
+# swaps traded the two ranks' tallies). ReplicaExchange strips the slot-bound
+# keys before applying a swap; a full get_state() dict (the restart
+# round-trip) restores everything.
 
-def test_gcmc_set_state_keeps_local_step_and_exchange_counters():
+_SLOT_KEYS = ('step', 'exchange_attempts', 'exchange_successes')
+
+
+def test_gcmc_set_state_swap_payload_keeps_local_counters():
     g = _gcmc(_h2(), [NullCell()], MoveSelector([1], [_DirtyBailingMove()]),
               {'H': 0.0})
     g._step, g.exchange_attempts, g.exchange_successes = 40, 8, 3
@@ -467,19 +471,40 @@ def test_gcmc_set_state_keeps_local_step_and_exchange_counters():
     partner = _gcmc(_h2(), [NullCell()],
                     MoveSelector([1], [_DirtyBailingMove()]), {'H': 0.0})
     partner._step, partner.exchange_attempts, partner.exchange_successes = 40, 8, 7
-    g.set_state(partner.get_state())
+    swap_payload = {k: v for k, v in partner.get_state().items()
+                    if k not in _SLOT_KEYS}  # what ReplicaExchange applies
+    g.set_state(swap_payload)
 
     assert (g._step, g.exchange_attempts, g.exchange_successes) == (40, 8, 3)
     assert g.atoms is partner.atoms  # the configuration still travels
 
 
-def test_canonical_set_state_keeps_local_step_and_exchange_counters(tmp_path):
+def test_gcmc_set_state_full_dict_round_trips_counters():
+    """Restart contract: get_state() -> set_state() must be lossless, or an
+    appended outfile renumbers its rows from 0 after a restart."""
+    g = _gcmc(_h2(), [NullCell()], MoveSelector([1], [_DirtyBailingMove()]),
+              {'H': 0.0})
+    partner = _gcmc(_h2(), [NullCell()],
+                    MoveSelector([1], [_DirtyBailingMove()]), {'H': 0.0})
+    partner._step, partner.exchange_attempts, partner.exchange_successes = 40, 8, 7
+    g.set_state(partner.get_state())
+    assert (g._step, g.exchange_attempts, g.exchange_successes) == (40, 8, 7)
+
+
+def test_canonical_set_state_swap_payload_keeps_local_counters(tmp_path):
+    mc = _canonical(tmp_path)
+    mc._step, mc.exchange_attempts, mc.exchange_successes = 12, 4, 1
+    mc.set_state({'atoms': _h2(), 'energy': -1.0})
+    assert (mc._step, mc.exchange_attempts, mc.exchange_successes) == (12, 4, 1)
+    assert mc._current_energy == -1.0
+
+
+def test_canonical_set_state_full_dict_round_trips_counters(tmp_path):
     mc = _canonical(tmp_path)
     mc._step, mc.exchange_attempts, mc.exchange_successes = 12, 4, 1
     mc.set_state({'atoms': _h2(), 'energy': -1.0, 'step': 99,
                   'exchange_attempts': 40, 'exchange_successes': 39})
-    assert (mc._step, mc.exchange_attempts, mc.exchange_successes) == (12, 4, 1)
-    assert mc._current_energy == -1.0
+    assert (mc._step, mc.exchange_attempts, mc.exchange_successes) == (99, 40, 39)
 
 
 # Per-interval acceptance counters are cleared even with the outfile disabled

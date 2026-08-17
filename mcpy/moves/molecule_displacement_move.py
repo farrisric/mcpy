@@ -3,7 +3,8 @@ from ase import Atoms
 from ase.geometry import find_mic, wrap_positions
 
 from .base_move import BaseMove
-from .molecule_utils import find_molecules, molecule_com, random_rotation_matrix
+from .molecule_utils import (exchangeable_predicate, find_molecules,
+                             molecule_com, random_rotation_matrix)
 from ..cell import Cell
 
 
@@ -68,7 +69,7 @@ class MoleculeDisplacementMove(BaseMove):
         new_com = com + shift
         if np.any(np.asarray(atoms.pbc)):
             new_com = wrap_positions([new_com], atoms.cell, pbc=atoms.pbc)[0]
-        if not self.cell.is_point_exchangeable(new_com):
+        if not exchangeable_predicate(self.cell)(new_com):
             return False, 0, self.name
         if self.max_angle is None:
             rotation = random_rotation_matrix(self.rng)
