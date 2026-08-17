@@ -13,7 +13,7 @@ from nvalchemi.data import AtomicData
 from nvalchemi.data.batch import Batch
 from nvalchemi.models.mace import MACEWrapper
 from nvalchemi.hooks.neighbor_list import NeighborListHook
-from nvalchemi.hooks._context import HookContext
+from nvalchemi.hooks import DynamicsContext
 from nvalchemi.dynamics import NVTLangevin, initialize_velocities
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook
@@ -49,6 +49,12 @@ def _load_model(
 ) -> MACEWrapper:
     if isinstance(checkpoint, MACEWrapper):
         return checkpoint
+    if compile_model:
+        # torch >= 2.12.1 donates compiled-backward buffers that the FIRE
+        # force backward still needs; GCMC runs crash within a few steps
+        # ("compiled with non-empty donated buffers"). Zero measured cost.
+        from torch._functorch import config as _functorch_config
+        _functorch_config.donated_buffer = False
     # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
     # string as a download alias, so it cannot open local paths. ``head``
     # selects a multihead model's head by name or index.
@@ -121,7 +127,7 @@ def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
 
 
 def _build_nl(batch: Batch, nl_hook: NeighborListHook) -> None:
-    ctx = HookContext(batch=batch, step_count=0)
+    ctx = DynamicsContext(batch=batch, step_count=0)
     nl_hook(ctx, DynamicsStage.BEFORE_COMPUTE)
 
 
