@@ -95,8 +95,14 @@ class CanonicalEnsemble(BaseEnsemble):
         # config swap, without relying on the pickled .info surviving MPI.
         self.atoms.info.setdefault("key_value_pairs", {})
         self.atoms.info["key_value_pairs"]["potential_energy"] = state["energy"]
-        # Step count and exchange statistics stay with the slot, not the
-        # config -- see GrandCanonicalEnsemble.set_state.
+        # Restored only when present, so the restart round-trip is lossless;
+        # ReplicaExchange strips these slot-bound keys before a swap -- see
+        # GrandCanonicalEnsemble.set_state.
+        self._step = state.get("step", self._step)
+        self.exchange_attempts = state.get(
+            "exchange_attempts", self.exchange_attempts)
+        self.exchange_successes = state.get(
+            "exchange_successes", self.exchange_successes)
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:

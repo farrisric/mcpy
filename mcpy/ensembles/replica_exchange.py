@@ -118,6 +118,19 @@ class ReplicaExchange:
                 energy2 -= mu2[specie] * state2['atoms'].symbols.count(specie)
 
         delta = (beta2 - beta1) * (energy2 - energy1)
+
+        # Grand-canonical weights also carry Lambda_s^(-3 N_s) per exchangeable
+        # species, and Lambda depends on T, so configs with different particle
+        # counts shift the joint weight by a de Broglie cross-term (zero in LJ
+        # units, where Lambda = 1). lambda_dbs rides on each replica's state;
+        # a units-less ensemble (CanonicalEnsemble) has no mu and skips this.
+        l1, l2 = state1.get('lambda_dbs'), state2.get('lambda_dbs')
+        if mu1 and mu2 and l1 and l2:
+            for specie in mu1:
+                dn = (state1['atoms'].symbols.count(specie)
+                      - state2['atoms'].symbols.count(specie))
+                if dn:
+                    delta += 3.0 * dn * np.log(l1[specie] / l2[specie])
         exchange_prob = min(1.0, np.exp(delta))
         self.logger.debug(
             f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
@@ -199,7 +212,14 @@ class ReplicaExchange:
 
         if u < exchange_prob:
             self.logger.debug(f"Accepted exchange with rank {partner_rank}")
-            self.gcmc.set_state(partner_state)
+            # Only the configuration travels on a swap. step and the exchange
+            # tallies describe the slot, not the config; set_state restores
+            # them when present (the restart round-trip), so strip them here.
+            config_state = {
+                k: v for k, v in partner_state.items()
+                if k not in ('step', 'exchange_attempts', 'exchange_successes')
+            }
+            self.gcmc.set_state(config_state)
             return True
         else:
             self.logger.debug(f"Rejected exchange with rank {partner_rank}")

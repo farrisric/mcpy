@@ -93,6 +93,19 @@ def test_find_molecules_missing_array_and_cell_filter():
     assert find_molecules(atoms, sorted(['O', 'H', 'H']), _NowhereCell()) == []
 
 
+def test_duck_typed_cell_with_only_is_point_inside_still_works():
+    """Pre-1.4.0 contract: a user cell exposing only ``is_point_inside``
+    (no BaseCell inheritance) must keep working with the molecule moves via
+    the fallback predicate."""
+    class _LegacyDuckCell:
+        def is_point_inside(self, point):
+            return False
+
+    atoms = _water_box()
+    assert find_molecules(atoms, sorted(['O', 'H', 'H']),
+                          _LegacyDuckCell()) == []
+
+
 def test_random_rotation_matrix_is_rotation():
     rng = RandomNumberGenerator(seed=7)
     r1 = random_rotation_matrix(rng)

@@ -95,17 +95,3 @@ class Cell(BaseCell):
         any cell type (the region cells implement a real test).
         """
         return True
-
-    def is_point_exchangeable(self, point):
-        """Whether a molecule whose center of mass sits at ``point`` may be
-        exchanged with the reservoir (counted, deleted, displaced).
-
-        The point counterpart of :meth:`get_atoms_specie_inside_cell`, and the
-        predicate the molecule moves use. It is separate from
-        :meth:`is_point_inside` because a region may deliberately accept
-        molecules it would never *propose* — :class:`CustomCell` drops the z
-        upper bound so a desorbed molecule stays deletable instead of
-        accumulating forever. Cells whose two regions coincide (the box, the
-        sphere, the dome) inherit this delegation unchanged.
-        """
-        return self.is_point_inside(point)

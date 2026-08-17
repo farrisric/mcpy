@@ -6,6 +6,7 @@ behaviour without needing torch/mpi4py by driving _accept_swap / _grand_potentia
 with lightweight replica stubs.
 """
 import logging
+from collections import defaultdict
 
 import numpy as np
 import pytest
@@ -14,9 +15,13 @@ from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 
 
 class _FakeUnits:
-    def __init__(self, beta):
+    def __init__(self, beta, lambda_dbs=None):
         self.beta = beta
         self.molecules = {}
+        # Lambda = 1 unless a test opts in: keeps the de Broglie cross-term
+        # zero so the Lambda-free expectations below stay exact.
+        self.lambda_dbs = (lambda_dbs if lambda_dbs is not None
+                           else defaultdict(lambda: 1.0))
 
 
 class _FakeAtoms:
@@ -28,8 +33,8 @@ class _FakeAtoms:
 
 
 class _FakeReplica:
-    def __init__(self, beta, energy, mu, symbols):
-        self.units = _FakeUnits(beta)
+    def __init__(self, beta, energy, mu, symbols, lambda_dbs=None):
+        self.units = _FakeUnits(beta, lambda_dbs)
         self.E_old = energy
         self._mu = mu
         self.atoms = _FakeAtoms(symbols)
@@ -39,10 +44,13 @@ class _FakeReplica:
         (these fakes carry no molecular species) so _grand_potential's
         delegation to it can be exercised without a real ensemble."""
         score = energy
-        symbols = atoms.get_chemical_symbols()
         for specie, mu in (self._mu or {}).items():
-            score -= mu * symbols.count(specie)
+            score -= mu * self._species_count(atoms, specie)
         return score
+
+    def _species_count(self, atoms, specie):
+        """Mirrors GrandCanonicalEnsemble._species_count (atomic only)."""
+        return atoms.get_chemical_symbols().count(specie)
 
 
 class _FakeRng:
@@ -193,6 +201,8 @@ def test_temperature_ladder_swap_unchanged_by_the_mu_fix():
 
 
 def test_temperature_ladder_uphill_swap_matches_legacy_probability():
+    """With Lambda = 1 (the fakes' default, and LJ units in production) the
+    de Broglie cross-term vanishes and the Lambda-free form is exact."""
     ri = _FakeReplica(beta=1.0, energy=10.0, mu={'Ag': 1.0}, symbols=['Ag'] * 18)
     rj = _FakeReplica(beta=0.5, energy=20.0, mu={'Ag': 1.0}, symbols=['Ag'] * 5)
     re = _bare_re()
@@ -203,6 +213,56 @@ def test_temperature_ladder_uphill_swap_matches_legacy_probability():
     assert re._accept_swap(0, 1)
     re.rng = _FakeRng(p * 1.01)
     assert not re._accept_swap(0, 1)
+
+
+def test_temperature_ladder_swap_includes_de_broglie_term():
+    """Grand-canonical T-ladder swaps carry the Lambda_s^(-3N_s) factors of
+    the stationary weight: with Lambda_i/Lambda_j = e^0.1 and N differing by
+    13, the exponent gains 3 * 13 * 0.1 = 3.9 over the Lambda-free form."""
+    ri = _FakeReplica(beta=1.0, energy=10.0, mu={'Ag': 1.0},
+                      symbols=['Ag'] * 18,
+                      lambda_dbs={'Ag': float(np.exp(0.1))})
+    rj = _FakeReplica(beta=0.5, energy=20.0, mu={'Ag': 1.0},
+                      symbols=['Ag'] * 5, lambda_dbs={'Ag': 1.0})
+    re = _bare_re()
+    re.replicas = [ri, rj]
+    # Lambda-free delta = -11.5 (test above); cross-term adds +3.9.
+    p = float(np.exp(-11.5 + 3.9))
+    re.rng = _FakeRng(p * 0.99)
+    assert re._accept_swap(0, 1)
+    re.rng = _FakeRng(p * 1.01)
+    assert not re._accept_swap(0, 1)
+
+
+def test_de_broglie_term_is_symmetric_in_slot_order():
+    ri = _FakeReplica(beta=1.0, energy=10.0, mu={'Ag': 1.0},
+                      symbols=['Ag'] * 18,
+                      lambda_dbs={'Ag': float(np.exp(0.1))})
+    rj = _FakeReplica(beta=0.5, energy=20.0, mu={'Ag': 1.0},
+                      symbols=['Ag'] * 5, lambda_dbs={'Ag': 1.0})
+    re = _bare_re()
+    re.replicas = [ri, rj]
+    p = float(np.exp(-11.5 + 3.9))
+    for u in (p * 0.99, p * 1.01):
+        re.rng = _FakeRng(u)
+        assert re._accept_swap(0, 1) == re._accept_swap(1, 0)
+
+
+def test_nan_energy_rejects_the_swap_and_warns(caplog):
+    """A diverged relaxation (NaN energy) must sever the swap loudly: the
+    old min(1, exp(nan)) form silently *accepted* every such swap, and the
+    plain comparison form would silently reject."""
+    re = _bare_re()
+    re.replicas = [
+        _FakeReplica(beta=1.0, energy=float('nan'), mu={'Ag': 1.0},
+                     symbols=['Ag'] * 5),
+        _FakeReplica(beta=0.5, energy=20.0, mu={'Ag': 1.0},
+                     symbols=['Ag'] * 5),
+    ]
+    re.rng = _FakeRng(1e-12)
+    with caplog.at_level(logging.WARNING, logger='test'):
+        assert re._accept_swap(0, 1) is False
+    assert 'non-finite' in ' '.join(r.getMessage() for r in caplog.records)
 
 
 def test_consolidated_status_line(caplog):
@@ -240,6 +300,8 @@ def _tally_re(attempts, successes, mus=None):
     pt.logger = logging.getLogger('mcpy.ensembles.batched_replica_exchange')
     pt.exchange_attempts = attempts
     pt.exchange_successes = successes
+    pt._mid_attempts = None
+    pt._mid_successes = None
     pt.mus = mus
     return pt
 
@@ -272,8 +334,12 @@ def test_degenerate_ladder_warning_names_the_ladder_kind(caplog):
     with caplog.at_level(logging.WARNING,
                          logger='mcpy.ensembles.batched_replica_exchange'):
         pt._warn_if_ladder_degenerate()
-    text = ' '.join(r.getMessage() for r in caplog.records)
-    assert '80/80' in text and 'mu spacing' in text
+    # One record (log aggregators must not strand the reason line), counting
+    # swap attempts, not the doubled per-slot tallies (both slots of a pair
+    # are incremented per attempt: 40 attempts, not 80).
+    assert len(caplog.records) == 1
+    text = caplog.records[0].getMessage()
+    assert '40/40' in text and 'mu spacing' in text
 
     caplog.clear()
     pt = _tally_re([40, 40], [40, 40], mus=None)
@@ -282,3 +348,80 @@ def test_degenerate_ladder_warning_names_the_ladder_kind(caplog):
         pt._warn_if_ladder_degenerate()
     assert 'temperature spacing' in ' '.join(
         r.getMessage() for r in caplog.records)
+
+
+def test_dead_rung_warned_from_second_half_tally(caplog):
+    """The documented real failure: the cumulative tally looks mixed (early
+    free swaps inflate it forever), but one rung accepted nothing after the
+    midpoint. The whole-run check cannot see it; the per-rung second-half
+    check must."""
+    pt = _tally_re([40, 80, 80, 80, 40], [20, 30, 30, 20, 0],
+                   mus=[{'CO': -1.0}] * 5)
+    pt._mid_attempts = [20, 40, 40, 40, 20]
+    pt._mid_successes = [10, 20, 22, 12, 0]
+    with caplog.at_level(logging.WARNING,
+                         logger='mcpy.ensembles.batched_replica_exchange'):
+        pt._warn_if_ladder_degenerate()
+    text = ' '.join(r.getMessage() for r in caplog.records)
+    assert 'rung 4' in text
+    assert 'rung 0' not in text  # rung 0 kept accepting in the second half
+
+
+def test_no_dead_rung_warning_without_midpoint_snapshot(caplog):
+    """A run too short to snapshot (or a healthy mixed tally) stays quiet."""
+    pt = _tally_re([40, 40], [12, 12])
+    with caplog.at_level(logging.WARNING,
+                         logger='mcpy.ensembles.batched_replica_exchange'):
+        pt._warn_if_ladder_degenerate()
+    assert not caplog.records
+
+
+# --------------------------------------------------------------------------
+# Replica isolation. A factory written for the MPI class (module-level shared
+# atoms/moves, safe under one-process-per-rank) silently corrupts every
+# replica under batching; the constructor must refuse it.
+# --------------------------------------------------------------------------
+
+class _StubBatchCalc:
+    def get_potential_energies(self, atoms_list):
+        return [0.0] * len(atoms_list)
+
+
+def test_shared_replica_state_is_refused():
+    from types import SimpleNamespace
+
+    shared_atoms = object()
+
+    def factory(T, rank):
+        return SimpleNamespace(atoms=shared_atoms, move_selector=object(),
+                               cells=[])
+
+    with pytest.raises(ValueError, match='share'):
+        BatchedReplicaExchange(factory, _StubBatchCalc(),
+                               temperatures=[300.0, 400.0])
+
+
+def test_shared_cells_are_refused():
+    from types import SimpleNamespace
+
+    shared_cell = object()
+
+    def factory(T, rank):
+        return SimpleNamespace(atoms=object(), move_selector=object(),
+                               cells=[shared_cell])
+
+    with pytest.raises(ValueError, match='cells'):
+        BatchedReplicaExchange(factory, _StubBatchCalc(),
+                               temperatures=[300.0, 400.0])
+
+
+def test_distinct_replica_state_is_accepted():
+    from types import SimpleNamespace
+
+    def factory(T, rank):
+        return SimpleNamespace(atoms=object(), move_selector=object(),
+                               cells=[object()])
+
+    re = BatchedReplicaExchange(factory, _StubBatchCalc(),
+                                temperatures=[300.0, 400.0])
+    assert re.n_replicas == 2

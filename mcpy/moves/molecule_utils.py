@@ -37,6 +37,17 @@ def molecule_com(atoms, members):
     return com
 
 
+def exchangeable_predicate(cell):
+    """The cell's exchangeable-region point predicate.
+
+    Falls back to ``is_point_inside`` for user cells written against the
+    original single-predicate duck-type contract (pre-1.4.0), which
+    ``BaseCell`` subclasses inherit as a default but plain duck-typed cells
+    do not.
+    """
+    return getattr(cell, 'is_point_exchangeable', None) or cell.is_point_inside
+
+
 def find_molecules(atoms, template_symbols, cell=None):
     """Index groups of whole molecules matching ``template_symbols``.
 
@@ -45,11 +56,12 @@ def find_molecules(atoms, template_symbols, cell=None):
     the cell counts as exchangeable (``cell.is_point_exchangeable``) are
     returned; ``None`` skips the spatial filter (used by the grand-potential
     bookkeeping). The exchangeable region is not always the proposal region:
-    see :meth:`mcpy.cell.Cell.is_point_exchangeable`.
+    see :meth:`mcpy.cell.BaseCell.is_point_exchangeable`.
     """
     ids = atoms.arrays.get('molecule_id')
     if ids is None:
         return []
+    predicate = None if cell is None else exchangeable_predicate(cell)
     symbols = np.asarray(atoms.get_chemical_symbols())
     groups = []
     for mid in np.unique(ids):
@@ -58,8 +70,7 @@ def find_molecules(atoms, template_symbols, cell=None):
         members = np.where(ids == mid)[0]
         if sorted(symbols[members]) != list(template_symbols):
             continue
-        if cell is not None and not cell.is_point_exchangeable(
-                molecule_com(atoms, members)):
+        if predicate is not None and not predicate(molecule_com(atoms, members)):
             continue
         groups.append(members)
     return groups

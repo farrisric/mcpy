@@ -48,6 +48,15 @@ def _load_model(
     head: Union[str, int, None] = None,
 ) -> MACEWrapper:
     if isinstance(checkpoint, MACEWrapper):
+        if head is not None:
+            raise ValueError(
+                'head= cannot be applied to a pre-loaded MACEWrapper: the '
+                'head is baked in at wrap time, so it would be silently '
+                'ignored and a multihead model would evaluate on head 0 '
+                '(usually the pretrain head). Load from the .model path '
+                'with head=, or wrap the raw model in _HeadMACEWrapper '
+                'yourself before sharing it.'
+            )
         return checkpoint
     if compile_model:
         # torch >= 2.12.1 donates compiled-backward buffers that the FIRE
