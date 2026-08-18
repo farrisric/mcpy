@@ -16,7 +16,7 @@ from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.hooks import DynamicsContext
 from nvalchemi.dynamics import NVTLangevin, initialize_velocities
 from nvalchemi.dynamics.base import DynamicsStage
-from nvalchemi.dynamics.hooks import FreezeAtomsHook
+from nvalchemi.dynamics.hooks import FreezeAtomsHook, NaNDetectorHook
 
 
 class _HeadMACEWrapper(MACEWrapper):
@@ -58,12 +58,11 @@ def _load_model(
                 'yourself before sharing it.'
             )
         return checkpoint
-    if compile_model:
-        # torch >= 2.12.1 donates compiled-backward buffers that the FIRE
-        # force backward still needs; GCMC runs crash within a few steps
-        # ("compiled with non-empty donated buffers"). Zero measured cost.
-        from torch._functorch import config as _functorch_config
-        _functorch_config.donated_buffer = False
+    # The donated_buffer=False workaround (b333c8e) is gone: the crash it
+    # papered over came from the wrapper running in train mode
+    # (create_graph=True made the FIRE force backward need the buffers the
+    # compiled backward donates); with wrapper.eval() below, donation is safe
+    # (verified compile+cuEq, alias and local paths, varying-N GCMC).
     # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
     # string as a download alias, so it cannot open local paths. ``head``
     # selects a multihead model's head by name or index.
@@ -96,7 +95,14 @@ def _load_model(
             for param in raw.parameters():
                 param.requires_grad = False
             raw = torch.compile(raw)
-        return MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
+        wrapper = MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
+        # MACEWrapper.forward passes training=self.training down to MACE, where
+        # it becomes create_graph/retain_graph on the force autograd. nn.Module
+        # defaults to train mode, and from_checkpoint's wrapper.eval() (alias
+        # path below) never runs here — without this every force pass builds a
+        # retained second-order graph.
+        wrapper.eval()
+        return wrapper
     if head is not None:
         raise ValueError(
             "head= is only supported when loading a local .model path; "
@@ -214,7 +220,8 @@ def _run_langevin_md(
         random_seed=seed,
     )
 
-    freeze_hooks = _freeze_hook_for(batch, _fixed_indices(atoms))
+    fixed = _fixed_indices(atoms)
+    freeze_hooks = _freeze_hook_for(batch, fixed)
     nl_hook = NeighborListHook(nl_config, max_neighbors=max_neighbors)
     opt = NVTLangevin(
         model=model,
@@ -223,13 +230,20 @@ def _run_langevin_md(
         friction=friction,
         random_seed=seed,
         n_steps=steps,
-        hooks=freeze_hooks,
+        # NaN forces/energy would otherwise propagate silently into the
+        # proposal the ensemble scores; the hook raises at the offending step.
+        hooks=(freeze_hooks or []) + [NaNDetectorHook()],
     )
     opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
     # Bootstrap: build NL and compute initial forces before the MD loop.
     _build_nl(batch, nl_hook)
     opt.compute(batch)
+    if fixed:
+        # FreezeAtomsHook zeros frozen forces only at AFTER_POST_UPDATE; the
+        # bootstrap compute() runs outside the hook loop, so step 0 would
+        # otherwise kick and displace the frozen rows once.
+        batch.forces[fixed] = 0.0
 
     opt.run(batch)
     _write_back_positions(atoms, batch)

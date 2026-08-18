@@ -11,6 +11,7 @@ from nvalchemi.models.mace import MACEWrapper
 from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.dynamics import FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2, ConvergenceHook
 from nvalchemi.dynamics.base import DynamicsStage
+from nvalchemi.dynamics.hooks import NaNDetectorHook
 
 from ..utils.chunking import chunk_ranges
 from ._alchemi_common import (
@@ -56,8 +57,11 @@ class AlchemiFCalculator:
     compile_model : bool
         torch.compile. Best to pre-warm in __init__ if reusing.
     dt : float
-        FIRE initial timestep (default 1.0). Matches ASE FIRE's dtmax;
-        benchmarks show dt=1.0 converges in ~half the steps vs dt=0.1.
+        FIRE initial timestep in fs (default 1.0, the value of ASE FIRE's
+        dtmax; benchmarks show dt=1.0 converges in ~half the steps vs 0.1).
+        Note nvalchemi grows the adaptive timestep up to dt_max = 10*dt,
+        unlike ASE's 1 fs cap; per-step displacement stays clamped by
+        maxstep=0.2 A either way.
     optimizer : str
         'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant —
         typically converges in fewer steps).
@@ -131,7 +135,8 @@ class AlchemiFCalculator:
         batch.forces = torch.zeros_like(batch.positions)
         batch.energy = torch.zeros(1, 1, device=self.device, dtype=self.dtype)
 
-        freeze_hooks = _freeze_hook_for(batch, _fixed_indices(atoms))
+        fixed = _fixed_indices(atoms)
+        freeze_hooks = _freeze_hook_for(batch, fixed)
 
         nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         opt = self._optimizer_cls(
@@ -139,17 +144,30 @@ class AlchemiFCalculator:
             dt=self.dt,
             convergence_hook=ConvergenceHook.from_fmax(self.fmax),
             n_steps=self.steps,
-            hooks=freeze_hooks,
+            # NaN forces/energy would otherwise flow silently into the GCMC
+            # acceptance decision; the hook raises at the offending step.
+            hooks=(freeze_hooks or []) + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
         # Bootstrap: build NL and compute initial forces before the FIRE loop
         _build_nl(batch, nl_hook)
         opt.compute(batch)
+        if fixed:
+            # FreezeAtomsHook zeros frozen forces only at AFTER_POST_UPDATE;
+            # the bootstrap compute() runs outside the hook loop, so step 0
+            # would otherwise displace the frozen rows once.
+            batch.forces[fixed] = 0.0
 
         opt.run(batch)
         self.last_relax_steps = int(opt.step_count)
         self.total_relax_steps += self.last_relax_steps
+        if self.last_relax_steps >= self.steps:
+            # Known bias trap: a too-tight cap returns truncated relaxations
+            # whose energies skew the GCMC acceptance.
+            logger.warning('FIRE reached the %d-step cap (fmax=%.3g eV/A); '
+                           'returned energy may be unconverged',
+                           self.steps, self.fmax)
         logger.debug("FIRE relaxation: %d/%d steps (fmax=%.3g eV/A)",
                      self.last_relax_steps, self.steps, self.fmax)
         _write_back_positions(atoms, batch)
@@ -177,12 +195,14 @@ class AlchemiFCalculator:
             dt=self.dt,
             convergence_hook=ConvergenceHook.from_fmax(self.fmax),
             n_steps=self.steps,
-            hooks=freeze_hooks,
+            hooks=(freeze_hooks or []) + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
         _build_nl(batch, nl_hook)
         opt.compute(batch)
+        if fixed:
+            batch.forces[fixed] = 0.0  # see get_potential_energy bootstrap
 
         return self._run_compacted(opt, batch, atoms_list)
 
@@ -224,6 +244,10 @@ class AlchemiFCalculator:
                     # or the next hook context builds an out-of-bounds mask.
                     opt._last_converged = None
             if alive.size:  # step cap hit: harvest the stragglers as-is
+                logger.warning('%d/%d graphs reached the %d-step FIRE cap '
+                               '(fmax=%.3g eV/A); their energies may be '
+                               'unconverged', alive.size, len(atoms_list),
+                               self.steps, self.fmax)
                 self._harvest(batch, np.arange(alive.size), alive, energies,
                               atoms_list)
         finally:
