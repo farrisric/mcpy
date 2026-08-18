@@ -15,6 +15,12 @@ class AlchemiBrownianMove(BaseMove):
     This move is pure Python; the nvalchemi dependency enters only through
     ``calculator.run_md`` at call time.
 
+    Positions are not wrapped back into the box after the MD trajectory.
+    This is safe: the periodic ``Cell`` selects deletion candidates by
+    species only (no position test), MACE handles PBC through neighbor-list
+    shifts, and region cells (DomeCell, CustomCell) treat out-of-region
+    drift exactly as they do for any displacement move.
+
     Parameters
     ----------
     calculator : AlchemiCalculator | AlchemiFCalculator

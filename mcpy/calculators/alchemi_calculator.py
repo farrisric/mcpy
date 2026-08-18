@@ -82,6 +82,16 @@ class AlchemiCalculator:
             # fp32 rounding. See docs/superpowers/specs/2026-06-09-...-design.md.
             self.model.model_config.active_outputs.discard('forces')
 
+    def _forward(self, batch):
+        """Model forward. The wrapper manages positions grad itself when forces
+        are active; with energy_only nothing needs grad, and no_grad keeps the
+        forward graph-free even when model parameters still require grad
+        (compile_model=False local loads)."""
+        if self.energy_only:
+            with torch.no_grad():
+                return self.model(batch)
+        return self.model(batch)
+
     def get_potential_energy(self, atoms: Atoms) -> float:
         """
         Single forward pass — no geometry relaxation.
@@ -97,11 +107,9 @@ class AlchemiCalculator:
             Potential energy in eV.
         """
         batch = _make_batch(atoms, self.device, self.dtype)
-        # positions must have grad enabled — MACEWrapper always computes forces via autograd
-        batch.positions.requires_grad_(True)
         nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
         _build_nl(batch, nl_hook)
-        out = self.model(batch)
+        out = self._forward(batch)
         return float(out['energy'].sum().item())
 
     def get_potential_energies(
@@ -140,10 +148,9 @@ class AlchemiCalculator:
         for start, stop in chunk_ranges(len(atoms_list), cs):
             chunk = atoms_list[start:stop]
             batch = _make_multi_batch(chunk, self.device, self.dtype)
-            batch.positions.requires_grad_(True)
             nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
             _build_nl(batch, nl_hook)
-            model_out = self.model(batch)
+            model_out = self._forward(batch)
             out.append(_per_graph_energies(model_out['energy'], len(chunk)))
         return np.concatenate(out)
 
