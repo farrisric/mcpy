@@ -87,7 +87,8 @@ class CustomCell(Cell):
             covered |= np.isfinite(dists)
 
         occupied_fraction = float(np.count_nonzero(covered)) / self.mc_sample_points
-        self.volume = self.cell_volume * (1.0 - occupied_fraction)
+        self.volume = self._clamp_free_volume(
+            self.cell_volume * (1.0 - occupied_fraction), self.cell_volume)
 
     def _periodic_images(self, atoms):
         """Positions (cell frame) of the atoms plus their -1/0/+1 periodic

@@ -50,6 +50,7 @@ from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # no
 from mcpy.calculators import AlchemiFCalculator  # noqa: E402
 from mcpy.cell import SphericalCell  # noqa: E402
 from mcpy.ensembles import BatchedReplicaExchange  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -72,8 +73,10 @@ def parse_args():
     p.add_argument('--no-compile', action='store_true')
     p.add_argument('--fmax', type=float, default=0.05)
     p.add_argument('--relax-steps', type=int, default=500)
-    p.add_argument('--mu-Ag', type=float, default=-2.99)
-    p.add_argument('--mu-O', type=float, default=-4.91)
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
     p.add_argument('--delta-mu-O', type=float, default=-0.5)
     p.add_argument('--min-insert', type=float, default=0.5)
     p.add_argument('--vacuum', type=float, default=3.0)
@@ -111,7 +114,9 @@ def main():
     )
 
     species = ['O']
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     def gcmc_factory(T, rank):
         atoms = base_atoms.copy()

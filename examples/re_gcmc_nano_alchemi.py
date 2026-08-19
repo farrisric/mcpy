@@ -38,6 +38,7 @@ from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # no
 from mcpy.calculators import AlchemiFCalculator  # noqa: E402
 from mcpy.cell import SphericalCell  # noqa: E402
 from mcpy.ensembles import BatchedReplicaExchange  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -60,8 +61,10 @@ def parse_args():
                    help='FIRE force convergence threshold (eV/Å)')
     p.add_argument('--relax-steps', type=int, default=500,
                    help='Max FIRE steps per batched energy evaluation')
-    p.add_argument('--mu-Ag', type=float, default=-2.99, help='Chemical potential of Ag (eV)')
-    p.add_argument('--mu-O', type=float, default=-4.91, help='Reference mu_O (eV)')
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
     p.add_argument('--delta-mu-O', type=float, default=-0.5, help='Shift applied to mu_O (eV)')
     p.add_argument('--min-insert', type=float, default=0.5,
                    help='Min insertion distance to existing atoms (Å)')
@@ -83,7 +86,7 @@ def main():
     master_seed = int(seeds[-1])
 
     # Shared template -- each factory call copies it and builds its own cell/moves.
-    base_atoms = Octahedron('Ag', 6, 1)
+    base_atoms = Octahedron('Ag', 9, 3)
 
     # ONE model, shared across replicas. Batched FIRE relax reuses this calculator.
     calculator = AlchemiFCalculator(
@@ -96,7 +99,9 @@ def main():
     )
 
     species = ['O']
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     def gcmc_factory(T, rank):
         atoms = base_atoms.copy()
@@ -106,7 +111,7 @@ def main():
 
         s = move_seeds[2 * rank:2 * (rank + 1)]
         move_selector = MoveSelector(
-            [1, 1],
+            [25, 25],
             [DeletionMove(scell, species=species, seed=s[0]),
              InsertionMove(scell, species=species, min_insert=args.min_insert, seed=s[1])],
         )

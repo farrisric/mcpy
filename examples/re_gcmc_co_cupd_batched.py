@@ -53,8 +53,8 @@ def parse_args():
                         'bug, which accepted every swap and so did flatten '
                         'the coverage curve the more often it ran.)')
     p.add_argument('--checkpoint', default='medium-mpa-0')
-    p.add_argument('--rel-steps', type=int, default=30)
-    p.add_argument('--rel-fmax', type=float, default=0.1)
+    p.add_argument('--rel-steps', type=int, default=100)
+    p.add_argument('--rel-fmax', type=float, default=0.05)
     p.add_argument('--min-insert', type=float, default=1.3)
     p.add_argument('--mol-disp-weight', type=int, default=0,
                    help='Weight of the rigid CO translate+rotate move '
