@@ -1,4 +1,7 @@
+import logging
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 
 
 class BaseCell(ABC):
@@ -39,6 +42,22 @@ class BaseCell(ABC):
         :return: Volume of the cell.
         """
         raise NotImplementedError("This method should be implemented in subclasses.")
+
+    def _clamp_free_volume(self, free_volume, region_volume):
+        """Floor an MC free-volume estimate at one sample point's worth of
+        the region. Zero covered-everything estimates only prove the free
+        volume is below the sampler's resolution, and a literal 0.0 turns
+        the deletion prefactor N*Lambda^3/V into inf (auto-accept) or nan
+        (silent reject) in ``SetUnits.de_broglie_deletion``."""
+        floor = region_volume / self.mc_sample_points
+        if free_volume < floor:
+            logger.warning(
+                'Estimated free volume %.3g A^3 is below the sampler '
+                'resolution (%d points over %.3g A^3); flooring to %.3g A^3. '
+                'The region is effectively full -- consider enlarging it.',
+                free_volume, self.mc_sample_points, region_volume, floor)
+            return floor
+        return free_volume
 
     def is_point_exchangeable(self, point):
         """Whether a molecule whose center of mass sits at ``point`` may be

@@ -134,4 +134,5 @@ class DomeCell(SphericalCell):
             covered |= np.isfinite(dists)
 
         free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
-        self.volume = free_fraction * self.sphere_volume
+        self.volume = self._clamp_free_volume(
+            free_fraction * self.sphere_volume, self.sphere_volume)

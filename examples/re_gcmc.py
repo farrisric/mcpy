@@ -21,6 +21,7 @@ from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
 from mcpy.cell import CustomCell as Cell  # noqa: E402
 from mcpy.ensembles import ReplicaExchange  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -31,8 +32,10 @@ def parse_args():
     p.add_argument('--gcmc-steps', type=int, default=200, help='GCMC steps between exchanges')
     p.add_argument('--exchange-interval', type=int, default=10, help='Steps between exchanges')
     p.add_argument('--write-interval', type=int, default=1, help='Outfile/traj write interval')
-    p.add_argument('--mu-Ag', type=float, default=-2.99, help='Chemical potential of Ag (eV)')
-    p.add_argument('--mu-O', type=float, default=-4.91, help='Reference mu_O (eV)')
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
     p.add_argument('--delta-mu-O', type=float, default=-0.5, help='Shift applied to mu_O (eV)')
     p.add_argument('--rel-max-steps', type=int, default=40, help='LBFGS relaxation steps')
     p.add_argument('--rel-fmax', type=float, default=0.1, help='LBFGS force convergence (eV/Å)')
@@ -65,7 +68,9 @@ def main():
                                 steps=args.rel_max_steps, fmax=args.rel_fmax)
 
     species = ['Ag', 'O']
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     move_selector = MoveSelector(
         [25, 25, 25, 25],
