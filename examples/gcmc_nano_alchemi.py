@@ -36,6 +36,7 @@ from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
 from mcpy.calculators import AlchemiCalculator, AlchemiFCalculator  # noqa: E402
 from mcpy.cell import SphericalCell  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -57,8 +58,10 @@ def parse_args():
                    help='Max FIRE steps per energy evaluation [relax mode only]')
     p.add_argument('--T', type=float, default=500.0, help='Temperature (K)')
     p.add_argument('--steps', type=int, default=1_000_000, help='Number of GCMC steps')
-    p.add_argument('--mu-Ag', type=float, default=-2.99, help='Chemical potential of Ag (eV)')
-    p.add_argument('--mu-O', type=float, default=-4.91, help='Reference mu_O (eV)')
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
     p.add_argument('--delta-mu-O', type=float, default=-0.5, help='Shift applied to mu_O (eV)')
     p.add_argument('--min-insert', type=float, default=0.5,
                    help='Min insertion distance to existing atoms (Å)')
@@ -112,7 +115,9 @@ def main():
          InsertionMove(scell, species=species, min_insert=args.min_insert, seed=seed_ins)],
     )
 
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     mode = 'nrelax' if args.no_relax else f'fire_fmax{args.fmax}'
     tag = f'{atoms.get_chemical_formula()}_dmu_{args.delta_mu_O}_{mode}'

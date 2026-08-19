@@ -1,8 +1,11 @@
 from .random_number_generator import RandomNumberGenerator
+from .reference_mu import derive_mu_bulk, derive_mu_gas
 
 __all__ = [
     'RandomNumberGenerator',
     'analyze_phase_diagram_results',
+    'derive_mu_bulk',
+    'derive_mu_gas',
     'plot_phase_diagram',
 ]
 

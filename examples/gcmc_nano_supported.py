@@ -17,6 +17,7 @@ from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
 from mcpy.cell import CustomCell  # noqa: E402
 from mcpy.utils.utils import get_p_at_support  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -24,8 +25,10 @@ def parse_args():
     p.add_argument('--support', default='Al2O3.poscar', help='POSCAR of the support')
     p.add_argument('--T', type=float, default=500.0, help='Temperature (K)')
     p.add_argument('--steps', type=int, default=1_000_000, help='Number of GCMC steps')
-    p.add_argument('--mu-Ag', type=float, default=-2.99, help='Chemical potential of Ag (eV)')
-    p.add_argument('--mu-O', type=float, default=-4.91, help='Reference mu_O (eV)')
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
     p.add_argument('--delta-mu-O', type=float, default=-0.5, help='Shift applied to mu_O (eV)')
     p.add_argument('--seed', type=int, default=None, help='Master seed (random if unset)')
     p.add_argument('--device', default='cuda', help='Torch device for MACE')
@@ -63,7 +66,9 @@ def main():
          InsertionMove(scell, species=species, min_insert=0.5, seed=seed_ins)],
     )
 
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     tag = f'{atoms.get_chemical_formula()}_dmu_{args.delta_mu_O}'
     gcmc = GrandCanonicalEnsemble(

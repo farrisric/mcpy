@@ -1,7 +1,7 @@
 """Batched replica-exchange GCMC on a single GPU.
 
 Single-process variant of ``re_gcmc.py``. All replicas live in one Python
-process and share one ``AlchemiCalculator`` instance; energies for trial
+process and share one ``AlchemiFCalculator`` instance; energies for trial
 moves are evaluated in a single batched forward pass per MC step.
 
 Run::
@@ -25,27 +25,30 @@ configure_logging()
 from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
 from mcpy.moves.move_selector import MoveSelector  # noqa: E402
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
-from mcpy.calculators import AlchemiCalculator  # noqa: E402
+from mcpy.calculators import AlchemiFCalculator  # noqa: E402
 from mcpy.cell import CustomCell as Cell  # noqa: E402
 from mcpy.ensembles import BatchedReplicaExchange  # noqa: E402
+from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--temperatures', type=float, nargs='+',
-                   default=[250, 300, 350, 400, 450, 500],
+                   default=[300, 400, 500, 600, 700, 800],
                    help='Replica temperatures (K)')
     p.add_argument('--gcmc-steps', type=int, default=200)
     p.add_argument('--exchange-interval', type=int, default=10)
     p.add_argument('--write-interval', type=int, default=1)
-    p.add_argument('--checkpoint', default='medium-mpa-0')
+    p.add_argument('--checkpoint', default='mace-small-density-agnesi-stress.model')
     p.add_argument('--device', default='cuda')
     p.add_argument('--no-cueq', action='store_true')
     p.add_argument('--no-compile', action='store_true')
-    p.add_argument('--mu-Ag', type=float, default=-2.99)
-    p.add_argument('--mu-O', type=float, default=-4.91)
-    p.add_argument('--delta-mu-O', type=float, default=-0.5)
+    p.add_argument('--mu-Ag', type=float, default=None,
+                   help='Chemical potential of Ag (eV); default: derived from the potential')
+    p.add_argument('--mu-O', type=float, default=None,
+                   help='Reference mu_O (eV); default: E(O2)/2 derived from the potential')
+    p.add_argument('--delta-mu-O', type=float, default=-0.3)
     p.add_argument('--seed', type=int, default=None)
     p.add_argument('--outdir', default='.')
     return p.parse_args()
@@ -68,7 +71,7 @@ def main():
     base_atoms.set_constraint(FixAtoms(indices=bottom_layer))
 
     # ONE model, shared across replicas. Batched eval reuses this calculator.
-    calculator = AlchemiCalculator(
+    calculator = AlchemiFCalculator(
         checkpoint=args.checkpoint,
         device=args.device,
         enable_cueq=not args.no_cueq,
@@ -76,20 +79,22 @@ def main():
     )
 
     species = ['Ag', 'O']
-    mus = {'Ag': args.mu_Ag, 'O': args.mu_O + args.delta_mu_O}
+    mu_ag = args.mu_Ag if args.mu_Ag is not None else derive_mu_bulk(calculator, 'Ag')
+    mu_o = args.mu_O if args.mu_O is not None else derive_mu_gas(calculator)
+    mus = {'Ag': mu_ag, 'O': mu_o + args.delta_mu_O}
 
     def gcmc_factory(T, rank):
         atoms = base_atoms.copy()
         atoms.set_constraint(FixAtoms(indices=bottom_layer))
 
-        cell_ag_ag = Cell(atoms, custom_height=5.5, bottom_z=12.8 - 2.11,
+        cell_ag_ag = Cell(atoms, custom_height=7, bottom_z=12.8 - 2.11,
                           species_radii={'Ag': 2.75, 'O': 0})
-        cell_ag_o = Cell(atoms, custom_height=5.5, bottom_z=12.8 - 2.11,
+        cell_ag_o = Cell(atoms, custom_height=7, bottom_z=12.8 - 2.11,
                          species_radii={'Ag': 2.11, 'O': 0})
 
         s = move_seeds[4 * rank:4 * (rank + 1)]
         move_selector = MoveSelector(
-            [25, 25, 25, 25],
+            [5, 5, 5, 5],
             [DeletionMove(cell_ag_ag, species=['Ag'], seed=s[0]),
              DeletionMove(cell_ag_o, species=['O'], seed=s[1]),
              InsertionMove(cell_ag_ag, species=['Ag'], min_insert=0.5, seed=s[2]),
