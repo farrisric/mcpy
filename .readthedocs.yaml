@@ -8,7 +8,9 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.9"
+    # mcpy needs >=3.11 (PEP 604 unions in the move signatures), and autodoc
+    # imports it below.
+    python: "3.12"
     # You can also specify other tool versions:
     # nodejs: "20"
     # rust: "1.70"
@@ -35,3 +37,8 @@ sphinx:
 python:
   install:
     - requirements: docs/requirements.txt
+    # The API reference is generated with autodoc, which imports mcpy. Without
+    # this the whole reference silently builds empty. The optional GPU backends
+    # stay uninstalled; docs/conf.py mocks them.
+    - method: pip
+      path: .
