@@ -14,13 +14,12 @@ from ._alchemi_common import (
     _build_nl,
     _load_model,
     _make_batch,
-    _make_multi_batch,
     _per_graph_energies,
-    _run_langevin_md,
+    _MDMixin,
 )
 
 
-class AlchemiCalculator:
+class AlchemiCalculator(_MDMixin):
     """
     Energy-only Alchemi calculator (no geometry relaxation).
 
@@ -147,41 +146,9 @@ class AlchemiCalculator:
         out: List[np.ndarray] = []
         for start, stop in chunk_ranges(len(atoms_list), cs):
             chunk = atoms_list[start:stop]
-            batch = _make_multi_batch(chunk, self.device, self.dtype)
+            batch = _make_batch(chunk, self.device, self.dtype)
             nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
             _build_nl(batch, nl_hook)
             model_out = self._forward(batch)
             out.append(_per_graph_energies(model_out['energy'], len(chunk)))
         return np.concatenate(out)
-
-    def run_md(
-        self,
-        atoms: Atoms,
-        *,
-        temperature: float,
-        friction: float = 0.01,
-        dt: float = 2.0,
-        steps: int = 100,
-        seed: int = 42,
-    ) -> None:
-        """Run NVT Langevin MD in place on ``atoms`` (Maxwell-Boltzmann IC at T).
-
-        Reuses this calculator's model and neighbor-list config, so no second
-        model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
-        in K. ``FixAtoms`` constraints are honored.
-        """
-        if self.energy_only:
-            # The integrator would otherwise die steps deep inside nvalchemi
-            # ("NVTLangevin requires forces...") without naming the cause.
-            raise ValueError(
-                'run_md needs forces, but this calculator was built with '
-                'energy_only=True (forces are stripped from the model '
-                'outputs). Build a separate calculator without energy_only '
-                'for MD.'
-            )
-        _run_langevin_md(
-            self.model, self._nl_config, atoms,
-            temperature=temperature, friction=friction, dt=dt, steps=steps,
-            seed=seed, device=self.device, dtype=self.dtype,
-            max_neighbors=self.max_neighbors,
-        )

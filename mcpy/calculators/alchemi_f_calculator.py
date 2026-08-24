@@ -15,15 +15,14 @@ from nvalchemi.dynamics.hooks import NaNDetectorHook
 
 from ..utils.chunking import chunk_ranges
 from ._alchemi_common import (
-    _build_nl,
+    _bootstrap,
     _fixed_indices,
     _freeze_hook_for,
     _load_model,
     _make_batch,
-    _make_multi_batch,
     _per_graph_energies,
-    _run_langevin_md,
-    _write_back_positions,
+    _prepare_batch,
+    _MDMixin,
 )
 
 
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 _ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
 
 
-class AlchemiFCalculator:
+class AlchemiFCalculator(_MDMixin):
     """
     Alchemi calculator with FIRE geometry relaxation.
 
@@ -117,6 +116,12 @@ class AlchemiFCalculator:
         """
         Relax with Alchemi FIRE, then return the relaxed potential energy.
 
+        One structure is a batch of one: this delegates to the same batched
+        relaxation the multi-structure path uses, so the two cannot use
+        different FIRE strategies. (They did: this path called ``opt.run``,
+        which steps the whole batch until every graph converges, while the
+        batched path retires each graph at its own first convergence.)
+
         Parameters
         ----------
         atoms : ase.Atoms
@@ -129,57 +134,13 @@ class AlchemiFCalculator:
         float
             Relaxed potential energy in eV.
         """
-        batch = _make_batch(atoms, self.device, self.dtype)
-
-        # compute() writes via copy_() — pre-allocate target tensors
-        batch.forces = torch.zeros_like(batch.positions)
-        batch.energy = torch.zeros(1, 1, device=self.device, dtype=self.dtype)
-
-        fixed = _fixed_indices(atoms)
-        freeze_hooks = _freeze_hook_for(batch, fixed)
-
-        nl_hook = NeighborListHook(self._nl_config, max_neighbors=self.max_neighbors)
-        opt = self._optimizer_cls(
-            model=self.model,
-            dt=self.dt,
-            convergence_hook=ConvergenceHook.from_fmax(self.fmax),
-            n_steps=self.steps,
-            # NaN forces/energy would otherwise flow silently into the GCMC
-            # acceptance decision; the hook raises at the offending step.
-            hooks=(freeze_hooks or []) + [NaNDetectorHook()],
-        )
-        opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
-
-        # Bootstrap: build NL and compute initial forces before the FIRE loop
-        _build_nl(batch, nl_hook)
-        opt.compute(batch)
-        if fixed:
-            # FreezeAtomsHook zeros frozen forces only at AFTER_POST_UPDATE;
-            # the bootstrap compute() runs outside the hook loop, so step 0
-            # would otherwise displace the frozen rows once.
-            batch.forces[fixed] = 0.0
-
-        opt.run(batch)
-        self.last_relax_steps = int(opt.step_count)
-        self.total_relax_steps += self.last_relax_steps
-        if self.last_relax_steps >= self.steps:
-            # Known bias trap: a too-tight cap returns truncated relaxations
-            # whose energies skew the GCMC acceptance.
-            logger.warning('FIRE reached the %d-step cap (fmax=%.3g eV/A); '
-                           'returned energy may be unconverged',
-                           self.steps, self.fmax)
-        logger.debug("FIRE relaxation: %d/%d steps (fmax=%.3g eV/A)",
-                     self.last_relax_steps, self.steps, self.fmax)
-        _write_back_positions(atoms, batch)
-        return float(batch.energy.sum().item())
+        return float(self.get_potential_energies([atoms])[0])
 
     def _relax_batch(self, atoms_list: List[Atoms]) -> tuple:
         """Batched FIRE relaxation of one (sub-)batch. Mutates positions in
         place; returns ``(per_graph_energies, step_count)``."""
-        n_graphs = len(atoms_list)
-        batch = _make_multi_batch(atoms_list, self.device, self.dtype)
-        batch.forces = torch.zeros_like(batch.positions)
-        batch.energy = torch.zeros(n_graphs, 1, device=self.device, dtype=self.dtype)
+        batch = _make_batch(atoms_list, self.device, self.dtype)
+        _prepare_batch(batch, len(atoms_list), self.device, self.dtype)
 
         # Map each graph's FixAtoms indices into the concatenated (sub-)batch.
         fixed: List[int] = []
@@ -198,12 +159,7 @@ class AlchemiFCalculator:
             hooks=(freeze_hooks or []) + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
-
-        _build_nl(batch, nl_hook)
-        opt.compute(batch)
-        if fixed:
-            batch.forces[fixed] = 0.0  # see get_potential_energy bootstrap
-
+        _bootstrap(opt, batch, nl_hook, fixed)
         return self._run_compacted(opt, batch, atoms_list)
 
     def _run_compacted(self, opt, batch, atoms_list: List[Atoms]) -> tuple:
@@ -320,26 +276,3 @@ class AlchemiFCalculator:
                      len(atoms_list), len(steps), self.last_relax_steps,
                      self.steps, self.fmax)
         return np.concatenate(out)
-
-    def run_md(
-        self,
-        atoms: Atoms,
-        *,
-        temperature: float,
-        friction: float = 0.01,
-        dt: float = 2.0,
-        steps: int = 100,
-        seed: int = 42,
-    ) -> None:
-        """Run NVT Langevin MD in place on ``atoms`` (Maxwell-Boltzmann IC at T).
-
-        Reuses this calculator's model and neighbor-list config, so no second
-        model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
-        in K. ``FixAtoms`` constraints are honored.
-        """
-        _run_langevin_md(
-            self.model, self._nl_config, atoms,
-            temperature=temperature, friction=friction, dt=dt, steps=steps,
-            seed=seed, device=self.device, dtype=self.dtype,
-            max_neighbors=self.max_neighbors,
-        )

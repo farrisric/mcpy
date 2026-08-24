@@ -117,12 +117,10 @@ def _load_model(
     )
 
 
-def _make_batch(atoms: Atoms, device: str, dtype: torch.dtype) -> Batch:
-    data = AtomicData.from_atoms(atoms, device=device, dtype=dtype)
-    return Batch.from_data_list([data], device=device)
-
-
-def _make_multi_batch(atoms_list: List[Atoms], device: str, dtype: torch.dtype) -> Batch:
+def _make_batch(atoms_list, device: str, dtype: torch.dtype) -> Batch:
+    """Batch one ``Atoms`` or a list of them; a single structure is a batch of one."""
+    if isinstance(atoms_list, Atoms):
+        atoms_list = [atoms_list]
     data = [AtomicData.from_atoms(a, device=device, dtype=dtype) for a in atoms_list]
     return Batch.from_data_list(data, device=device)
 
@@ -132,9 +130,6 @@ def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
     e = out_energy.detach().to('cpu')
     if e.numel() == n_graphs:
         return e.view(-1).numpy()
-    # Fallback: scatter-reduced layout — sum each graph's atomic contributions.
-    # If this branch is hit, the model returned per-atom energies; for now we
-    # surface the mismatch loudly so the caller can adapt.
     raise RuntimeError(
         f"Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. "
         "Batched eval expects one energy per graph."
@@ -144,6 +139,27 @@ def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
 def _build_nl(batch: Batch, nl_hook: NeighborListHook) -> None:
     ctx = DynamicsContext(batch=batch, step_count=0)
     nl_hook(ctx, DynamicsStage.BEFORE_COMPUTE)
+
+
+def _prepare_batch(batch: Batch, n_graphs: int, device: str,
+                   dtype: torch.dtype) -> None:
+    """Pre-allocate the tensors ``compute()`` writes into via ``copy_()``."""
+    batch.forces = torch.zeros_like(batch.positions)
+    batch.energy = torch.zeros(n_graphs, 1, device=device, dtype=dtype)
+
+
+def _bootstrap(opt, batch: Batch, nl_hook: NeighborListHook,
+               fixed: List[int]) -> None:
+    """Build the neighbor list and the initial forces before the loop starts.
+
+    ``FreezeAtomsHook`` zeros frozen forces only at ``AFTER_POST_UPDATE``, and
+    this ``compute()`` runs outside the hook loop, so step 0 would otherwise
+    displace the frozen rows once.
+    """
+    _build_nl(batch, nl_hook)
+    opt.compute(batch)
+    if fixed:
+        batch.forces[fixed] = 0.0
 
 
 def _write_back_positions(atoms: Atoms, batch: Batch) -> None:
@@ -208,10 +224,7 @@ def _run_langevin_md(
     converts to internal units). Mutates ``atoms`` in place; returns nothing.
     """
     batch = _make_batch(atoms, device, dtype)
-
-    # compute() writes forces/energy via copy_() — pre-allocate the targets.
-    batch.forces = torch.zeros_like(batch.positions)
-    batch.energy = torch.zeros(1, 1, device=device, dtype=dtype)
+    _prepare_batch(batch, 1, device, dtype)
     batch.velocities = torch.zeros_like(batch.positions)
     temp = torch.full((batch.num_graphs,), float(temperature), device=device, dtype=dtype)
     initialize_velocities(
@@ -235,14 +248,47 @@ def _run_langevin_md(
     )
     opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
 
-    # Bootstrap: build NL and compute initial forces before the MD loop.
-    _build_nl(batch, nl_hook)
-    opt.compute(batch)
-    if fixed:
-        # FreezeAtomsHook zeros frozen forces only at AFTER_POST_UPDATE; the
-        # bootstrap compute() runs outside the hook loop, so step 0 would
-        # otherwise kick and displace the frozen rows once.
-        batch.forces[fixed] = 0.0
-
+    _bootstrap(opt, batch, nl_hook, fixed)
     opt.run(batch)
     _write_back_positions(atoms, batch)
+
+
+class _MDMixin:
+    """``run_md`` for both Alchemi calculators.
+
+    Identical in each, docstring included, so it lives here. The energy_only
+    guard applies only to :class:`AlchemiCalculator`; the F variant has no such
+    attribute and rejects a forces-less model in its constructor instead.
+    """
+
+    def run_md(
+        self,
+        atoms: Atoms,
+        *,
+        temperature: float,
+        friction: float = 0.01,
+        dt: float = 2.0,
+        steps: int = 100,
+        seed: int = 42,
+    ) -> None:
+        """Run NVT Langevin MD in place on ``atoms`` (Maxwell-Boltzmann IC at T).
+
+        Reuses this calculator's model and neighbor-list config, so no second
+        model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
+        in K. ``FixAtoms`` constraints are honored.
+        """
+        if getattr(self, 'energy_only', False):
+            # The integrator would otherwise die steps deep inside nvalchemi
+            # ("NVTLangevin requires forces...") without naming the cause.
+            raise ValueError(
+                'run_md needs forces, but this calculator was built with '
+                'energy_only=True (forces are stripped from the model '
+                'outputs). Build a separate calculator without energy_only '
+                'for MD.'
+            )
+        _run_langevin_md(
+            self.model, self._nl_config, atoms,
+            temperature=temperature, friction=friction, dt=dt, steps=steps,
+            seed=seed, device=self.device, dtype=self.dtype,
+            max_neighbors=self.max_neighbors,
+        )
