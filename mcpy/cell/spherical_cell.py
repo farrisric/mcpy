@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial import cKDTree
 
 from .cell import Cell
 
@@ -61,22 +60,10 @@ class SphericalCell(Cell):
         r = self.radius * (self._rng.random() ** (1.0 / 3.0))
         return self.center + r * direction
 
-    def get_atoms_specie_inside_cell(self, atoms, specie):
-        """
-        Vectorized: indices of atoms whose symbol is in ``specie`` and whose
-        position is inside the cell.
-        """
-        if len(atoms) == 0:
-            return np.empty(0, dtype=int)
-        symbols = np.asarray(atoms.get_chemical_symbols())
-        if isinstance(specie, str):
-            species_list = [specie]
-        else:
-            species_list = list(specie)
-        species_mask = np.isin(symbols, species_list)
+    def _inside_mask(self, atoms):
+        """Inside the sphere."""
         diff = atoms.positions - self.center
-        inside = np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
-        return np.where(species_mask & inside)[0]
+        return np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
 
     def _sample_sphere_points(self, n):
         """
@@ -114,22 +101,7 @@ class SphericalCell(Cell):
 
         pts = self._sample_sphere_points(self.mc_sample_points)
 
-        radii = self._radii_for(atoms)
-        positions = atoms.positions
-
-        covered = np.zeros(self.mc_sample_points, dtype=bool)
-        # One kdtree per unique radius; query nearest atom of that radius.
-        # A point is covered if the nearest such atom is within r.
-        for r in np.unique(radii):
-            if r <= 0.0:
-                continue
-            mask = radii == r
-            sub_pos = positions[mask]
-            tree = cKDTree(sub_pos)
-            # distance_upper_bound returns inf above r; that's the rejection.
-            dists, _ = tree.query(pts, k=1, distance_upper_bound=float(r))
-            covered |= np.isfinite(dists)
-
+        covered = self._covered_mask(pts, atoms)
         free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
         self.volume = self._clamp_free_volume(
             free_fraction * self.sphere_volume, self.sphere_volume)

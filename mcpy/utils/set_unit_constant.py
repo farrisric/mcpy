@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List
+from ase import units
 from ase.data import atomic_masses, atomic_numbers
 
 
@@ -63,11 +64,17 @@ class SetUnits:
         self.lambda_dbs = {specie: 1 for specie in names}
 
     def _set_metal_units(self) -> None:
-        """Set units for metal potential."""
-        self.PLANCK_CONSTANT = 4.13567e-15  # eV/s
-        self.BOLTZMANN_CONSTANT = 8.617333e-5  # eV/K
-        self.mass_conversion_factor = 1.66053906660e-27  # amu to kg
-        self.lambda_conversion_factor = np.sqrt(1.60218e-19) * 1e10
+        """Set units for metal potential.
+
+        The constants come from ``ase.units`` rather than being written out
+        here: ase is already a hard dependency, and its CODATA values keep the
+        de Broglie wavelengths consistent with every other energy in the run.
+        """
+        self.PLANCK_CONSTANT = units._hplanck / units._e   # eV s
+        self.BOLTZMANN_CONSTANT = units.kB                 # eV/K
+        self.mass_conversion_factor = units._amu           # amu to kg
+        # sqrt(J -> eV) folded with m -> Angstrom, so lambda comes out in A.
+        self.lambda_conversion_factor = np.sqrt(units._e) * 1e10
         self.beta = 1/(self.temperature*self.BOLTZMANN_CONSTANT)
 
         self.masses = {specie: atomic_masses[atomic_numbers[specie]] for specie in self.species}

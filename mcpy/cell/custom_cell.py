@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial import cKDTree
 
 from .cell import Cell
 
@@ -75,16 +74,7 @@ class CustomCell(Cell):
 
         positions = self._periodic_images(atoms)
         radii = np.tile(self._radii_for(atoms), len(positions) // n_atoms)
-
-        covered = np.zeros(self.mc_sample_points, dtype=bool)
-        for r in np.unique(radii):
-            if r <= 0.0:
-                continue
-            mask = radii == r
-            tree = cKDTree(positions[mask])
-            dists, _ = tree.query(cart_coords, k=1, distance_upper_bound=float(r))
-            covered |= np.isfinite(dists)
-
+        covered = self._covered_mask(cart_coords, atoms, positions, radii)
         occupied_fraction = float(np.count_nonzero(covered)) / self.mc_sample_points
         self.volume = self._clamp_free_volume(
             self.cell_volume * (1.0 - occupied_fraction), self.cell_volume)
@@ -105,10 +95,8 @@ class CustomCell(Cell):
         ]
         return np.concatenate(images)
 
-    def get_atoms_specie_inside_cell(self, atoms, specie):
-        """
-        Vectorized: indices of atoms with symbol in ``specie`` that are
-        exchangeable with the reservoir.
+    def _inside_mask(self, atoms):
+        """Exchangeable with the reservoir.
 
         In xy an atom must lie within the cell footprint. In z the upper bound
         is intentionally dropped: atoms at or above the cell floor count as
@@ -118,19 +106,9 @@ class CustomCell(Cell):
         Atoms below the floor (absorbed into the subsurface layers) stay
         excluded so they are kept.
         """
-        if len(atoms) == 0:
-            return np.empty(0, dtype=int)
-        symbols = np.asarray(atoms.get_chemical_symbols())
-        if isinstance(specie, str):
-            species_list = [specie]
-        else:
-            species_list = list(specie)
-        species_mask = np.isin(symbols, species_list)
         frac = (atoms.positions - self.offset) @ self._dim_inv
         in_xy = np.all((frac[:, :2] >= 0.0) & (frac[:, :2] < 1.0), axis=1)
-        above_floor = frac[:, 2] >= 0.0
-        inside = in_xy & above_floor
-        return np.where(species_mask & inside)[0]
+        return in_xy & (frac[:, 2] >= 0.0)
 
     def is_point_inside(self, point):
         """
