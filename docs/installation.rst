@@ -95,4 +95,4 @@ single GPU prefer ``BatchedReplicaExchange``, which needs no MPI:
 
 .. code-block:: bash
 
-   python examples/re_gcmc_batched.py
+   python examples/04_replica_exchange_batched.py

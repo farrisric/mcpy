@@ -1,12 +1,12 @@
 """Batched replica-exchange GCMC on a single GPU.
 
-Single-process variant of ``re_gcmc.py``. All replicas live in one Python
+Single-process variant of the MPI ``ReplicaExchange``. All replicas live in one Python
 process and share one ``AlchemiFCalculator`` instance; energies for trial
 moves are evaluated in a single batched forward pass per MC step.
 
 Run::
 
-    python examples/re_gcmc_batched.py --temperatures 250 300 350 400
+    python examples/04_replica_exchange_batched.py --temperatures 250 300 350 400
 
 No mpirun. One GPU. Each replica must build its OWN cells and move_selector
 (BatchedReplicaExchange would otherwise share state across replicas).

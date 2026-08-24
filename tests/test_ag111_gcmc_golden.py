@@ -15,7 +15,7 @@ whole GCMC loop (CustomCell free volume with periodic images, ``min_insert``
 overlap rejection, de Broglie acceptance, arrays+constraints rollback,
 trajectory writing) reproduces exactly when seeded.
 
-Parameters come from ``examples/gcmc_ag111.py``, the calibrated set for this
+Parameters come from ``examples/03_gcmc_surface_mace.py``, the calibrated set for this
 checkpoint: a=4.165, the O-Ag exclusion radius 2.068 used both as the
 radius and as the region depth below the top layer, height 7, min_insert 0.5,
 and the -0.176 bulk Ag correction.

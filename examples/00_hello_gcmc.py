@@ -10,7 +10,7 @@ particle number it settles at is a real, checkable number.
 Writes ``hello_gcmc.out`` (step / N / energy / acceptance ratios) and
 ``hello_gcmc.xyz`` (trajectory).
 
-Once this makes sense, read ``examples/gcmc_ag111.py`` for the same loop
+Once this makes sense, read ``examples/03_gcmc_surface_mace.py`` for the same loop
 driven by a machine-learned potential on a real surface.
 """
 from ase import Atoms

@@ -17,7 +17,7 @@ Factory requirements
 ``gcmc_factory(T, rank)`` must return a fresh ``GrandCanonicalEnsemble`` with
 its own ``cells``, ``move_selector`` and atoms object. Sharing cells or a
 move_selector across replicas will corrupt per-replica state (cell volumes,
-acceptance counters, RNG streams). See ``examples/re_gcmc_batched.py``.
+acceptance counters, RNG streams). See ``examples/04_replica_exchange_batched.py``.
 
 The shared ``calculator`` must implement ``get_potential_energies(atoms_list)``
 returning an ndarray of energies. ``AlchemiCalculator`` provides this.

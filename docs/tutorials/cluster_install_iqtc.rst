@@ -187,7 +187,7 @@ Save as ``submit_gcmc_alchemi.sh``:
    set -eo pipefail
 
    PYTHON=$HOME/.conda/envs/alchemi128/bin/python
-   SCRIPT=$HOME/bin/mcpy/examples/gcmc_ag111.py
+   SCRIPT=$HOME/bin/mcpy/examples/03_gcmc_surface_mace.py
    RESULTS_DIR=$SLURM_SUBMIT_DIR/results/job_${SLURM_JOB_ID:-local}
 
    export PYTHONNOUSERSITE=1
@@ -240,7 +240,7 @@ batched forward pass per MC step. This is the GPU path the package is built
 around. Unlike the MPI ``ReplicaExchange`` (one rank per replica), there is **no
 mpirun** and still only ``--gres=gpu:1``.
 
-The script is ``examples/re_gcmc_batched.py``. Replica temperatures are passed
+The script is ``examples/04_replica_exchange_batched.py``. Replica temperatures are passed
 with ``--temperatures``; the number of values is the replica count.
 
 Save as ``submit_re_gcmc_batched.sh``:
@@ -259,7 +259,7 @@ Save as ``submit_re_gcmc_batched.sh``:
    set -eo pipefail
 
    PYTHON=$HOME/.conda/envs/alchemi128/bin/python
-   SCRIPT=$HOME/bin/mcpy/examples/re_gcmc_batched.py
+   SCRIPT=$HOME/bin/mcpy/examples/04_replica_exchange_batched.py
    RESULTS_DIR=$SLURM_SUBMIT_DIR/results/job_${SLURM_JOB_ID:-local}
 
    export PYTHONNOUSERSITE=1

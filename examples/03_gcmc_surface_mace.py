@@ -16,13 +16,13 @@ Requirements:
 
 Typical usage:
   # FIRE relaxation per step (recommended, GPU-native so fast enough):
-  python gcmc_ag111.py --checkpoint medium-mpa-0 --device cuda
+  python 03_gcmc_surface_mace.py --checkpoint medium-mpa-0 --device cuda
 
   # Energy-only (fastest, no geometry relaxation):
-  python gcmc_ag111.py --checkpoint medium-mpa-0 --no-relax
+  python 03_gcmc_surface_mace.py --checkpoint medium-mpa-0 --no-relax
 
   # Adjust chemical potential sweep:
-  python gcmc_ag111.py --checkpoint medium-mpa-0 --delta-mu-O -1.0
+  python 03_gcmc_surface_mace.py --checkpoint medium-mpa-0 --delta-mu-O -1.0
 """
 import argparse
 import os
