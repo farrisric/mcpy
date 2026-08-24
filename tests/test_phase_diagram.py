@@ -6,11 +6,11 @@ stoichiometry used by the pressure twin axis. torch/mace-free.
 Run with: python -m pytest tests/test_phase_diagram.py -v
 """
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # must precede any pyplot import; hence the E402 below
 
-from ase import Atoms
+from ase import Atoms  # noqa: E402
 
-from mcpy.utils.phase_diagram import plot_phase_diagram
+from mcpy.utils.phase_diagram import plot_phase_diagram  # noqa: E402
 
 
 def _frame(n_co, energy):

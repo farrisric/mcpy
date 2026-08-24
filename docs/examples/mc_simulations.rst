@@ -74,6 +74,6 @@ Next steps
 - For variable composition, switch to :doc:`gcmc_simulations`.
 - For temperature-ladder parallel tempering of the chemical ordering (high-T
   replicas escape poor orderings and feed good ones down to low-T replicas),
-  drive several ``CanonicalEnsemble`` replicas with
-  :doc:`replica_exchange_simulations`.
+  drive several ``CanonicalEnsemble`` replicas with ``ReplicaExchange`` (see
+  :doc:`../ensembles`).
 - See :doc:`../moves` for the full move set.

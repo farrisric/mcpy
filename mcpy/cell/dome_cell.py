@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial import cKDTree
 
 from .cell import Cell
 from .spherical_cell import SphericalCell
@@ -57,7 +56,6 @@ class DomeCell(SphericalCell):
         self.radius = float(
             np.linalg.norm(particle_pos - self.center, axis=1).max() + vacuum
         )
-        self.species_radii = species_radii
         self.mc_sample_points = int(mc_sample_points)
         self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
         self.volume = self.sphere_volume
@@ -83,25 +81,13 @@ class DomeCell(SphericalCell):
             if point[2] >= self.bottom_z:
                 return point
 
-    def get_atoms_specie_inside_cell(self, atoms, specie):
-        """
-        Vectorized: indices of atoms whose symbol is in ``specie`` and whose
-        position is inside the dome (within the ball and above the surface).
-        Atoms that drifted below the surface (absorbed into the support) are
-        excluded, so they are never selected for deletion.
-        """
-        if len(atoms) == 0:
-            return np.empty(0, dtype=int)
-        symbols = np.asarray(atoms.get_chemical_symbols())
-        if isinstance(specie, str):
-            species_list = [specie]
-        else:
-            species_list = list(specie)
-        species_mask = np.isin(symbols, species_list)
+    def _inside_mask(self, atoms):
+        """Within the ball and at or above the support surface. Atoms that
+        drifted below it (absorbed into the support) are excluded, so they are
+        never selected for deletion."""
         diff = atoms.positions - self.center
         within = np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
-        above = atoms.positions[:, 2] >= self.bottom_z
-        return np.where(species_mask & within & above)[0]
+        return within & (atoms.positions[:, 2] >= self.bottom_z)
 
     def calculate_volume(self, atoms):
         """
@@ -121,18 +107,7 @@ class DomeCell(SphericalCell):
             self.volume = dome_fraction * self.sphere_volume
             return
 
-        radii = self._radii_for(atoms)
-        positions = atoms.positions
-
-        covered = np.zeros(len(pts), dtype=bool)
-        for r in np.unique(radii):
-            if r <= 0.0:
-                continue
-            mask = radii == r
-            tree = cKDTree(positions[mask])
-            dists, _ = tree.query(pts, k=1, distance_upper_bound=float(r))
-            covered |= np.isfinite(dists)
-
+        covered = self._covered_mask(pts, atoms)
         free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
         self.volume = self._clamp_free_volume(
             free_fraction * self.sphere_volume, self.sphere_volume)

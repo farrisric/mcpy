@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial import cKDTree
 
 from .cell import Cell
 
@@ -23,7 +22,6 @@ class CustomCell(Cell):
         """
         super().__init__(atoms, species_radii=species_radii, seed=seed)
         self.dimensions, self.offset = self.get_custom_height_cell(custom_height, bottom_z)
-        self.species_radii = species_radii if species_radii else {}
         self.cell_volume = float(abs(np.linalg.det(self.dimensions)))
         self.mc_sample_points = int(mc_sample_points)
         self._dim_inv = np.linalg.inv(self.dimensions)
@@ -76,16 +74,7 @@ class CustomCell(Cell):
 
         positions = self._periodic_images(atoms)
         radii = np.tile(self._radii_for(atoms), len(positions) // n_atoms)
-
-        covered = np.zeros(self.mc_sample_points, dtype=bool)
-        for r in np.unique(radii):
-            if r <= 0.0:
-                continue
-            mask = radii == r
-            tree = cKDTree(positions[mask])
-            dists, _ = tree.query(cart_coords, k=1, distance_upper_bound=float(r))
-            covered |= np.isfinite(dists)
-
+        covered = self._covered_mask(cart_coords, atoms, positions, radii)
         occupied_fraction = float(np.count_nonzero(covered)) / self.mc_sample_points
         self.volume = self._clamp_free_volume(
             self.cell_volume * (1.0 - occupied_fraction), self.cell_volume)
@@ -106,10 +95,8 @@ class CustomCell(Cell):
         ]
         return np.concatenate(images)
 
-    def get_atoms_specie_inside_cell(self, atoms, specie):
-        """
-        Vectorized: indices of atoms with symbol in ``specie`` that are
-        exchangeable with the reservoir.
+    def _inside_mask(self, atoms):
+        """Exchangeable with the reservoir.
 
         In xy an atom must lie within the cell footprint. In z the upper bound
         is intentionally dropped: atoms at or above the cell floor count as
@@ -119,19 +106,9 @@ class CustomCell(Cell):
         Atoms below the floor (absorbed into the subsurface layers) stay
         excluded so they are kept.
         """
-        if len(atoms) == 0:
-            return np.empty(0, dtype=int)
-        symbols = np.asarray(atoms.get_chemical_symbols())
-        if isinstance(specie, str):
-            species_list = [specie]
-        else:
-            species_list = list(specie)
-        species_mask = np.isin(symbols, species_list)
         frac = (atoms.positions - self.offset) @ self._dim_inv
         in_xy = np.all((frac[:, :2] >= 0.0) & (frac[:, :2] < 1.0), axis=1)
-        above_floor = frac[:, 2] >= 0.0
-        inside = in_xy & above_floor
-        return np.where(species_mask & inside)[0]
+        return in_xy & (frac[:, 2] >= 0.0)
 
     def is_point_inside(self, point):
         """
@@ -154,9 +131,3 @@ class CustomCell(Cell):
         frac = (point - self.offset) @ self._dim_inv
         return bool(np.all(frac[:2] >= 0.0) and np.all(frac[:2] < 1.0)
                     and frac[2] >= 0.0)
-
-    def get_species(self):
-        """
-        Get the species present in the custom cell.
-        """
-        return list(self.species_radii.keys())

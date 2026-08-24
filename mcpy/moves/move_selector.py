@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
@@ -58,9 +57,10 @@ class MoveSelector:
         if n_moves < 1:
             raise ValueError(f"n_moves must be >= 1, got {n_moves}")
         self.n_moves = int(n_moves)
-        self.rho = np.asarray(np.cumsum(probabilities), dtype=float)
-        self._rho_total = float(self.rho[-1])
-        self._n_moves_idx = len(self.rho)
+        # Cumulative weights for random.choices; it bisects them against one
+        # random() draw, which is exactly what the previous cumsum +
+        # searchsorted did, on the same stream.
+        self.rho = list(np.cumsum(probabilities, dtype=float))
         self.rng = RandomNumberGenerator(seed=seed)
         n = len(probabilities)
         self.move_counter = [0] * n
@@ -71,18 +71,16 @@ class MoveSelector:
         self.move_failed_counter_total = [0] * n
         self.to_use = 0
 
-    def __get_index__(self):
-        v = self.rng.get_uniform() * self._rho_total
-        i = int(np.searchsorted(self.rho, v, side='right'))
-        if i >= self._n_moves_idx:
-            i = self._n_moves_idx - 1
-        return i
+    def _pick_index(self):
+        """Index of the next move, sampled by weight."""
+        return self.rng.random.choices(range(len(self.rho)),
+                                       cum_weights=self.rho, k=1)[0]
 
     def do_trial_move(self, atoms):
         """Choose a move and apply it. Tracks attempt and (if the move
         returned the ``False`` sentinel) records the failure so ratios use
         viable attempts."""
-        self.to_use = self.__get_index__()
+        self.to_use = self._pick_index()
         self.move_counter[self.to_use] += 1
         self.move_counter_total[self.to_use] += 1
         result = self.move_list[self.to_use].do_trial_move(atoms)
@@ -113,14 +111,6 @@ class MoveSelector:
     def calculate_volume(self, atoms):
         return self.move_list[self.to_use].calculate_volume(atoms)
 
-    def calculate_volumes(self, atoms):
-        for move in self.move_list:
-            move.calculate_volume(atoms)
-
-    def get_operator(self):
-        to_use = self.__get_index__()
-        return self.move_list[to_use]
-
     def acceptance_counter(self):
         self.move_acceptance[self.to_use] += 1
         self.move_acceptance_total[self.to_use] += 1
@@ -146,16 +136,8 @@ class MoveSelector:
                             self.move_counter_total,
                             self.move_failed_counter_total)
 
-    # Backwards-compatible aliases.
+    # Backwards-compatible alias.
     def get_acceptance_ratio(self):
-        return self.interval_ratios()
-
-    def get_acceptance_ration(self):  # legacy typo'd name
-        warnings.warn(
-            "MoveSelector.get_acceptance_ration is a deprecated typo'd alias; "
-            "use interval_ratios() (or get_acceptance_ratio()).",
-            DeprecationWarning, stacklevel=2,
-        )
         return self.interval_ratios()
 
     def reset_counters(self):

@@ -18,9 +18,7 @@ class BaseEnsemble(ABC):
     def __init__(self,
                  atoms: Atoms,
                  cells: List[Cell],
-                 units_type: str,
                  calculator: Calculator,
-                 user_tag: Optional[str] = None,
                  random_seed: Optional[int] = None,
                  traj_file: Optional[str] = 'trajectory.xyz',
                  traj_mode: str = 'w',
@@ -53,7 +51,6 @@ class BaseEnsemble(ABC):
         self._atoms = atoms
         self._cells = cells
         self._calculator = calculator
-        self._user_tag = user_tag
 
         self._trajectory_write_interval = trajectory_write_interval
         self._outfile_write_interval = outfile_write_interval
@@ -179,14 +176,6 @@ class BaseEnsemble(ABC):
                 self.logger.exception("Error closing minima file %s", self._minima_file)
             self._minima_handle = None
 
-    def __del__(self):
-        # Safety net only. Deterministic cleanup goes through finalize_run /
-        # the context manager.
-        try:
-            self.close_files()
-        except Exception:
-            pass
-
     def compute_energy(self, atoms: Atoms) -> float:
         return self._calculator.get_potential_energy(atoms)
 
@@ -262,6 +251,20 @@ class BaseEnsemble(ABC):
                 self._run()
         finally:
             self.finalize_run()
+
+
+def write_global_minimum(path, atoms, energy, score, rank, logger):
+    """Write one XYZ frame for the best configuration seen across replicas.
+
+    Shared by ``ReplicaExchange`` (which gathers over MPI ranks) and
+    ``BatchedReplicaExchange`` (which picks the local minimum); only finding
+    the winner differs between them.
+    """
+    try:
+        with open(path, 'w') as fh:
+            write_xyz(atoms, energy, fh, extra=f'rank={rank} score={score:.6f}')
+    except OSError:
+        logger.exception("Error writing global minimum to %s", path)
 
 
 def write_xyz(atoms, energy, file_or_path, extra: str = ''):

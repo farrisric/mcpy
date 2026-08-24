@@ -10,8 +10,18 @@ Run with: python -m pytest tests/test_molecule_moves.py -v
 import numpy as np
 import pytest
 from ase import Atoms
+from ase.build import molecule as build_molecule
 
 from mcpy.cell import Cell
+from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove,
+                        MoleculeDisplacementMove, MoleculeInsertionMove,
+                        MoveSelector)
+from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
+                                       random_rotation_matrix)
+from mcpy.utils import RandomNumberGenerator
+from mcpy.utils.set_unit_constant import SetUnits
 
 
 def _box_atoms():
@@ -22,11 +32,6 @@ def test_box_cell_is_point_inside_always_true():
     cell = Cell(_box_atoms())
     assert cell.is_point_inside(np.array([5.0, 5.0, 5.0]))
     assert cell.is_point_inside(np.array([-100.0, 0.0, 1e6]))
-
-
-from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
-                                       random_rotation_matrix)
-from mcpy.utils import RandomNumberGenerator
 
 
 def _water_box():
@@ -117,11 +122,6 @@ def test_random_rotation_matrix_is_rotation():
     assert not np.allclose(r1, r2)
 
 
-from ase.build import molecule as build_molecule
-
-from mcpy.utils.set_unit_constant import SetUnits
-
-
 def test_setunits_molecular_mass_and_lambda():
     water = build_molecule('H2O')
     u = SetUnits('metal', temperature=300.0, species=['Ag'],
@@ -150,9 +150,6 @@ def test_setunits_rejects_isomer_compositions():
     with pytest.raises(ValueError, match='composition'):
         SetUnits('metal', temperature=300.0, species=[],
                  molecules={'co2_linear': a, 'co2_alt': b})
-
-
-from mcpy.moves import MoleculeInsertionMove
 
 
 def _water_template():
@@ -225,9 +222,6 @@ def test_molecule_insertion_min_insert_unplaceable():
     assert len(atoms) == 1
 
 
-from mcpy.moves import MoleculeDeletionMove
-
-
 def test_molecule_deletion_removes_whole_molecule():
     atoms = _water_box()
     move = MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
@@ -268,9 +262,6 @@ def test_molecule_deletion_ignores_other_compositions():
     assert sorted(atoms.get_chemical_symbols()) == ['H', 'H', 'H', 'O']
 
 
-from mcpy.moves import DeletionMove, MoveSelector
-
-
 def test_move_selector_exchange_count():
     atoms = _water_box()
     cell = Cell(atoms)
@@ -284,9 +275,6 @@ def test_move_selector_exchange_count():
     ms2 = MoveSelector([0, 1], [mol_move, atomic_move], seed=3)
     ms2.do_trial_move(atoms)
     assert ms2.get_exchange_count() is None
-
-
-from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 
 
 class _StubCalc:
@@ -390,9 +378,6 @@ def test_replica_exchange_accepts_units_less_ensemble():
 
     re = ReplicaExchange(factory, temperatures=[300.0])
     assert isinstance(re.gcmc, _FakeCanonical)
-
-
-from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 
 
 def test_batched_re_grand_potential_counts_molecules():
@@ -501,9 +486,6 @@ def test_molecule_deletion_picks_among_multiple_candidates():
     assert deleted_ids == {0, 1}
 
 
-from mcpy.moves import InsertionMove  # noqa: E402
-
-
 def test_atomic_insertion_alongside_molecules_stays_free():
     # ASE ``extend`` zero-pads arrays missing from the fragment; without the
     # explicit -1 tag the inserted atom would join molecule id 0.
@@ -532,9 +514,6 @@ def test_atomic_deletion_never_picks_molecule_members():
         # And with no free O left, the move reports a failed proposal.
         again = move.do_trial_move(atoms)
         assert again[0] is False
-
-
-from mcpy.moves import MoleculeDisplacementMove  # noqa: E402
 
 
 def test_molecule_displacement_rigid_and_bounded():

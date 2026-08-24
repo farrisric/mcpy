@@ -89,25 +89,16 @@ def test_accepted_deletion_keeps_ase_remap():
 
 
 def test_batched_rejected_deletion_restores_constraint():
+    """The batched loop must roll back exactly like the serial one.
+
+    The replica is a real GrandCanonicalEnsemble, not a stand-in: the batched
+    loop delegates the snapshot and the accept/reject to the ensemble's own
+    _propose / _commit_or_rollback, so stubbing those would test nothing.
+    """
     atoms, move = _make_atoms_and_move()
     positions_before = atoms.positions.copy()
 
-    replica = types.SimpleNamespace(
-        atoms=atoms,
-        move_selector=types.SimpleNamespace(
-            do_trial_move=move.do_trial_move,
-            get_volume=lambda: 100.0,
-            get_name=lambda: 'deletion',
-            acceptance_counter=lambda: None,
-            get_exchange_count=lambda: None,
-        ),
-        E_old=0.0,
-        n_atoms=len(atoms),
-        _acceptance_condition=lambda *a, **k: False,
-        _wrap_on_accept=False,
-        calculate_cells_volume=lambda a: None,
-        _record_minimum=lambda a, en: None,
-    )
+    replica = _gcmc(atoms, move, accept=False)
 
     re = BatchedReplicaExchange.__new__(BatchedReplicaExchange)
     re.replicas = [replica]

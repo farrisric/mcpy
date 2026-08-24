@@ -64,12 +64,6 @@ the hybrid GCMC method it implements (see :doc:`bibliography`).
    replica_exchange_ladder_spacing
 
 .. toctree::
-   :caption: Tutorials
-   :maxdepth: 1
-
-   tutorials/cluster_install_iqtc
-
-.. toctree::
    :caption: Examples
    :maxdepth: 1
 

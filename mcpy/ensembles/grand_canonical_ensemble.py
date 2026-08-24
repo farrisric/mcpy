@@ -41,7 +41,6 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         super().__init__(atoms=atoms,
                          cells=cells,
-                         units_type=units_type,
                          calculator=calculator,
                          random_seed=random_seed,
                          traj_file=traj_file,
@@ -140,6 +139,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             + "\n" + "-" * self._table_width + "\n"
         )
 
+    def _row(self, ratio_str: str) -> str:
+        return "{:<10} {:<10} {:<15.6f} {:<{w}}".format(
+            self._step, self.n_atoms, self.E_old, ratio_str,
+            w=self._ratio_col_width)
+
     def write_outfile(self, step: int = None, energy: float = None) -> None:
         """Write one row: step, N, energy, per-interval acceptance ratios.
 
@@ -163,13 +167,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             for r in acceptance_ratios
         )
         try:
-            self._outfile_handle.write("{:<10} {:<10} {:<15.6f} {:<{w}}\n".format(
-                self._step,
-                self.n_atoms,
-                self.E_old,
-                ratio_str,
-                w=self._ratio_col_width,
-            ))
+            self._outfile_handle.write(self._row(ratio_str) + "\n")
             self._outfile_handle.flush()
             self._last_logged_step = self._step
         except (OSError, AttributeError):
@@ -241,71 +239,94 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             return True
         return p > self.rng_acceptance.get_uniform()
 
-    def do_gcmc_step(self) -> None:
+    def _restore(self, snapshot) -> None:
+        """Put the configuration back as it was before the trial move."""
+        arrays, constraints = snapshot
+        self.atoms.arrays = arrays
+        self.atoms.set_constraint(constraints)
+
+    def _propose(self):
+        """Run one trial move in place. Returns ``(snapshot, meta)``, or
+        ``None`` when the move could not propose (already rolled back).
+
+        Split out of :meth:`do_gcmc_step` so ``BatchedReplicaExchange`` runs
+        the identical proposal step: it has to propose on every replica before
+        it can score any of them in one batched forward pass.
+
+        The snapshot holds ``atoms.arrays`` (positions, numbers, ...) plus the
+        constraints. Restoring it on rejection also undoes any in-place
+        relaxation ``compute_energy`` did. The constraints are part of it
+        because ``del atoms[i]`` remaps FixAtoms indices in place (ASE
+        ``delete_atoms``), so a rejected deletion would otherwise leave the
+        restored configuration with shifted fixed indices -- wrong atoms frozen
+        from then on.
+        """
         atoms = self.atoms
-        for _ in range(self.move_selector.n_moves):
-            # Snapshot arrays (positions, numbers, ...) before the trial move.
-            # On rejection we restore from this snapshot, which also undoes
-            # any in-place relaxation done by ``compute_energy``. This
-            # replaces the previous ``atoms.copy()`` per trial in the moves.
-            # Constraints too: ``del atoms[i]`` remaps FixAtoms indices in
-            # place (ASE ``delete_atoms``), so a rejected deletion would
-            # otherwise leave the restored configuration with shifted fixed
-            # indices — wrong atoms frozen from then on.
-            saved_arrays = {k: v.copy() for k, v in atoms.arrays.items()}
-            saved_constraints = [c.copy() for c in atoms.constraints]
+        snapshot = ({k: v.copy() for k, v in atoms.arrays.items()},
+                    [c.copy() for c in atoms.constraints])
 
-            atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
+        atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
 
-            if atoms_new is False or atoms_new is None:
-                # Move couldn't be proposed (e.g. empty cell). MoveSelector
-                # already recorded the failure so it won't depress the
-                # acceptance ratio. Identity check, not truthiness: an empty
-                # Atoms (last atom deleted) is falsy but is a real proposal
-                # that must be scored.
-                #
-                # Restore the snapshot rather than trusting the sentinel to
-                # mean "nothing was touched": a move that mutates before
-                # bailing would otherwise leave the configuration changed
-                # while ``E_old`` still describes the previous one.
-                atoms.arrays = saved_arrays
-                atoms.set_constraint(saved_constraints)
-                continue
+        if atoms_new is False or atoms_new is None:
+            # Move couldn't be proposed (e.g. empty cell). MoveSelector already
+            # recorded the failure so it won't depress the acceptance ratio.
+            # Identity check, not truthiness: an empty Atoms (last atom
+            # deleted) is falsy but is a real proposal that must be scored.
+            #
+            # Restore rather than trust the sentinel to mean "nothing was
+            # touched": a move that mutates before bailing would otherwise
+            # leave the configuration changed while ``E_old`` still describes
+            # the previous one.
+            self._restore(snapshot)
+            return None
 
-            if atoms_new is not atoms:
-                raise RuntimeError(
-                    f"move '{self.move_selector.get_name()}' returned a "
-                    "different Atoms object; GCMC moves must mutate the "
-                    "passed atoms in place (copy-based moves are for "
-                    "CanonicalEnsemble only)"
-                )
+        if atoms_new is not atoms:
+            raise RuntimeError(
+                f"move '{self.move_selector.get_name()}' returned a "
+                "different Atoms object; GCMC moves must mutate the "
+                "passed atoms in place (copy-based moves are for "
+                "CanonicalEnsemble only)"
+            )
+        return snapshot, (delta_particles, species)
 
-            E_new = self.compute_energy(atoms)
-            delta_E = E_new - self.E_old
-            volume = self.move_selector.get_volume()
-            # de Broglie particle count. Molecule moves report their in-cell
-            # molecule count via ``get_exchange_count`` (textbook convention);
-            # atomic moves return None and fall back to the total atom count
-            # before the move (``self.n_atoms`` is updated only on acceptance).
-            # See docs/gcmc_acceptance_convention.rst.
-            n_exchange = self.move_selector.get_exchange_count()
-            if n_exchange is None:
-                n_exchange = self.n_atoms
-            if self._acceptance_condition(delta_E, delta_particles, volume,
+    def _commit_or_rollback(self, E_new: float, snapshot, meta) -> bool:
+        """Score the pending proposal and either keep it or restore the
+        snapshot. Returns whether it was accepted."""
+        delta_particles, species = meta
+        delta_E = E_new - self.E_old
+        volume = self.move_selector.get_volume()
+        # de Broglie particle count. Molecule moves report their in-cell
+        # molecule count via ``get_exchange_count`` (textbook convention);
+        # atomic moves return None and fall back to the total atom count
+        # before the move (``self.n_atoms`` is updated only on acceptance).
+        # See docs/gcmc_acceptance_convention.rst.
+        n_exchange = self.move_selector.get_exchange_count()
+        if n_exchange is None:
+            n_exchange = self.n_atoms
+        if not self._acceptance_condition(delta_E, delta_particles, volume,
                                           species, n_exchange):
-                if self._wrap_on_accept:
-                    atoms.wrap()
-                self.n_atoms = len(atoms)
-                self.E_old = E_new
-                self.move_selector.acceptance_counter()
-                self.calculate_cells_volume(atoms)
-                self._record_minimum(atoms, self.E_old)
+            self._restore(snapshot)
+            return False
 
-                self.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
-                                  volume, delta_particles, species)
-            else:
-                atoms.arrays = saved_arrays
-                atoms.set_constraint(saved_constraints)
+        if self._wrap_on_accept:
+            self.atoms.wrap()
+        self.n_atoms = len(self.atoms)
+        self.E_old = E_new
+        self.move_selector.acceptance_counter()
+        self.calculate_cells_volume(self.atoms)
+        self._record_minimum(self.atoms, self.E_old)
+        self.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
+                          volume, delta_particles, species)
+        return True
+
+    def do_gcmc_step(self) -> None:
+        for _ in range(self.move_selector.n_moves):
+            proposal = self._propose()
+            if proposal is None:
+                continue
+            snapshot, meta = proposal
+            self._commit_or_rollback(self.compute_energy(self.atoms),
+                                     snapshot, meta)
 
     def initialize_run(self) -> None:
         """Open files, write headers, log start, write initial state."""
@@ -328,9 +349,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             return
         try:
             placeholder = ", ".join("N/A" for _ in self.move_selector.move_list)
-            self._outfile_handle.write("{:<10} {:<10} {:<15.6f} {:<{w}}\n".format(
-                0, self.n_atoms, self.E_old, placeholder, w=self._ratio_col_width,
-            ))
+            self._outfile_handle.write(self._row(placeholder) + "\n")
             self._outfile_handle.flush()
             self._last_logged_step = 0
         except (OSError, AttributeError):

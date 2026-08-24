@@ -8,9 +8,53 @@ except ImportError:
     MPI = None
 
 from ..utils import RandomNumberGenerator
-from .base_ensemble import write_xyz
+from .base_ensemble import write_global_minimum
 
 logger = logging.getLogger(__name__)
+
+# One replica table, printed by the console log and the outfile of both
+# replica-exchange drivers. The first column differs between them (MPI numbers
+# ranks, the batched driver numbers replicas), so it is a parameter; everything
+# after it is shared.
+RE_COLUMNS = ("Step", "Atom Count (by species)", "Energy (eV)",
+              "Chemical Potentials (eV)", "Temperature (K)",
+              "Accepted Exchange (%)")
+_RE_TAIL_HEADER = "{:<10} {:<25} {:<15} {:<35} {:<20} {:<25}"
+_RE_TAIL_ROW = "{:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}"
+RE_RULE = "-" * 140
+
+
+def re_header(label="Rank", width=5):
+    return f"{label:<{width}} " + _RE_TAIL_HEADER.format(*RE_COLUMNS)
+
+
+def re_row(index, *values, width=5):
+    return f"{index:<{width}} " + _RE_TAIL_ROW.format(*values)
+
+
+def re_banner(gcmc_steps, exchange_interval, atom_count, temperatures, mus,
+              n_ranks):
+    """The parameter block both drivers print, as a list of lines."""
+    lines = [
+        "+-------------------------------------------------+",
+        "| Replica Exchange Monte Carlo Simulation         |",
+        "+-------------------------------------------------+",
+        "Simulation Parameters:",
+        f"Total GCMC steps: {gcmc_steps}",
+        f"Exchange interval (steps): {exchange_interval}",
+        f"Number of atoms in initial configuration: {atom_count}",
+    ]
+    if temperatures is not None:
+        lines.append(f"Temperatures (K): {temperatures}")
+    else:
+        lines.append("Temperatures: Not specified (default)")
+    if mus is not None:
+        lines += [f"Chemical potentials: Rank {i} - {mu}"
+                  for i, mu in enumerate(mus)]
+    else:
+        lines.append("Chemical potentials: Not specified (default)")
+    lines += [f"Number of MPI ranks: {n_ranks}", re_header(), RE_RULE]
+    return lines
 
 
 class ReplicaExchange:
@@ -281,41 +325,20 @@ class ReplicaExchange:
         if not candidates:
             return
         rank, (score, energy, atoms) = min(candidates, key=lambda kv: kv[1][0])
-        try:
-            with open(self._global_minimum_file, 'w') as fh:
-                write_xyz(atoms, energy, fh,
-                          extra=f'rank={rank} score={score:.6f}')
-        except OSError:
-            self.logger.exception(
-                "Error writing global minimum to %s", self._global_minimum_file
-            )
+        write_global_minimum(self._global_minimum_file, atoms, energy, score,
+                             rank, self.logger)
 
     def initialize_run(self):
-        self.logger.info("+-------------------------------------------------+")
-        self.logger.info("| Replica Exchange Monte Carlo Simulation         |")
-        self.logger.info("+-------------------------------------------------+")
-        self.logger.info("Simulation Parameters:")
-        self.logger.info(f"Total GCMC steps: {self.gcmc_steps}")
-        self.logger.info(f"Exchange interval (steps): {self.exchange_interval}")
+        for line in self._banner():
+            self.logger.info(line)
 
-        atom_count = len(self.gcmc.get_state()['atoms'])
-        self.logger.info(f"Number of atoms in initial configuration: {atom_count}")
-
-        if hasattr(self, 'temperatures') and self.temperatures is not None:
-            self.logger.info(f"Temperatures (K): {self.temperatures}")
-        else:
-            self.logger.info("Temperatures: Not specified (default)")
-        if hasattr(self, 'mus') and self.mus is not None:
-            for i, mus in enumerate(self.mus):
-                self.logger.info(f"Chemical potentials: Rank {i} - {mus}")
-        else:
-            self.logger.info("Chemical potentials: Not specified (default)")
-        self.logger.info(f"Number of MPI ranks: {self.size}")
-        self.logger.info("{:<5} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}".format(
-            "Rank", "Step", "Atom Count (by species)", "Energy (eV)", "Chemical Potentials (eV)",
-            "Temperature (K)", "Accepted Exchange (%)"
-        ))
-        self.logger.info("-" * 140)
+    def _banner(self):
+        return re_banner(
+            self.gcmc_steps, self.exchange_interval,
+            len(self.gcmc.get_state()['atoms']),
+            getattr(self, 'temperatures', None), getattr(self, 'mus', None),
+            self.size,
+        )
 
     def summarize_states(self, step):
         states = self.comm.gather(self.gcmc.get_state(), root=0)
@@ -360,10 +383,9 @@ class ReplicaExchange:
                     "temperature": temperature,
                     "accepted_percentage": accepted_percentage
                 }
-                self.logger.info("{:<5} {:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}".format(
-                    i, gcmc_step, atom_count_by_species, energy, chemical_potential_str,
-                    temperature, accepted_percentage
-                ))
+                self.logger.info(re_row(
+                    i, gcmc_step, atom_count_by_species, energy,
+                    chemical_potential_str, temperature, accepted_percentage))
         return summary
 
     def initialize_outfile(self):
@@ -372,31 +394,7 @@ class ReplicaExchange:
             return
         try:
             with open(self._outfile, 'w') as outfile:
-                outfile.write("+-------------------------------------------------+\n")
-                outfile.write("| Replica Exchange Monte Carlo Simulation         |\n")
-                outfile.write("+-------------------------------------------------+\n")
-                outfile.write("Simulation Parameters:\n")
-                outfile.write(f"Total GCMC steps: {self.gcmc_steps}\n")
-                outfile.write(f"Exchange interval (steps): {self.exchange_interval}\n")
-
-                atom_count = len(self.gcmc.get_state()['atoms'])
-                outfile.write(f"Number of atoms in initial configuration: {atom_count}\n")
-
-                if hasattr(self, 'temperatures') and self.temperatures is not None:
-                    outfile.write(f"Temperatures (K): {self.temperatures}\n")
-                else:
-                    outfile.write("Temperatures: Not specified (default)\n")
-                if hasattr(self, 'mus') and self.mus is not None:
-                    for i, mus in enumerate(self.mus):
-                        outfile.write(f"Chemical potentials: Rank {i} - {mus}\n")
-                else:
-                    outfile.write("Chemical potentials: Not specified (default)\n")
-                outfile.write(f"Number of MPI ranks: {self.size}\n")
-                outfile.write("{:<5} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}\n".format(
-                    "Rank", "Step", "Atom Count (by species)", "Energy (eV)",
-                    "Chemical Potentials (eV)", "Temperature (K)", "Accepted Exchange (%)"
-                ))
-                outfile.write("-" * 140 + "\n")
+                outfile.write('\n'.join(self._banner()) + '\n')
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
             self.logger.exception("Error opening output file %s", self._outfile)
@@ -409,17 +407,10 @@ class ReplicaExchange:
             return
         try:
             for rank, state in summary.items():
-                self._outfile_handle.write(
-                    "{:<5} {:<10} {:<25} {:<15.6f} "
-                    "{:<35} {:<20} {:<25.2f}\n".format(
-                        rank, state["step"],
-                        state["atom_count_by_species"],
-                        state["energy"],
-                        state["chemical_potential"],
-                        state["temperature"],
-                        state["accepted_percentage"]
-                    )
-                )
+                self._outfile_handle.write(re_row(
+                    rank, state["step"], state["atom_count_by_species"],
+                    state["energy"], state["chemical_potential"],
+                    state["temperature"], state["accepted_percentage"]) + "\n")
             self._outfile_handle.flush()
         except (OSError, AttributeError):
             self.logger.exception("Error writing summary to file %s", self._outfile)

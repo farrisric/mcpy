@@ -34,7 +34,7 @@ MLIP backends
 -------------
 
 Install only the backends you intend to use. For MACE
-(``MACECalculator`` / ``MACE_F_Calculator`` and the bundled examples):
+(``MACE_F_Calculator`` and the bundled examples):
 
 .. code-block:: bash
 
@@ -90,8 +90,9 @@ Install it with conda before running RE-GCMC:
 
    conda install mpi4py
 
-Then launch a replica-exchange simulation with one MPI rank per replica:
+Then launch a replica-exchange simulation with one MPI rank per replica. On a
+single GPU prefer ``BatchedReplicaExchange``, which needs no MPI:
 
 .. code-block:: bash
 
-   mpirun -n <N> python examples/re_gcmc.py
+   python examples/04_replica_exchange_batched.py

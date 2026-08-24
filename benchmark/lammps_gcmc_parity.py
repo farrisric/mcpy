@@ -16,12 +16,12 @@ Usage:
 import argparse
 import math
 import os
-import subprocess
 
 import numpy as np
 from ase import Atoms
 from ase.calculators.lj import LennardJones
 
+from _parity_common import ZeroCalc, block_stats, compare, run_lammps
 from mcpy.cell import Cell
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.moves import (DeletionMove, DisplacementMove, InsertionMove,
@@ -51,57 +51,6 @@ def mu_map(mu_mcpy, lam):
 # --------------------------------------------------------------------------
 # shared infra
 # --------------------------------------------------------------------------
-
-def run_lammps(deck, outdir, tag, lmp):
-    deckfile = os.path.join(outdir, f'in.{tag}')
-    logfile = os.path.join(outdir, f'log.{tag}')
-    with open(deckfile, 'w') as f:
-        f.write(deck)
-    subprocess.run([lmp, '-in', os.path.abspath(deckfile),
-                    '-log', os.path.abspath(logfile), '-screen', 'none'],
-                   check=True, cwd=outdir)
-    return parse_thermo(logfile)
-
-
-def parse_thermo(logfile):
-    """Collect thermo rows from every run section. Returns dict of arrays
-    keyed by lower-cased column names (step, atoms, pe, ...)."""
-    cols, rows = None, []
-    with open(logfile) as f:
-        in_section = False
-        for line in f:
-            s = line.split()
-            if not s:
-                continue
-            if s[0] == 'Step':
-                cols = [c.lower() for c in s]
-                in_section = True
-                continue
-            if in_section:
-                if s[0] == 'Loop' or line.startswith('WARNING'):
-                    in_section = False
-                    continue
-                try:
-                    rows.append([float(v) for v in s])
-                except ValueError:
-                    in_section = False
-    if cols is None or not rows:
-        raise RuntimeError(f'no thermo data parsed from {logfile}')
-    rows = [r for r in rows if len(r) == len(cols)]
-    data = np.array(rows)
-    out = {c: data[:, i] for i, c in enumerate(cols)}
-    if 'poteng' in out:  # thermo header prints "PotEng" for pe
-        out['pe'] = out['poteng']
-    return out
-
-
-def block_stats(series, burn_frac=0.4, nblocks=15):
-    x = np.asarray(series, dtype=float)
-    x = x[int(len(x) * burn_frac):]
-    blocks = np.array_split(x, nblocks)
-    means = np.array([b.mean() for b in blocks])
-    return means.mean(), means.std(ddof=1) / math.sqrt(nblocks)
-
 
 def write_csv(outdir, stage, results):
     """One row per (mu, observable): means, stderrs, diff, verdict."""
@@ -145,25 +94,9 @@ def plot_isotherms(outdir, s1_results, s2_results):
     return path
 
 
-def compare(label, m_mcpy, s_mcpy, m_lmp, s_lmp, nsig):
-    diff = abs(m_mcpy - m_lmp)
-    scomb = math.sqrt(s_mcpy ** 2 + s_lmp ** 2)
-    ok = diff < nsig * scomb
-    print(f'    {label:6s} mcpy {m_mcpy:10.4f} ± {s_mcpy:.4f}   '
-          f'lammps {m_lmp:10.4f} ± {s_lmp:.4f}   '
-          f'|d|={diff:.4f} ({diff / scomb if scomb > 0 else float("inf"):.2f} sigma)  '
-          f'{"PASS" if ok else "FAIL"}')
-    return ok, (m_mcpy, s_mcpy, m_lmp, s_lmp, diff, scomb)
-
-
 # --------------------------------------------------------------------------
 # mcpy side
 # --------------------------------------------------------------------------
-
-class ZeroCalc:
-    def get_potential_energy(self, atoms):
-        return 0.0
-
 
 class LJCalc:
     """Vectorized truncated-and-shifted LJ (sigma=eps=1), minimum image in a

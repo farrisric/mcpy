@@ -174,9 +174,5 @@ Worked examples
    Cu\ :sub:`33`\ Pd\ :sub:`5` particle against the CO chemical potential
    (see :doc:`phase_diagrams`).
 
-- ``examples/gcmc_molecule_mace.py`` adsorbs any ASE-buildable molecule on
-  Ag(111) with MACE.
-- ``examples/re_gcmc_co_cupd_batched.py`` runs CO on a CuPd nanoparticle
-  across a mu ladder with batched replica exchange.
 - The molecular GCMC notebook walks the machinery step by step with executed
   output (see :doc:`notebooks`).

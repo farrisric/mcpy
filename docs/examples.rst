@@ -59,7 +59,6 @@ Phase diagrams from GCMC ensembles
 
 The formation-energy construction, the lower-envelope logic, and the
 post-processing utilities are described in :doc:`phase_diagrams`.
-The replica-exchange examples below end in exactly that analysis.
 
 
 Examples by workflow
@@ -80,10 +79,6 @@ Grand Canonical Monte Carlo (GCMC)
    :maxdepth: 1
 
    examples/gcmc_custom_cell.rst
-   examples/gcmc_nano.rst
-   examples/gcmc_bimet_nano.rst
-   examples/gcmc_nano_supported.rst
-   examples/gcmc_dome_supported.rst
    examples/gcmc_simulations.rst
 
 Replica-Exchange GCMC (RE-GCMC)
@@ -92,5 +87,4 @@ Replica-Exchange GCMC (RE-GCMC)
 .. toctree::
    :maxdepth: 1
 
-   examples/replica_exchange_simulations.rst
    examples/phase_diagram_analysis.rst
