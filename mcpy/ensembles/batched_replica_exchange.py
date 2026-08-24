@@ -235,71 +235,35 @@ class BatchedReplicaExchange:
     def _batched_single_move(self, active: List[int]) -> None:
         """
         One trial move on each active replica:
-          1. propose a trial move on each replica (in place, with snapshot)
-          2. batched energy eval over the replicas with viable trials
-          3. per-replica Metropolis accept/reject
+          1. propose on each replica (in place, with a rollback snapshot)
+          2. one batched energy evaluation over the replicas that proposed
+          3. per-replica accept/reject
+
+        Steps 1 and 3 are ``GrandCanonicalEnsemble._propose`` and
+        ``._commit_or_rollback``, the same methods the serial loop uses, so the
+        two cannot drift apart. Splitting them is what lets the energies be
+        evaluated together: every replica must have proposed before the batch
+        can be built.
+
+        ``get_volume`` and ``get_exchange_count`` are stateful on each
+        replica's own MoveSelector, so they still describe that replica's
+        pending proposal when it is scored later in this method.
         """
-        snapshots: Dict[int, Dict] = {}
-        constraint_snapshots: Dict[int, list] = {}
-        trial_meta: Dict[int, tuple] = {}
-
+        pending = {}
         for i in active:
-            r = self.replicas[i]
-            snapshots[i] = {k: v.copy() for k, v in r.atoms.arrays.items()}
-            # ``del atoms[i]`` in a deletion move remaps FixAtoms indices in
-            # place; a rejected deletion must restore the constraint too or
-            # the fixed set drifts (see GrandCanonicalEnsemble.do_gcmc_step).
-            constraint_snapshots[i] = [c.copy() for c in r.atoms.constraints]
-            result = r.move_selector.do_trial_move(r.atoms)
-            atoms_new, delta_particles, species = (
-                result if isinstance(result, tuple) else (result, 0, None)
-            )
-            if atoms_new is False or atoms_new is None:
-                # Move couldn't propose. Identity check, not truthiness: an
-                # empty Atoms (last atom deleted) is falsy but is a real
-                # proposal. Restore rather than trust the sentinel to mean
-                # "nothing was touched" (see GrandCanonicalEnsemble).
-                r.atoms.arrays = snapshots[i]
-                r.atoms.set_constraint(constraint_snapshots[i])
-                continue
-            if atoms_new is not r.atoms:
-                raise RuntimeError(
-                    f"move '{r.move_selector.get_name()}' returned a "
-                    "different Atoms object; GCMC moves must mutate the "
-                    "passed atoms in place"
-                )
-            trial_meta[i] = (delta_particles, species)
+            proposal = self.replicas[i]._propose()
+            if proposal is not None:
+                pending[i] = proposal
 
-        viable = [i for i in active if i in trial_meta]
-        if not viable:
+        if not pending:
             return
 
-        atoms_list = [self.replicas[i].atoms for i in viable]
-        energies = self.calculator.get_potential_energies(atoms_list)
+        viable = list(pending)
+        energies = self.calculator.get_potential_energies(
+            [self.replicas[i].atoms for i in viable])
         for i, E_new in zip(viable, energies):
-            r = self.replicas[i]
-            delta_particles, species = trial_meta[i]
-            delta_E = float(E_new) - r.E_old
-            volume = r.move_selector.get_volume()
-            # de Broglie particle count: molecule moves report their in-cell
-            # molecule count, atomic moves fall back to the pre-move total
-            # atom count (``r.n_atoms`` is updated only on acceptance). See
-            # docs/gcmc_acceptance_convention.rst.
-            n_exchange = r.move_selector.get_exchange_count()
-            if n_exchange is None:
-                n_exchange = r.n_atoms
-            if r._acceptance_condition(delta_E, delta_particles, volume, species,
-                                       n_exchange):
-                if r._wrap_on_accept:
-                    r.atoms.wrap()
-                r.n_atoms = len(r.atoms)
-                r.E_old = float(E_new)
-                r.move_selector.acceptance_counter()
-                r.calculate_cells_volume(r.atoms)
-                r._record_minimum(r.atoms, r.E_old)
-            else:
-                r.atoms.arrays = snapshots[i]
-                r.atoms.set_constraint(constraint_snapshots[i])
+            snapshot, meta = pending[i]
+            self.replicas[i]._commit_or_rollback(float(E_new), snapshot, meta)
 
     # --------------------------------------------------------- exchange
 
