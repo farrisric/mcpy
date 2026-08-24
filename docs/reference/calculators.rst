@@ -19,8 +19,13 @@ exported only when its backend is installed.
 .. autoclass:: mcpy.calculators.mace_f_calculator.MACE_F_Calculator
    :members:
 
-.. autoclass:: mcpy.calculators.alchemi_calculator.AlchemiCalculator
+.. autoclass:: mcpy.calculators.alchemi._AlchemiBase
    :members:
 
-.. autoclass:: mcpy.calculators.alchemi_f_calculator.AlchemiFCalculator
+.. autoclass:: mcpy.calculators.alchemi.AlchemiCalculator
    :members:
+   :show-inheritance:
+
+.. autoclass:: mcpy.calculators.alchemi.AlchemiFCalculator
+   :members:
+   :show-inheritance:

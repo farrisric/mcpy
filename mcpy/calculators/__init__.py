@@ -10,8 +10,7 @@ except ImportError:
     pass
 
 try:
-    from .alchemi_calculator import AlchemiCalculator
-    from .alchemi_f_calculator import AlchemiFCalculator
+    from .alchemi import AlchemiCalculator, AlchemiFCalculator
     __all__ += ['AlchemiCalculator', 'AlchemiFCalculator']
 except ImportError:
     # nvalchemi is an optional backend; skip if not installed.
