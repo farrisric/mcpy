@@ -22,12 +22,12 @@ Usage:
 import argparse
 import math
 import os
-import subprocess
 
 import numpy as np
 from ase import Atoms
 from ase.build import fcc111, molecule
 
+from _parity_common import ZeroCalc, block_stats, compare, run_lammps
 from mcpy.cell import Cell, CustomCell
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.moves import (MoleculeDeletionMove, MoleculeInsertionMove,
@@ -45,80 +45,14 @@ TORCH_LIB = os.environ.get(
         '~/miniconda3/envs/mcpy/lib/python3.14/site-packages/torch/lib'))
 
 
-# --------------------------------------------------------------------------
-# shared infra (mirrors benchmark/lammps_gcmc_parity.py)
-# --------------------------------------------------------------------------
-
-def run_lammps(deck, outdir, tag, lmp):
-    deckfile = os.path.join(outdir, f'in.{tag}')
-    logfile = os.path.join(outdir, f'log.{tag}')
-    with open(deckfile, 'w') as f:
-        f.write(deck)
-    env = dict(os.environ)
-    env['LD_LIBRARY_PATH'] = TORCH_LIB + ':' + env.get('LD_LIBRARY_PATH', '')
-    subprocess.run([lmp, '-in', os.path.abspath(deckfile),
-                    '-log', os.path.abspath(logfile), '-screen', 'none'],
-                   check=True, cwd=outdir, env=env)
-    return parse_thermo(logfile)
-
-
-def parse_thermo(logfile):
-    cols, rows = None, []
-    with open(logfile) as f:
-        in_section = False
-        for line in f:
-            s = line.split()
-            if not s:
-                continue
-            if s[0] == 'Step':
-                cols = [c.lower() for c in s]
-                in_section = True
-                continue
-            if in_section:
-                if s[0] == 'Loop' or line.startswith('WARNING'):
-                    in_section = False
-                    continue
-                try:
-                    rows.append([float(v) for v in s])
-                except ValueError:
-                    in_section = False
-    if cols is None or not rows:
-        raise RuntimeError(f'no thermo data parsed from {logfile}')
-    rows = [r for r in rows if len(r) == len(cols)]
-    data = np.array(rows)
-    out = {c: data[:, i] for i, c in enumerate(cols)}
-    if 'poteng' in out:
-        out['pe'] = out['poteng']
-    return out
-
-
-def block_stats(series, burn_frac=0.4, nblocks=15):
-    x = np.asarray(series, dtype=float)
-    x = x[int(len(x) * burn_frac):]
-    blocks = np.array_split(x, nblocks)
-    means = np.array([b.mean() for b in blocks])
-    return means.mean(), means.std(ddof=1) / math.sqrt(nblocks)
-
-
-def compare(label, m_mcpy, s_mcpy, m_lmp, s_lmp, nsig):
-    diff = abs(m_mcpy - m_lmp)
-    scomb = math.sqrt(s_mcpy ** 2 + s_lmp ** 2)
-    ok = diff < nsig * scomb
-    print(f'    {label:6s} mcpy {m_mcpy:12.4f} ± {s_mcpy:.4f}   '
-          f'lammps {m_lmp:12.4f} ± {s_lmp:.4f}   '
-          f'|d|={diff:.4f} ({diff / scomb if scomb > 0 else float("inf"):.2f} sigma)  '
-          f'{"PASS" if ok else "FAIL"}')
-    return ok
+def _libtorch_env():
+    """LAMMPS pair_style mace needs libtorch on the loader path."""
+    return {'LD_LIBRARY_PATH': TORCH_LIB + ':' + os.environ.get('LD_LIBRARY_PATH', '')}
 
 
 # --------------------------------------------------------------------------
 # mcpy side
 # --------------------------------------------------------------------------
-
-class ZeroCalc:
-    def get_potential_energy(self, atoms):
-        return 0.0
-
 
 class MaceSinglePoint:
     """Bare single-point MACE energy (no relaxation), float32 on GPU."""
@@ -224,7 +158,7 @@ create_atoms 2 single 6.0 6.4 5.0
 thermo_style custom step atoms pe
 run 0
 """
-    th = run_lammps(deck, outdir, 'gate', lmp)
+    th = run_lammps(deck, outdir, 'gate', lmp, extra_env=_libtorch_env())
     e_l = th['pe'][-1]
     diff = abs(e_py - e_l)
     ok = diff < 5e-4
@@ -276,7 +210,7 @@ thermo 5
 thermo_style custom step atoms pe
 run {lmp_steps}
 """
-    th = run_lammps(deck, outdir, 'stage1', lmp)
+    th = run_lammps(deck, outdir, 'stage1', lmp, extra_env=_libtorch_env())
     ml, sl = block_stats(th['atoms'] / 2.0)
     ok_lmp = abs(ml - n_exact) < 2 * sl
     print(f'  lammps <N_mol> = {ml:.3f} ± {sl:.3f}  '
@@ -338,12 +272,12 @@ thermo 2
 thermo_style custom step atoms pe
 run {nsteps}
 """
-        th = run_lammps(deck, outdir, f'stage2_d{delta}', lmp)
+        th = run_lammps(deck, outdir, f'stage2_d{delta}', lmp, extra_env=_libtorch_env())
         mln, sln = block_stats((th['atoms'] - n_slab) / 2.0)
         mle, sle = block_stats(th['pe'])
 
-        okn = compare('<Nmol>', mn, sn, mln, sln, 2)
-        oke = compare('<PE>', me, se, mle, sle, 3)
+        okn, _ = compare('<Nmol>', mn, sn, mln, sln, 2, width=12)
+        oke, _ = compare('<PE>', me, se, mle, sle, 3, width=12)
         all_ok &= okn and oke
     print(f'  Stage II: {"PASS" if all_ok else "FAIL"}')
     return all_ok
