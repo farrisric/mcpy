@@ -11,135 +11,60 @@ or ``0``, and ``species`` is the affected symbol. Moves mutate ``atoms`` in
 place; the ensemble rolls back on rejection.
 
 
-MoveSelector
-------------
+.. autoclass:: mcpy.moves.MoveSelector
+   :members:
 
-.. code-block:: python
+.. autoclass:: mcpy.moves.base_move.BaseMove
+   :members:
 
-   MoveSelector(probabilities, move_list, seed=None)
+Particle exchange
+-----------------
 
-Samples one move per step from ``move_list`` with weights ``probabilities``
-(weights need not sum to one). Tracks per-interval and cumulative acceptance
-counters, excluding non-viable proposals from the denominator.
+.. autoclass:: mcpy.moves.InsertionMove
+   :members:
+   :show-inheritance:
 
-Parameters:
+.. autoclass:: mcpy.moves.DeletionMove
+   :members:
+   :show-inheritance:
 
-- ``probabilities`` (list): relative weight of each move. Their sum sets
-  ``n_moves``, the number of trial moves per GCMC step.
-- ``move_list`` (list): the move instances to sample from.
-- ``seed`` (int, optional): RNG seed.
+Molecular exchange
+------------------
 
-Methods: ``do_trial_move(atoms)``, ``acceptance_counter()``, ``get_volume()``,
-``interval_ratios()``, ``total_ratios()``, ``reset_counters()``.
+.. autoclass:: mcpy.moves.MoleculeInsertionMove
+   :members:
+   :show-inheritance:
 
+.. autoclass:: mcpy.moves.MoleculeDeletionMove
+   :members:
+   :show-inheritance:
 
-BaseMove
---------
+.. autoclass:: mcpy.moves.MoleculeDisplacementMove
+   :members:
+   :show-inheritance:
 
-.. code-block:: python
+.. automodule:: mcpy.moves.molecule_utils
+   :members:
 
-   BaseMove(cell, species, seed)
+Displacement and reordering
+---------------------------
 
-Abstract base. Holds the attached ``cell``, the ``species`` list, and a seeded
-RNG. Provides ``get_volume()`` and ``calculate_volume(atoms)`` over the cell.
-Subclasses implement ``do_trial_move(atoms)``.
+.. autoclass:: mcpy.moves.DisplacementMove
+   :members:
+   :show-inheritance:
 
+.. autoclass:: mcpy.moves.PermutationMove
+   :members:
+   :show-inheritance:
 
-InsertionMove
--------------
+.. autoclass:: mcpy.moves.ShakeMove
+   :members:
+   :show-inheritance:
 
-.. code-block:: python
+.. autoclass:: mcpy.moves.BrownianMove
+   :members:
+   :show-inheritance:
 
-   InsertionMove(cell, species, seed, min_insert=None, max_atoms=None)
-
-Inserts one atom of a random selected species at a random point in ``cell``.
-Sets ``delta_particles = +1``.
-
-- ``min_insert`` (float, optional): minimum distance to existing cell atoms. The
-  move retries up to an internal cap and reports a failed move if it cannot
-  place the atom without a closer contact.
-- ``max_atoms`` (int, optional): if the structure already contains at least this
-  many atoms of the selected species, the move is skipped without mutating
-  ``atoms`` (recorded as a failed move, no energy evaluation).
-
-
-DeletionMove
-------------
-
-.. code-block:: python
-
-   DeletionMove(cell, species, seed, min_atoms=None)
-
-Deletes a random atom of the selected species lying inside ``cell``. Sets
-``delta_particles = -1``. Returns a falsy result when no candidate atom exists,
-when ``min_atoms`` would be violated, or recorded as a failed move rather than a
-rejection.
-
-- ``min_atoms`` (int, optional): if the structure contains at most this many
-  atoms of the selected species, the move is skipped without mutating ``atoms``.
-
-
-DisplacementMove
-----------------
-
-.. code-block:: python
-
-   DisplacementMove(species, seed, constraints=None, max_displacement=0.1,
-                    n_steps=1)
-
-Displaces ``n_steps`` distinct atoms by random vectors of magnitude up to
-``max_displacement``. Particle count is unchanged. Uses a ``NullCell``
-internally (no insertion region).
-
-- ``constraints`` (list, optional): indices held fixed.
-- ``max_displacement`` (float): maximum per-atom step.
-- ``n_steps`` (int): atoms moved per trial. Exceeding the movable-atom count
-  raises ``ValueError``.
-
-
-PermutationMove
----------------
-
-.. code-block:: python
-
-   PermutationMove(species, seed, n_swaps=1)
-
-Swaps the chemical identities of ``n_swaps`` atom pairs drawn from different
-species groups, in a single trial. Particle count is unchanged. Returns a falsy
-result if a requested species is absent.
-
-
-ShakeMove
----------
-
-.. code-block:: python
-
-   ShakeMove(r_max, seed)
-
-Displaces every atom by an independent vector drawn uniformly inside a ball of
-radius ``r_max``. A global perturbation, usually paired with a relaxing
-calculator.
-
-
-BrownianMove
-------------
-
-.. code-block:: python
-
-   BrownianMove(temperature, calculator, steps, d_t, seed)
-
-Runs ``steps`` of Velocity-Verlet MD at ``temperature`` (timestep ``d_t`` in fs)
-as the trial move, from a Maxwell-Boltzmann velocity draw.
-
-
-AlchemiBrownianMove
--------------------
-
-.. code-block:: python
-
-   AlchemiBrownianMove(calculator, temperature, friction=0.01, steps=100,
-                       dt=2.0, seed=0)
-
-GPU-native Langevin Brownian move. Runs a short NVT Langevin trajectory through
-``calculator.run_md`` (an ``AlchemiCalculator`` or ``AlchemiFCalculator``),
-reusing its model. Honors ``FixAtoms``.
+.. autoclass:: mcpy.moves.AlchemiBrownianMove
+   :members:
+   :show-inheritance:

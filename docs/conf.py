@@ -20,7 +20,17 @@ except importlib.metadata.PackageNotFoundError:
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.todo', 'sphinx.ext.viewcode']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.napoleon',
+              'sphinx.ext.todo', 'sphinx.ext.viewcode']
+
+# The optional backends are not installed on the docs builder, and importing a
+# real torch here is both slow and, in a misconfigured env, fatal (SIGBUS).
+# Mocking lets autodoc read the wrappers' signatures and docstrings anyway.
+autodoc_mock_imports = ['torch', 'mace', 'nvalchemi', 'cuequivariance', 'mpi4py']
+autodoc_member_order = 'bysource'
+# Parameters are documented in __init__, so render both docstrings.
+autoclass_content = 'both'
+autodoc_typehints = 'description'
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

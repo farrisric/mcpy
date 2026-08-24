@@ -14,14 +14,15 @@ class SetUnits:
         """
         Initialize the SetUnits class with a specific unit type.
 
-        Parameters:
-        unit_type (str): The type of units to set. Possible values are "LJ" or "metal".
-        species (List): List of atomic species for which to set units.
-        molecules (dict, optional): Mapping of molecular species name to an
-            ASE Atoms template. The name is the key used in ``mu`` and
-            ``lambda_dbs``; the mass is the sum of the template's atomic
-            masses. Molecular species are identified by composition, so two
-            templates with the same composition cannot coexist.
+        Args:
+            unit_type: The type of units to set, ``"LJ"`` or ``"metal"``.
+            temperature: Temperature in K.
+            species: List of atomic species for which to set units.
+            molecules: Mapping of molecular species name to an ASE Atoms
+                template. The name is the key used in ``mu`` and
+                ``lambda_dbs``; the mass is the sum of the template's atomic
+                masses. Molecular species are identified by composition, so two
+                templates with the same composition cannot coexist.
         """
         self.unit_type = unit_type
         self.species = species
