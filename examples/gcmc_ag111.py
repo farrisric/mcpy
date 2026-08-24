@@ -33,21 +33,19 @@ from ase.constraints import FixAtoms
 
 import logging
 
+from mcpy.calculators import AlchemiCalculator, AlchemiFCalculator
+from mcpy.cell import CustomCell
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.moves import DeletionMove, InsertionMove
+from mcpy.moves.move_selector import MoveSelector
+from mcpy.utils import derive_mu_bulk, derive_mu_gas
 from mcpy.utils.logging import configure as configure_logging
 
-configure_logging()
 logger = logging.getLogger('mcpy')
 
-from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
-from mcpy.moves.move_selector import MoveSelector  # noqa: E402
-from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
-from mcpy.calculators import AlchemiCalculator, AlchemiFCalculator  # noqa: E402
-from mcpy.cell import CustomCell  # noqa: E402
-from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
-
-# Calibrated set for O on Ag(111) with the small-density-agnesi MACE model,
-# Fixed on purpose: this is fixture
-# geometry, not a per-checkpoint number. Only mu is derived at run time.
+# Calibrated set for O on Ag(111) with the small-density-agnesi MACE model.
+# Fixed on purpose: this is fixture geometry, not a per-checkpoint number.
+# Only mu is derived at run time.
 AG_LATTICE = 4.165  # Ag fcc lattice constant (Angstrom)
 # Relaxed O-Ag pair distance: the free-volume exclusion radius, and also how
 # far below the top layer the region starts so O can go subsurface (the
@@ -127,6 +125,7 @@ def build_calculator(args):
 
 def main():
     args = parse_args()
+    configure_logging()
     os.makedirs(args.outdir, exist_ok=True)
 
     ss = np.random.SeedSequence(args.seed)

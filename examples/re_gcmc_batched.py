@@ -18,17 +18,14 @@ import numpy as np
 from ase.build import fcc111
 from ase.constraints import FixAtoms
 
+from mcpy.calculators import AlchemiFCalculator
+from mcpy.cell import CustomCell as Cell
+from mcpy.ensembles import BatchedReplicaExchange
+from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.moves import DeletionMove, InsertionMove
+from mcpy.moves.move_selector import MoveSelector
+from mcpy.utils import derive_mu_bulk, derive_mu_gas
 from mcpy.utils.logging import configure as configure_logging
-
-configure_logging()
-
-from mcpy.moves import DeletionMove, InsertionMove  # noqa: E402
-from mcpy.moves.move_selector import MoveSelector  # noqa: E402
-from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble  # noqa: E402
-from mcpy.calculators import AlchemiFCalculator  # noqa: E402
-from mcpy.cell import CustomCell as Cell  # noqa: E402
-from mcpy.ensembles import BatchedReplicaExchange  # noqa: E402
-from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 
 def parse_args():
@@ -56,6 +53,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    configure_logging()
     os.makedirs(args.outdir, exist_ok=True)
 
     ss = np.random.SeedSequence(args.seed)
