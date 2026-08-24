@@ -17,7 +17,7 @@ BaseEnsemble
 
 .. code-block:: python
 
-   BaseEnsemble(atoms, cells, units_type, calculator, user_tag=None,
+   BaseEnsemble(atoms, cells, calculator,
                 random_seed=None, traj_file='trajectory.xyz', traj_mode='w',
                 trajectory_write_interval=1, outfile='outfile.out',
                 outfile_mode='w', outfile_write_interval=1,
@@ -30,7 +30,6 @@ Shared parameters (inherited by the concrete ensembles):
 
 - ``atoms`` (ase.Atoms): starting configuration.
 - ``cells`` (list): cell objects providing free volume and insertion points.
-- ``units_type`` (str): ``'metal'`` or ``'LJ'`` (see :doc:`../ensembles`).
 - ``calculator``: an mcpy calculator wrapper or any object exposing
   ``get_potential_energy(atoms)``.
 - ``random_seed`` (int, optional): seed source for derived generators.
@@ -57,7 +56,7 @@ CanonicalEnsemble
 
 .. code-block:: python
 
-   CanonicalEnsemble(atoms, calculator, cells=None, units_type='metal',
+   CanonicalEnsemble(atoms, calculator, cells=None,
                      random_seed=None, optimizer=None, fmax=0.1,
                      temperature=300, move_selector=None, constraints=None,
                      traj_file='trajectory.xyz', traj_mode='w',
@@ -100,6 +99,8 @@ de Broglie criterion (see :doc:`../ensembles`).
 
 Parameters beyond the shared set:
 
+- ``units_type`` (str): ``'metal'`` or ``'LJ'``; selects the constants the
+  de Broglie factors are built from (see :doc:`../ensembles`).
 - ``mu`` (dict): species to reservoir chemical potential in eV.
 - ``species`` (list[str]): symbols the move set may insert or delete.
 - ``temperature`` (float): temperature in K.

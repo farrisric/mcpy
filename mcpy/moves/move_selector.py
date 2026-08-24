@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
@@ -113,14 +112,6 @@ class MoveSelector:
     def calculate_volume(self, atoms):
         return self.move_list[self.to_use].calculate_volume(atoms)
 
-    def calculate_volumes(self, atoms):
-        for move in self.move_list:
-            move.calculate_volume(atoms)
-
-    def get_operator(self):
-        to_use = self.__get_index__()
-        return self.move_list[to_use]
-
     def acceptance_counter(self):
         self.move_acceptance[self.to_use] += 1
         self.move_acceptance_total[self.to_use] += 1
@@ -146,16 +137,8 @@ class MoveSelector:
                             self.move_counter_total,
                             self.move_failed_counter_total)
 
-    # Backwards-compatible aliases.
+    # Backwards-compatible alias.
     def get_acceptance_ratio(self):
-        return self.interval_ratios()
-
-    def get_acceptance_ration(self):  # legacy typo'd name
-        warnings.warn(
-            "MoveSelector.get_acceptance_ration is a deprecated typo'd alias; "
-            "use interval_ratios() (or get_acceptance_ratio()).",
-            DeprecationWarning, stacklevel=2,
-        )
         return self.interval_ratios()
 
     def reset_counters(self):

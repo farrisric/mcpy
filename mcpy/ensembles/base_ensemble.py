@@ -18,9 +18,7 @@ class BaseEnsemble(ABC):
     def __init__(self,
                  atoms: Atoms,
                  cells: List[Cell],
-                 units_type: str,
                  calculator: Calculator,
-                 user_tag: Optional[str] = None,
                  random_seed: Optional[int] = None,
                  traj_file: Optional[str] = 'trajectory.xyz',
                  traj_mode: str = 'w',
@@ -53,7 +51,6 @@ class BaseEnsemble(ABC):
         self._atoms = atoms
         self._cells = cells
         self._calculator = calculator
-        self._user_tag = user_tag
 
         self._trajectory_write_interval = trajectory_write_interval
         self._outfile_write_interval = outfile_write_interval

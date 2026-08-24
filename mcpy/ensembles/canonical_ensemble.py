@@ -25,7 +25,6 @@ class CanonicalEnsemble(BaseEnsemble):
                  atoms,
                  calculator,
                  cells=None,
-                 units_type: str = 'metal',
                  random_seed=None,
                  optimizer=None,
                  fmax=0.1,
@@ -42,7 +41,6 @@ class CanonicalEnsemble(BaseEnsemble):
                  minima_mode: str = 'a') -> None:
         super().__init__(atoms=atoms,
                          cells=cells if cells is not None else [],
-                         units_type=units_type,
                          calculator=calculator,
                          random_seed=random_seed,
                          traj_file=traj_file,

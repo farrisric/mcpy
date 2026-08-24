@@ -38,14 +38,12 @@ RandomNumberGenerator
 
 .. code-block:: python
 
-   RandomNumberGenerator(seed=None, warm_up=0)
+   RandomNumberGenerator(seed=None)
 
 Seeded wrapper over Python's ``random.Random``. Each move and the acceptance
 test carries its own instance, so the global ``random`` state is never touched.
 
 - ``seed`` (int, optional): seed for reproducibility.
-- ``warm_up`` (int): discarded draws after seeding. The default ``0`` is
-  sufficient for the Mersenne Twister.
 
 Methods: ``get_uniform(a=0.0, b=1.0)``, ``get_gaussian(mu=0.0, sigma=1.0)``.
 

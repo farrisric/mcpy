@@ -196,16 +196,11 @@ def test_moveselector_explicit_trials_per_step_overrides_weights():
     assert ms.n_moves == 2
 
 
-def test_moveselector_legacy_typo_alias_warns():
-    ms = MoveSelector([1], [DisplacementMove(species=['H'], seed=1)], seed=2)
-    with pytest.warns(DeprecationWarning):
-        ms.get_acceptance_ration()
-
-
 # --------------------------------------------------------------------------
 # set_state refreshes cell free volumes (bug: acceptance after an accepted
 # replica swap used the previous configuration's volume)
 # --------------------------------------------------------------------------
+
 
 class _RecordingCell:
     def __init__(self):
