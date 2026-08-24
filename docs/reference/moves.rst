@@ -143,12 +143,3 @@ AlchemiBrownianMove
 GPU-native Langevin Brownian move. Runs a short NVT Langevin trajectory through
 ``calculator.run_md`` (an ``AlchemiCalculator`` or ``AlchemiFCalculator``),
 reusing its model. Honors ``FixAtoms``.
-
-
-Experimental moves
-------------------
-
-``mcpy.moves.go_moves`` contains specialised exploratory moves (``BallMove``,
-``ShellMove``, ``BondMove``, ``HighEnergyAtomsMove``, and variant
-permutation/shake/Brownian moves). They are not part of the ``mcpy.moves``
-export list and their interfaces may change.

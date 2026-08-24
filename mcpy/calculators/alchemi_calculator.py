@@ -24,7 +24,7 @@ class AlchemiCalculator:
     """
     Energy-only Alchemi calculator (no geometry relaxation).
 
-    Equivalent to MACECalculator but uses the nvalchemi GPU-native stack.
+    Single-point MACE evaluation on the nvalchemi GPU-native stack.
     Use this when mcpy handles its own MC moves and only needs E(atoms).
 
     Parameters

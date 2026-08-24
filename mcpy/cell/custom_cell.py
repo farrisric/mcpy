@@ -23,7 +23,6 @@ class CustomCell(Cell):
         """
         super().__init__(atoms, species_radii=species_radii, seed=seed)
         self.dimensions, self.offset = self.get_custom_height_cell(custom_height, bottom_z)
-        self.species_radii = species_radii if species_radii else {}
         self.cell_volume = float(abs(np.linalg.det(self.dimensions)))
         self.mc_sample_points = int(mc_sample_points)
         self._dim_inv = np.linalg.inv(self.dimensions)
@@ -154,9 +153,3 @@ class CustomCell(Cell):
         frac = (point - self.offset) @ self._dim_inv
         return bool(np.all(frac[:2] >= 0.0) and np.all(frac[:2] < 1.0)
                     and frac[2] >= 0.0)
-
-    def get_species(self):
-        """
-        Get the species present in the custom cell.
-        """
-        return list(self.species_radii.keys())

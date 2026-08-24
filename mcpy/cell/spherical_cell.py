@@ -32,7 +32,6 @@ class SphericalCell(Cell):
         self.radius = float(
             np.linalg.norm(atoms.positions - self.center, axis=1).max() + vacuum
         )
-        self.species_radii = species_radii
         self.mc_sample_points = int(mc_sample_points)
         self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
         self.volume = self.sphere_volume
@@ -78,12 +77,6 @@ class SphericalCell(Cell):
         diff = atoms.positions - self.center
         inside = np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
         return np.where(species_mask & inside)[0]
-
-    def get_species(self):
-        """
-        Get the species present in the custom cell.
-        """
-        return list(self.species_radii.keys())
 
     def _sample_sphere_points(self, n):
         """

@@ -8,7 +8,7 @@ background, including the relaxation-inside-energy design, is in
 Each wrapper exposes ``get_potential_energy(atoms) -> float``. The Alchemi
 classes add ``get_potential_energies(atoms_list, chunk_size=None) -> ndarray``
 for batched evaluation, where ``chunk_size`` caps peak GPU memory at one chunk.
-``MACECalculator``, ``MACE_F_Calculator``, and ``BaseCalculator`` import
+``MACE_F_Calculator`` and ``BaseCalculator`` import
 unconditionally; the Alchemi classes import only when ``nvalchemi-toolkit`` is
 installed.
 
@@ -29,20 +29,6 @@ relaxed energy.
 - ``fmax`` (float): force tolerance in eV/Å.
 
 
-MACECalculator
---------------
-
-.. code-block:: python
-
-   MACECalculator(model_paths, device='cpu')
-
-Single-point MACE evaluation with no relaxation.
-``get_potential_energy(atoms)`` returns one forward pass.
-
-- ``model_paths`` (str): path to a MACE model file.
-- ``device`` (str): ``'cpu'`` or ``'cuda'``.
-
-
 MACE_F_Calculator
 -----------------
 
@@ -54,8 +40,8 @@ MACE_F_Calculator
 Relax-then-energy MACE wrapper used in most GCMC runs. Records
 ``last_relax_steps`` and ``total_relax_steps`` after each call.
 
-- ``model_paths`` (str | MACECalculator): model file path, or a built
-  ``MACECalculator`` to reuse.
+- ``model_paths`` (str | mace.calculators.MACECalculator): model file path, or
+  a built upstream MACE calculator to reuse.
 - ``steps`` (int): maximum relaxation steps.
 - ``fmax`` (float): force tolerance in eV/Å.
 - ``device`` (str): ``'cpu'`` or ``'cuda'``.

@@ -78,14 +78,12 @@ def test_library_loggers_use_module_name():
     """Each module exposes ``logger = logging.getLogger(__name__)``."""
     from mcpy.ensembles import base_ensemble, canonical_ensemble
     from mcpy.ensembles import grand_canonical_ensemble
-    from mcpy.utils import utils as utils_mod
 
     assert base_ensemble.logger.name == "mcpy.ensembles.base_ensemble"
     assert canonical_ensemble.logger.name == "mcpy.ensembles.canonical_ensemble"
     assert grand_canonical_ensemble.logger.name == (
         "mcpy.ensembles.grand_canonical_ensemble"
     )
-    assert utils_mod.logger.name == "mcpy.utils.utils"
 
 
 # ---------------------------------------------------------------------------

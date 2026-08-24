@@ -34,7 +34,7 @@ MLIP backends
 -------------
 
 Install only the backends you intend to use. For MACE
-(``MACECalculator`` / ``MACE_F_Calculator`` and the bundled examples):
+(``MACE_F_Calculator`` and the bundled examples):
 
 .. code-block:: bash
 

@@ -57,7 +57,6 @@ class DomeCell(SphericalCell):
         self.radius = float(
             np.linalg.norm(particle_pos - self.center, axis=1).max() + vacuum
         )
-        self.species_radii = species_radii
         self.mc_sample_points = int(mc_sample_points)
         self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
         self.volume = self.sphere_volume

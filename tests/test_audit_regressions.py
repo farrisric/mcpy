@@ -23,7 +23,6 @@ from mcpy.moves import (AlchemiBrownianMove, DeletionMove, DisplacementMove,
                         InsertionMove, MoveSelector, PermutationMove)
 from mcpy.moves.base_move import BaseMove
 from mcpy.utils.set_unit_constant import SetUnits
-from mcpy.utils.utils import overlap_volume
 
 
 class StubCalc:
@@ -77,25 +76,6 @@ def test_gcmc_runs_in_lj_units():
     )
     g.do_gcmc_step()  # uphill move -> exercises the beta-dependent branch
     assert np.isfinite(g.E_old)
-
-
-# --------------------------------------------------------------------------
-# overlap_volume analytic value (bug: returned exactly twice the lens volume)
-# --------------------------------------------------------------------------
-
-def test_overlap_volume_matches_analytic():
-    # Equal spheres radius r at distance d: V = pi*(4r + d)*(2r - d)^2 / 12
-    r, d = 1.0, 1.0
-    exact = math.pi * (4 * r + d) * (2 * r - d) ** 2 / 12.0
-    assert overlap_volume(r, r, d) == pytest.approx(exact)
-
-
-def test_overlap_volume_limits():
-    assert overlap_volume(1.0, 1.0, 2.5) == 0  # disjoint
-    engulfed = overlap_volume(2.0, 1.0, 0.5)   # small sphere inside big one
-    assert engulfed == pytest.approx((4 / 3) * math.pi)
-    # Touching from inside: d -> r1 + r2 gives vanishing overlap.
-    assert overlap_volume(1.0, 1.0, 1.999999) == pytest.approx(0.0, abs=1e-9)
 
 
 # --------------------------------------------------------------------------

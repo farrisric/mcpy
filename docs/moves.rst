@@ -103,14 +103,3 @@ as a relaxation-like perturbation that explores the local basin more thoroughly 
 single random displacement.
 
 
-Experimental moves
-------------------
-
-`mcpy.moves.go_moves` contains additional specialised moves used in exploratory workflows:
-
-- `BallMove`, `ShellMove`,
-- `BondMove`,
-- `HighEnergyAtomsMove`,
-- alternative `PermutationMove`, `ShakeMove`, and `BrownianMove` variants.
-
-These are not part of the default `mcpy.moves` export list and their interfaces may change.
