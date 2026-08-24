@@ -148,14 +148,13 @@ def _build_nl(batch: Batch, nl_hook: NeighborListHook) -> None:
 
 def _write_back_positions(atoms: Atoms, batch: Batch) -> None:
     """Copy relaxed positions from batch back to atoms, skipping FixAtoms-constrained indices."""
-    relaxed = batch.positions.detach().cpu().numpy()
-    fixed: set[int] = set()
-    for c in atoms.constraints:
-        if isinstance(c, FixAtoms):
-            fixed.update(c.index.tolist())
+    # float64: the batch is float32, and assigning the float64 frozen rows
+    # into a float32 array would truncate them, leaving the "restored" atoms
+    # about 5e-7 A off their pinned positions at slab-sized coordinates.
+    relaxed = batch.positions.detach().cpu().numpy().astype(np.float64)
+    fixed = _fixed_indices(atoms)
     if fixed:
-        relaxed = relaxed.copy()
-        relaxed[list(fixed)] = atoms.positions[list(fixed)]
+        relaxed[fixed] = atoms.positions[fixed]
     atoms.positions = relaxed
 
 

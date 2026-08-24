@@ -259,7 +259,8 @@ class AlchemiFCalculator:
         """Write energy + relaxed positions of ``rows`` (batch row indices)
         back to their originating Atoms objects, restoring FixAtoms rows."""
         e = _per_graph_energies(batch.energy, int(batch.num_graphs))
-        pos = batch.positions.detach().cpu().numpy()
+        # float64 before restoring frozen rows: see _write_back_positions.
+        pos = batch.positions.detach().cpu().numpy().astype(np.float64)
         batch_idx = batch.batch_idx.detach().cpu().numpy()
         for row in rows:
             g = int(alive[row])
