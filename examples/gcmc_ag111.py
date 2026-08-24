@@ -46,7 +46,7 @@ from mcpy.cell import CustomCell  # noqa: E402
 from mcpy.utils import derive_mu_bulk, derive_mu_gas  # noqa: E402
 
 # Calibrated set for O on Ag(111) with the small-density-agnesi MACE model,
-# taken from examples/gcmc_custom_cell.py. Fixed on purpose: this is fixture
+# Fixed on purpose: this is fixture
 # geometry, not a per-checkpoint number. Only mu is derived at run time.
 AG_LATTICE = 4.165  # Ag fcc lattice constant (Angstrom)
 # Relaxed O-Ag pair distance: the free-volume exclusion radius, and also how
@@ -54,7 +54,7 @@ AG_LATTICE = 4.165  # Ag fcc lattice constant (Angstrom)
 # oxidation path). Anchoring at the top layer makes the region pure vacuum.
 R_O_AG = 2.068
 SPECIES_RADII = {'Ag': R_O_AG, 'O': 0.0}
-# Bulk Ag reference correction (examples/gcmc_custom_cell.py).
+# Bulk Ag reference correction.
 MU_AG_CORRECTION = -0.176
 
 

@@ -187,7 +187,7 @@ Save as ``submit_gcmc_alchemi.sh``:
    set -eo pipefail
 
    PYTHON=$HOME/.conda/envs/alchemi128/bin/python
-   SCRIPT=$HOME/bin/mcpy/examples/gcmc_nano_alchemi.py
+   SCRIPT=$HOME/bin/mcpy/examples/gcmc_ag111.py
    RESULTS_DIR=$SLURM_SUBMIT_DIR/results/job_${SLURM_JOB_ID:-local}
 
    export PYTHONNOUSERSITE=1
@@ -237,7 +237,7 @@ The script above runs a single replica. ``mcpy`` also runs **replica exchange
 on one GPU**: all replicas live in a single Python process, share one
 ``AlchemiCalculator``, and have their trial-move energies evaluated in a single
 batched forward pass per MC step. This is the GPU path the package is built
-around. Unlike the CPU ``re_gcmc.py`` (one MPI rank per replica), there is **no
+around. Unlike the MPI ``ReplicaExchange`` (one rank per replica), there is **no
 mpirun** and still only ``--gres=gpu:1``.
 
 The script is ``examples/re_gcmc_batched.py``. Replica temperatures are passed

@@ -90,8 +90,9 @@ Install it with conda before running RE-GCMC:
 
    conda install mpi4py
 
-Then launch a replica-exchange simulation with one MPI rank per replica:
+Then launch a replica-exchange simulation with one MPI rank per replica. On a
+single GPU prefer ``BatchedReplicaExchange``, which needs no MPI:
 
 .. code-block:: bash
 
-   mpirun -n <N> python examples/re_gcmc.py
+   python examples/re_gcmc_batched.py

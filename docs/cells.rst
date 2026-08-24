@@ -166,8 +166,6 @@ Key parameters:
    )
    dome_cell.calculate_volume(atoms)
 
-A worked end-to-end run is in :doc:`examples/gcmc_dome_supported`.
-
 
 Choosing the right cell
 -----------------------
