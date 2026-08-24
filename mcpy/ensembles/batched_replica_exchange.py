@@ -32,7 +32,8 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 
 from ..utils.random_number_generator import RandomNumberGenerator
-from .base_ensemble import write_xyz
+from .base_ensemble import BaseEnsemble, write_global_minimum
+from .replica_exchange import RE_RULE, re_header, re_row
 
 logger = logging.getLogger(__name__)
 
@@ -131,11 +132,13 @@ class BatchedReplicaExchange:
     # ------------------------------------------------------------------ run
 
     def run(self) -> None:
-        import logging as _logging
-        quiet = _logging.getLogger('mcpy.ensembles.base_ensemble')
+        # The replicas' lifecycle logs all go to their base class's module
+        # logger; ask the class for it rather than repeating its dotted path,
+        # which a file move would silently break.
+        quiet = logging.getLogger(BaseEnsemble.__module__)
         prior_level = quiet.level
         if self._consolidate_logging:
-            quiet.setLevel(_logging.WARNING)
+            quiet.setLevel(logging.WARNING)
 
         for r in self.replicas:
             r.initialize_run()
@@ -182,17 +185,9 @@ class BatchedReplicaExchange:
         if not candidates:
             return
         best = min(candidates, key=lambda r: r._best_score)
-        rank = self.replicas.index(best)
-        try:
-            with open(self._global_minimum_file, 'w') as fh:
-                write_xyz(
-                    best._best_atoms, best._best_energy, fh,
-                    extra=f'rank={rank} score={best._best_score:.6f}',
-                )
-        except OSError:
-            self.logger.exception(
-                "Error writing global minimum to %s", self._global_minimum_file
-            )
+        write_global_minimum(self._global_minimum_file, best._best_atoms,
+                             best._best_energy, best._best_score,
+                             self.replicas.index(best), self.logger)
 
     def _rebatch_initial_energies(self) -> None:
         """Re-evaluate replica energies as one batch so all replicas start
@@ -391,12 +386,8 @@ class BatchedReplicaExchange:
                 if self.mus is not None:
                     for k, mu in enumerate(self.mus):
                         fh.write(f"Chemical potentials replica {k}: {mu}\n")
-                fh.write("{:<8} {:<10} {:<25} {:<15} {:<35} {:<20} {:<25}\n".format(
-                    "Replica", "Step", "Atom Count (by species)", "Energy (eV)",
-                    "Chemical Potentials (eV)", "Temperature (K)",
-                    "Accepted Exchange (%)",
-                ))
-                fh.write("-" * 140 + "\n")
+                fh.write(re_header("Replica", 8) + "\n")
+                fh.write(RE_RULE + "\n")
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
             self.logger.exception("Error opening output file %s", self._outfile)
@@ -496,12 +487,9 @@ class BatchedReplicaExchange:
                 mu_str = ', '.join(f"{s}: {v:.3f}" for s, v in r._mu.items())
                 attempts = self.exchange_attempts[i]
                 pct = (self.exchange_successes[i] / attempts * 100) if attempts else 0.0
-                self._outfile_handle.write(
-                    "{:<8} {:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}\n".format(
-                        i, r._step, count_str, r.E_old, mu_str,
-                        r._temperature, pct,
-                    )
-                )
+                self._outfile_handle.write(re_row(
+                    i, r._step, count_str, r.E_old, mu_str, r._temperature,
+                    pct, width=8) + "\n")
             self._outfile_handle.flush()
         except (OSError, AttributeError):
             self.logger.exception("Error writing to %s", self._outfile)

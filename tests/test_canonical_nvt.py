@@ -106,7 +106,7 @@ def test_minima_file_append_only_records_improvements(tmp_path):
     # any further frames must each correspond to a strict improvement.
     assert n_frames >= 1
     assert mc._best_atoms is not None
-    assert mc._best_score == pytest.approx(mc.lowest_energy)
+    assert mc._best_score == pytest.approx(mc._best_energy)
 
 
 def test_minima_file_overwrite_keeps_single_frame(tmp_path):
@@ -141,7 +141,5 @@ def test_get_set_state_roundtrip(tmp_path):
 
         mc.set_state(state)
         assert mc._current_energy == saved_energy
-        kvp = mc.atoms.info['key_value_pairs']['potential_energy']
-        assert kvp == saved_energy
     finally:
         mc.finalize_run()

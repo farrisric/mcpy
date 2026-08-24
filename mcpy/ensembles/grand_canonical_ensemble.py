@@ -139,6 +139,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             + "\n" + "-" * self._table_width + "\n"
         )
 
+    def _row(self, ratio_str: str) -> str:
+        return "{:<10} {:<10} {:<15.6f} {:<{w}}".format(
+            self._step, self.n_atoms, self.E_old, ratio_str,
+            w=self._ratio_col_width)
+
     def write_outfile(self, step: int = None, energy: float = None) -> None:
         """Write one row: step, N, energy, per-interval acceptance ratios.
 
@@ -162,13 +167,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             for r in acceptance_ratios
         )
         try:
-            self._outfile_handle.write("{:<10} {:<10} {:<15.6f} {:<{w}}\n".format(
-                self._step,
-                self.n_atoms,
-                self.E_old,
-                ratio_str,
-                w=self._ratio_col_width,
-            ))
+            self._outfile_handle.write(self._row(ratio_str) + "\n")
             self._outfile_handle.flush()
             self._last_logged_step = self._step
         except (OSError, AttributeError):
@@ -350,9 +349,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             return
         try:
             placeholder = ", ".join("N/A" for _ in self.move_selector.move_list)
-            self._outfile_handle.write("{:<10} {:<10} {:<15.6f} {:<{w}}\n".format(
-                0, self.n_atoms, self.E_old, placeholder, w=self._ratio_col_width,
-            ))
+            self._outfile_handle.write(self._row(placeholder) + "\n")
             self._outfile_handle.flush()
             self._last_logged_step = 0
         except (OSError, AttributeError):

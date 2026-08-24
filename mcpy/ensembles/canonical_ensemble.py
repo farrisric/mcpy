@@ -2,7 +2,6 @@ import logging
 import time
 
 import numpy as np
-from ase import Atoms
 from ase.units import kB as boltzmann_constant
 
 from .base_ensemble import BaseEnsemble
@@ -24,12 +23,12 @@ class CanonicalEnsemble(BaseEnsemble):
     def __init__(self,
                  atoms,
                  calculator,
+                 optimizer,
+                 move_selector,
                  cells=None,
                  random_seed=None,
-                 optimizer=None,
                  fmax=0.1,
                  temperature=300,
-                 move_selector=None,
                  constraints=None,
                  traj_file: str = 'trajectory.xyz',
                  traj_mode: str = 'w',
@@ -57,7 +56,6 @@ class CanonicalEnsemble(BaseEnsemble):
         # promises as much).
         self._rng_acceptance = RandomNumberGenerator(seed=self._random_seed + 2)
 
-        self.lowest_energy = float('inf')
         self._current_energy = None
         self.atoms = atoms
         self.constraints = constraints
@@ -88,11 +86,10 @@ class CanonicalEnsemble(BaseEnsemble):
         # (and thus _beta) across an exchange; restoring them would collapse
         # the temperature ladder.
         self.atoms = state["atoms"]
+        # The energy baseline the next trial_step compares against. It travels
+        # in the state dict rather than in atoms.info, which would have to
+        # survive being pickled across MPI.
         self._current_energy = state["energy"]
-        # Guarantee the next trial_step reads a valid energy baseline after a
-        # config swap, without relying on the pickled .info surviving MPI.
-        self.atoms.info.setdefault("key_value_pairs", {})
-        self.atoms.info["key_value_pairs"]["potential_energy"] = state["energy"]
         # Restored only when present, so the restart round-trip is lossless;
         # ReplicaExchange strips these slot-bound keys before a swap -- see
         # GrandCanonicalEnsemble.set_state.
@@ -110,15 +107,12 @@ class CanonicalEnsemble(BaseEnsemble):
         p = np.exp(-potential_diff / (boltzmann_constant * self._temperature))
         return p > self._rng_acceptance.get_uniform()
 
-    def relax(self, atoms) -> Atoms:
-        atoms.info['key_value_pairs'] = {}
+    def relax(self, atoms) -> float:
+        """Relax ``atoms`` in place and return its relaxed potential energy."""
         atoms.calc = self._calculator
         opt = self._optimizer(atoms, logfile=None)
         opt.run(fmax=self._fmax)
-
-        Epot = atoms.get_potential_energy()
-        atoms.info['key_value_pairs']['potential_energy'] = Epot
-        return atoms
+        return atoms.get_potential_energy()
 
     def do_mutation(self):
         new_atoms = self.atoms.copy()
@@ -135,15 +129,10 @@ class CanonicalEnsemble(BaseEnsemble):
         if new_atoms is None:
             return 0
 
-        new_atoms = self.relax(new_atoms)
-
-        potential_i = self.atoms.info['key_value_pairs']['potential_energy']
-        potential_f = new_atoms.info['key_value_pairs']['potential_energy']
-        potential_diff = potential_f - potential_i
+        potential_f = self.relax(new_atoms)
+        potential_diff = potential_f - self._current_energy
 
         if self._acceptance_condition(potential_diff):
-            if potential_f < self.lowest_energy:
-                self.lowest_energy = potential_f
             self.atoms = new_atoms
             self._current_energy = potential_f
             self.move_selector.acceptance_counter()
@@ -159,9 +148,7 @@ class CanonicalEnsemble(BaseEnsemble):
         self.logger.info("Canonical Ensemble Monte Carlo starting "
                          "(T=%s K, outfile=%s)", self._temperature, self._outfile)
 
-        self.relax(self.atoms)
-        self._current_energy = self.atoms.get_potential_energy()
-        self.lowest_energy = self._current_energy
+        self._current_energy = self.relax(self.atoms)
         self.write_coordinates(self.atoms, self._current_energy)
         self.write_outfile(self._step, self._current_energy)
         self._record_minimum(self.atoms, self._current_energy)
@@ -175,9 +162,10 @@ class CanonicalEnsemble(BaseEnsemble):
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile(self._step, self._current_energy)
-            self.logger.debug("step=%d E=%s lowest_E=%s accepted=%d t=%.2fs",
-                              self._step, self._current_energy, self.lowest_energy,
-                              self._accepted_trials, self._last_step_seconds)
+            self.logger.debug("step=%d E=%s best_E=%s accepted=%d t=%.2fs",
+                              self._step, self._current_energy,
+                              self._best_energy, self._accepted_trials,
+                              self._last_step_seconds)
 
         if self._step % self._trajectory_write_interval == 0:
             # Current accepted configuration (unchanged on a rejected step).
