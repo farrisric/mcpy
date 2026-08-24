@@ -199,17 +199,14 @@ Save as ``submit_gcmc_alchemi.sh``:
    nvidia-smi -L
    "$PYTHON" -c "import torch; print('torch', torch.__version__, 'cu_avail', torch.cuda.is_available())"
 
-   "$PYTHON" "$SCRIPT" \
-       --checkpoint medium-mpa-0 \
-       --device cuda \
-       --T 500.0 \
-       --steps 1000 \
-       --delta-mu-O -0.5 \
-       --fmax 0.05 \
-       --relax-steps 500 \
-       --seed 42 \
-       --outdir "$RESULTS_DIR" \
-       --write-interval 1
+   cd "$RESULTS_DIR"
+   "$PYTHON" "$SCRIPT"
+
+The script takes no command-line flags: every setting is a constant at the
+top of the file (``CHECKPOINT``, ``TEMPERATURE``, ``STEPS``, ``DELTA_MU_O``,
+``FMAX``, ``SEED``, ...). Edit your copy before submitting, and note that the
+output files land in the working directory, which is why the job changes into
+``$RESULTS_DIR`` first.
 
 Submit with ``sbatch submit_gcmc_alchemi.sh``.
 
@@ -227,7 +224,7 @@ Key SLURM-script rules:
   (after the first size change it switches to dynamic shapes; one-time
   warmup, then ~1.3-1.4x faster). On nodes with tight host-memory limits the
   compile guard-building phase can OOM at startup — if you hit that (see
-  troubleshooting below), pass ``--no-compile`` to the simulation script.
+  troubleshooting below), set ``COMPILE_MODEL = False`` in the script.
 
 
 Batched replica exchange on one GPU
@@ -240,8 +237,9 @@ batched forward pass per MC step. This is the GPU path the package is built
 around. Unlike the MPI ``ReplicaExchange`` (one rank per replica), there is **no
 mpirun** and still only ``--gres=gpu:1``.
 
-The script is ``examples/04_replica_exchange_batched.py``. Replica temperatures are passed
-with ``--temperatures``; the number of values is the replica count.
+The script is ``examples/04_replica_exchange_batched.py``. It takes no
+command-line flags: the replica temperatures are the ``TEMPERATURES`` list at
+the top of the file, and its length is the replica count.
 
 Save as ``submit_re_gcmc_batched.sh``:
 
@@ -271,32 +269,23 @@ Save as ``submit_re_gcmc_batched.sh``:
    nvidia-smi -L
    "$PYTHON" -c "import torch; print('torch', torch.__version__, 'cu_avail', torch.cuda.is_available())"
 
-   "$PYTHON" "$SCRIPT" \
-       --temperatures 250 300 350 400 450 500 \
-       --checkpoint medium-mpa-0 \
-       --device cuda \
-       --gcmc-steps 200 \
-       --exchange-interval 10 \
-       --delta-mu-O -0.5 \
-       --seed 42 \
-       --outdir "$RESULTS_DIR" \
-       --write-interval 1
+   cd "$RESULTS_DIR"
+   "$PYTHON" "$SCRIPT"
 
 Submit with ``sbatch submit_re_gcmc_batched.sh``.
 
 Notes specific to the batched path:
 
-- **One GPU, one process.** All six replicas (the six ``--temperatures``
-  above) share a single ``AlchemiCalculator`` and are evaluated in one batched
-  forward pass. Keep ``--gres=gpu:1``; adding ranks or extra GPUs does not help
-  this path.
+- **One GPU, one process.** All replicas in ``TEMPERATURES`` share a single
+  ``AlchemiCalculator`` and are evaluated in one batched forward pass. Keep
+  ``--gres=gpu:1``; adding ranks or extra GPUs does not help this path.
 - **``torch.compile`` stays on by default**, same as the single-replica run:
   it handles GCMC's dynamic atom count via dynamic shapes after a one-time
-  warmup. ``--no-compile`` is only the escape hatch if the compile
+  warmup. ``COMPILE_MODEL = False`` is only the escape hatch if the compile
   guard-building phase OOMs on a node with tight host-memory limits.
-- **Replica count = number of ``--temperatures``.** More replicas means a
-  larger batch and more GPU memory; if startup OOMs, reduce the number of
-  temperatures before changing anything else.
+- **Replica count = length of ``TEMPERATURES``.** More replicas means a
+  larger batch and more GPU memory; if startup OOMs, shorten that list
+  before changing anything else.
 - **Outputs** land in ``$RESULTS_DIR``: per-replica ``gcmc_batched_*.out`` and
   ``.xyz`` files, plus a combined ``replica_exchange_batched.log`` with the
   exchange history.
@@ -338,7 +327,7 @@ Common failure modes
        ``Warp CUDA error 2: out of memory`` at startup
      - ``torch.compile`` tries to JIT-compile the model and the guard-building
        pass OOMs against the job's host-memory limit.
-     - Pass ``--no-compile`` to the script (sets ``compile_model=False``), or
+     - Set ``COMPILE_MODEL = False`` in the script (passes ``compile_model=False``), or
        request more host memory for the job.
 
 
