@@ -46,6 +46,11 @@ with :math:`\beta = 1/(k_B T)`. The acceptance probability for a trial move
 
    P_{ij}^{\mathrm{acc}} = \min\!\left(1,\; e^{-\beta (E_j - E_i)}\right).
 
+``temperature=0`` gives :math:`\beta = \infty`, a greedy descent that accepts only moves
+that do not raise the energy. Each trial is relaxed with the configured optimizer for at
+most ``steps`` steps (default 1000); a warning is logged when a relaxation stops at the cap
+before reaching ``fmax``.
+
 Typical use: structural optimization or thermal sampling at fixed stoichiometry.
 
 
@@ -236,10 +241,16 @@ Global minimum across replicas
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Both :class:`ReplicaExchange` and :class:`BatchedReplicaExchange` accept a
-``global_minimum_file`` argument. After all replicas finalise, the lowest-score
-configuration observed across the whole ladder is written as a single XYZ frame to that
-file. The MPI variant gathers per-rank bests to rank 0; the batched variant minimises
-over the in-process replicas. The per-replica ``minima_file`` history is independent of
+``global_minimum_file`` argument. After all replicas finalise, each replica's best
+configuration is collected; the MPI variant gathers per-rank bests to rank 0, and the
+batched variant reads its in-process replicas.
+
+- On a temperature ladder all replicas share :math:`\mu`, so their scores :math:`\Omega` are
+  comparable. The lowest-score configuration is written as a single XYZ frame.
+- On a :math:`\mu` ladder each score uses its own replica's :math:`\mu`, so no common score
+  exists. The file then holds one frame per rung, in rung order. Each frame is tagged
+  ``rank=<i>`` and carries that rung's own-:math:`\mu` score.
+ The per-replica ``minima_file`` history is independent of
 this and continues to live in the per-rank outputs (e.g. ``minima_rank_3.xyz``).
 
 
@@ -328,8 +339,11 @@ Notes:
   the trajectory, log, and minima paths) so that ranks do not race on the same files;
 - one MPI rank corresponds to one replica;
 - at the end of the run, rank 0 collects each replica's running best (via ``comm.gather``)
-  and writes the global minimum as a single XYZ frame to ``global_minimum_file``
-  (default ``"global_minimum.xyz"``; pass ``None`` to disable). See :ref:`running-minima`.
+  and writes it to ``global_minimum_file`` (default ``"global_minimum.xyz"``; pass ``None``
+  to disable): one frame on a temperature ladder, one frame per rung on a :math:`\mu`
+  ladder. See :ref:`running-minima`;
+- an exception on any rank aborts the whole MPI job (``comm.Abort``), because the other
+  ranks would otherwise wait forever in a collective call.
 
 
 `BatchedReplicaExchange`
@@ -351,7 +365,7 @@ Requirements:
 
 Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
 ``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
-written from ``min(replicas, key=best_score)`` after the run completes.
+written after the run completes (see :ref:`running-minima`).
 
 
 Choosing the right ensemble

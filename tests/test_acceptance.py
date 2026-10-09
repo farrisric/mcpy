@@ -38,9 +38,11 @@ class FixedRNG:
 # --------------------------------------------------------------------------
 
 def _nvt(temperature):
-    e = CanonicalEnsemble.__new__(CanonicalEnsemble)
-    e._temperature = temperature
-    return e
+    # The real constructor (it derives beta, inf at T = 0); acceptance needs
+    # nothing else, so the remaining collaborators are left empty.
+    return CanonicalEnsemble(atoms=None, calculator=None, optimizer=None,
+                             move_selector=None, temperature=temperature,
+                             random_seed=0, traj_file=None, outfile=None)
 
 
 def test_nvt_downhill_always_accepted():

@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 
 import numpy as np
 from ase import Atoms
@@ -80,9 +80,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self._ratio_col_width = max(20, _RATIO_COL_PER_MOVE * len(move_selector.move_list))
         self._table_width = 10 + 1 + 10 + 1 + 15 + 1 + self._ratio_col_width
 
-    def get_state(self) -> Dict[str, any]:
+    def get_state(self) -> Dict[str, Any]:
+        # A copy: the dict is pickled across MPI ranks (the live atoms carry
+        # the calculator, which may not pickle or may ship a whole model) and
+        # must not alias the configuration the sampler keeps mutating.
         return {
-            "atoms": self.atoms,
+            "atoms": self.atoms.copy(),
             "n_atoms": self.n_atoms,
             "energy": self.E_old,
             "mu": self._mu,
@@ -94,8 +97,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             "exchange_successes": self.exchange_successes,
         }
 
-    def set_state(self, state: Dict[str, any]) -> None:
+    def set_state(self, state: Dict[str, Any]) -> None:
         self.atoms = state["atoms"]
+        self._last_traj_step = None  # new configuration, same step: new frame
         self.E_old = state["energy"]
         self.n_atoms = state["n_atoms"]
         # Step count and exchange statistics are restored only when the dict
@@ -181,7 +185,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             template = self.units.molecules[specie]
             return len(find_molecules(
                 atoms, sorted(template.get_chemical_symbols())))
-        return atoms.get_chemical_symbols().count(specie)
+        # An atomic key counts free atoms only: the O of a CO molecule is
+        # not an O adatom (molecule_id < 0 marks atoms outside molecules).
+        symbols = np.asarray(atoms.get_chemical_symbols())
+        mol_ids = atoms.arrays.get('molecule_id')
+        if mol_ids is not None:
+            symbols = symbols[mol_ids < 0]
+        return int(np.count_nonzero(symbols == specie))
 
     def _minimum_score(self, atoms: Atoms, energy: float) -> float:
         """Grand potential Ω = E − Σ μ_i N_i. Comparing raw E across moves
@@ -347,11 +357,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
     def _write_initial_row(self) -> None:
         if self._outfile is None or self._outfile_handle is None:
             return
+        if self._last_logged_step == self._step:
+            return  # a resumed run: the previous run's last row is this one
         try:
             placeholder = ", ".join("N/A" for _ in self.move_selector.move_list)
             self._outfile_handle.write(self._row(placeholder) + "\n")
             self._outfile_handle.flush()
-            self._last_logged_step = 0
+            self._last_logged_step = self._step
         except (OSError, AttributeError):
             self.logger.exception("Error writing initial row to %s", self._outfile)
 

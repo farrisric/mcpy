@@ -215,38 +215,45 @@ def test_logger_exception_includes_traceback(caplog):
 # Lazy formatting in hot-loop debug calls
 # ---------------------------------------------------------------------------
 
-class _Boom:
-    """Object whose ``__format__`` / ``__str__`` raises if invoked."""
+def _lj_gcmc():
+    from ase import Atoms
+    from ase.calculators.lj import LennardJones
 
-    def __format__(self, spec):  # pragma: no cover - asserted by test
-        raise AssertionError(
-            f"format called with spec={spec!r}; argument was evaluated "
-            "even though DEBUG is disabled"
-        )
+    from mcpy.cell import Cell
+    from mcpy.ensembles import GrandCanonicalEnsemble
+    from mcpy.moves import InsertionMove, MoveSelector
 
-    def __str__(self):  # pragma: no cover - asserted by test
-        raise AssertionError("str called; argument was evaluated")
-
-
-def test_acceptance_condition_debug_is_lazy():
-    """When the logger is above DEBUG, %-args must not be formatted."""
-    from mcpy.ensembles import grand_canonical_ensemble as gce
-
-    # Ensure DEBUG is disabled on the module logger.
-    gce.logger.setLevel(logging.INFO)
-    # Drive the debug call directly with a poisoned argument. If lazy
-    # formatting is in place the call is a no-op; otherwise _Boom.__format__
-    # will raise and fail the test.
-    gce.logger.debug(
-        "Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, "
-        "Exp Arg %s, Potential diff: %.3e, Delta_particles: %d",
-        _Boom(), _Boom(), _Boom(), _Boom(), _Boom(), _Boom(), _Boom(),
-    )
+    atoms = Atoms('H', positions=[[1.0, 1.0, 1.0]], cell=[6.0] * 3, pbc=True)
+    cell = Cell(atoms, seed=1)
+    return GrandCanonicalEnsemble(
+        atoms=atoms, cells=[cell], units_type='LJ',
+        calculator=LennardJones(rc=3.0, smooth=False), mu={'H': 50.0},
+        species=['H'], temperature=1.0,
+        move_selector=MoveSelector([1], [InsertionMove(cell, species=['H'], seed=2)],
+                                   seed=3),
+        random_seed=4, traj_file=None, outfile=None)
 
 
-def test_do_gcmc_step_debug_is_lazy():
-    from mcpy.ensembles import grand_canonical_ensemble as gce
+def _assert_lazy(caplog, prefix):
+    """The matching record was logged with %-args (formatted only on emit),
+    not a pre-built f-string."""
+    recs = [r for r in caplog.records if r.msg.startswith(prefix)]
+    assert recs, f'no {prefix!r} debug record'
+    assert all(r.args for r in recs), 'message was formatted eagerly'
 
-    gce.logger.setLevel(logging.INFO)
-    gce.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
-                     _Boom(), _Boom(), _Boom())
+
+def test_acceptance_condition_debug_is_lazy(caplog):
+    """Drives the real insertion acceptance path at DEBUG."""
+    g = _lj_gcmc()
+    with caplog.at_level(logging.DEBUG, logger='mcpy.ensembles'):
+        g._acceptance_condition(0.0, 1, 100.0, 'H', 1)
+    _assert_lazy(caplog, 'Lambda_db:')
+
+
+def test_do_gcmc_step_debug_is_lazy(caplog):
+    """Drives a real accepted insertion (mu = +50 accepts every one)."""
+    g = _lj_gcmc()
+    with caplog.at_level(logging.DEBUG, logger='mcpy.ensembles'):
+        g.do_gcmc_step()
+    assert g.n_atoms == 2
+    _assert_lazy(caplog, 'Volume:')

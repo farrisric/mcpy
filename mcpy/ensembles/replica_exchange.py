@@ -122,7 +122,10 @@ class ReplicaExchange:
 
         self._re_step = 0
 
-        self.rng = RandomNumberGenerator(seed=seed)
+        # Per-rank stream: the lower rank of each pair draws the swap's u, so
+        # identical seeds gave every pair in a round the same u. Rank 0's
+        # stream (seed + 0) is the one broadcast for the pairing, unchanged.
+        self.rng = RandomNumberGenerator(seed=seed + self.rank)
         self.logger = logging.getLogger(f"{__name__}.rank{self.rank}")
 
         self._outfile = outfile
@@ -175,11 +178,17 @@ class ReplicaExchange:
                       - state2['atoms'].symbols.count(specie))
                 if dn:
                     delta += 3.0 * dn * np.log(l1[specie] / l2[specie])
-        exchange_prob = min(1.0, np.exp(delta))
+        if not np.isfinite(delta):
+            # min(1, exp(nan)) is 1: a diverged energy would always swap.
+            self.logger.warning(
+                'non-finite swap exponent (delta=%r); rejecting. A NaN/inf '
+                'replica energy usually means a diverged relaxation.', delta)
+            return 0.0
+        # exp() overflows to inf for a large positive delta; short-circuit.
+        exchange_prob = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
-            f"beta1: {beta1:.3f}, beta2: {beta2:.3f}, E1: {energy1:.3f}, "
-            f"E2: {energy2:.3f}, Delta {delta:.3f}, "
-            f"Rank: {self.rank}")
+            'beta1: %.3f, beta2: %.3f, E1: %.3f, E2: %.3f, Delta %.3f, Rank: %d',
+            beta1, beta2, energy1, energy2, delta, self.rank)
         return exchange_prob
 
     def _exchange_prob_mu(self, state1, state2):
@@ -213,30 +222,30 @@ class ReplicaExchange:
         return exchange_prob
 
     def do_exchange(self):
-        """Attempt an exchange with a neighboring replica."""
+        """Attempt an exchange with a neighboring replica. Counts the attempt
+        in ``gcmc.exchange_attempts`` only when this rank has a partner.
+
+        Communication errors propagate: swallowing one after a half-done
+        exchange leaves the partner blocked forever. ``run`` aborts the job.
+        """
         global_random = self.comm.bcast(self.rng.get_uniform(), root=0)
         partner_rank = self.get_partner_rank(global_random)
 
         if partner_rank is None:
-            self.logger.debug(f"No valid partner for rank {self.rank} at step {self._re_step} "
-                              f"(Random: {global_random:.3f})")
+            self.logger.debug('No valid partner for rank %d at step %d (Random: %.3f)',
+                              self.rank, self._re_step, global_random)
             return False
 
-        self.logger.debug(f"Step {self._re_step}: Attempting exchange "
-                          f"with partner rank {partner_rank}. "
-                          f"Random: {global_random:.3f}")
+        self.logger.debug('Step %d: Attempting exchange with partner rank %d. '
+                          'Random: %.3f', self._re_step, partner_rank, global_random)
+        self.gcmc.exchange_attempts += 1
 
         rank_state = self.gcmc.get_state()
-
-        try:
-            partner_state = self.comm.sendrecv(
-                sendobj=rank_state,
-                dest=partner_rank,
-                source=partner_rank,
-            )
-        except Exception:
-            self.logger.exception("Communication error with rank %s", partner_rank)
-            return False
+        partner_state = self.comm.sendrecv(
+            sendobj=rank_state,
+            dest=partner_rank,
+            source=partner_rank,
+        )
 
         # Both partners compute the same (symmetric) probability, but the
         # accept/reject random must be shared: the lower-rank partner draws it
@@ -244,18 +253,14 @@ class ReplicaExchange:
         # Drawing independently would let the per-rank RNGs (which drift out of
         # sync) disagree, leaving one config duplicated and the other lost.
         exchange_prob = self._exchange_prob(rank_state, partner_state)
-        try:
-            if self.rank < partner_rank:
-                u = self.rng.get_uniform()
-                self.comm.send(u, dest=partner_rank)
-            else:
-                u = self.comm.recv(source=partner_rank)
-        except Exception:
-            self.logger.exception("Communication error with rank %s", partner_rank)
-            return False
+        if self.rank < partner_rank:
+            u = self.rng.get_uniform()
+            self.comm.send(u, dest=partner_rank)
+        else:
+            u = self.comm.recv(source=partner_rank)
 
         if u < exchange_prob:
-            self.logger.debug(f"Accepted exchange with rank {partner_rank}")
+            self.logger.debug('Accepted exchange with rank %d', partner_rank)
             # Only the configuration travels on a swap. step and the exchange
             # tallies describe the slot, not the config; set_state restores
             # them when present (the restart round-trip), so strip them here.
@@ -266,23 +271,28 @@ class ReplicaExchange:
             self.gcmc.set_state(config_state)
             return True
         else:
-            self.logger.debug(f"Rejected exchange with rank {partner_rank}")
+            self.logger.debug('Rejected exchange with rank %d', partner_rank)
             return False
 
     def run(self):
-        """Run the Parallel Tempering GCMC simulation."""
-        # Per-rank GCMC initialization (opens its own outfile/traj).
-        self.gcmc.initialize_run()
-        if self.rank == 0:
-            self.initialize_outfile()
-        self.initialize_run()
+        """Run the Parallel Tempering GCMC simulation.
 
+        An exception on any rank aborts the whole MPI job (``comm.Abort``)
+        after closing this rank's files: the other ranks are blocked in a
+        collective or a sendrecv with it and would otherwise hang forever.
+        No collective runs on that error path.
+        """
         try:
+            # Per-rank GCMC initialization (opens its own outfile/traj).
+            self.gcmc.initialize_run()
+            if self.rank == 0:
+                self.initialize_outfile()
+            self.initialize_run()
+
             for step in range(self.gcmc_steps):
                 self.gcmc._run()
 
                 if step > 0 and step % self.exchange_interval == 0:
-                    self.gcmc.exchange_attempts += 1
                     if self.do_exchange():
                         self.gcmc.exchange_successes += 1
 
@@ -290,15 +300,13 @@ class ReplicaExchange:
                     self.write_outfile(step)
 
                 self._re_step += 1
-        finally:
-            self.gcmc.finalize_run()
-            if self._outfile_handle is not None:
-                try:
-                    self._outfile_handle.close()
-                except OSError:
-                    self.logger.exception("Error closing %s", self._outfile)
-                self._outfile_handle = None
-            self._write_global_minimum()
+        except BaseException:
+            self.logger.exception('rank %d failed; aborting all ranks', self.rank)
+            self._close_files()
+            self.comm.Abort(1)
+            raise
+        self._close_files()
+        self._write_global_minimum()
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
@@ -308,9 +316,21 @@ class ReplicaExchange:
                                  f"Energy: {state['energy']:.3f}, "
                                  f"Mu: {state.get('mu', 'N/A')}")
 
+    def _close_files(self) -> None:
+        """Close this rank's files. Local only: safe on the error path."""
+        self.gcmc.finalize_run()
+        if self._outfile_handle is not None:
+            try:
+                self._outfile_handle.close()
+            except OSError:
+                self.logger.exception("Error closing %s", self._outfile)
+            self._outfile_handle = None
+
     def _write_global_minimum(self) -> None:
-        """Gather each rank's running best, write the lowest one as a single
-        XYZ frame on rank 0. No-op if disabled or no replica saw any minimum.
+        """Gather each rank's running best and write them on rank 0: the
+        lowest-score one on a temperature ladder, one frame per rank on a mu
+        ladder (see ``write_global_minimum``). Collective. No-op if disabled
+        or no replica saw any minimum.
         """
         if self._global_minimum_file is None:
             return
@@ -321,12 +341,8 @@ class ReplicaExchange:
         gathered = self.comm.gather(local, root=0)
         if self.rank != 0:
             return
-        candidates = [(i, item) for i, item in enumerate(gathered) if item is not None]
-        if not candidates:
-            return
-        rank, (score, energy, atoms) = min(candidates, key=lambda kv: kv[1][0])
-        write_global_minimum(self._global_minimum_file, atoms, energy, score,
-                             rank, self.logger)
+        write_global_minimum(self._global_minimum_file, gathered,
+                             bool(getattr(self, 'mus', None)), self.logger)
 
     def initialize_run(self):
         for line in self._banner():

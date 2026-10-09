@@ -353,18 +353,20 @@ def test_degenerate_ladder_warning_names_the_ladder_kind(caplog):
 def test_dead_rung_warned_from_second_half_tally(caplog):
     """The documented real failure: the cumulative tally looks mixed (early
     free swaps inflate it forever), but one rung accepted nothing after the
-    midpoint. The whole-run check cannot see it; the per-rung second-half
+    midpoint. The whole-run check cannot see it; the per-pair second-half
     check must."""
-    pt = _tally_re([40, 80, 80, 80, 40], [20, 30, 30, 20, 0],
+    pt = _tally_re([40, 80, 80, 80, 40], [20, 35, 35, 20, 0],
                    mus=[{'CO': -1.0}] * 5)
-    pt._mid_attempts = [20, 40, 40, 40, 20]
-    pt._mid_successes = [10, 20, 22, 12, 0]
+    pt.pair_attempts = [40, 40, 40, 40]
+    pt.pair_successes = [20, 15, 20, 0]
+    pt._mid_attempts = [20, 20, 20, 20]
+    pt._mid_successes = [10, 10, 12, 0]
     with caplog.at_level(logging.WARNING,
                          logger='mcpy.ensembles.batched_replica_exchange'):
         pt._warn_if_ladder_degenerate()
     text = ' '.join(r.getMessage() for r in caplog.records)
-    assert 'rung 4' in text
-    assert 'rung 0' not in text  # rung 0 kept accepting in the second half
+    assert 'pair 3-4' in text
+    assert 'pair 0-1' not in text  # kept accepting in the second half
 
 
 def test_no_dead_rung_warning_without_midpoint_snapshot(caplog):

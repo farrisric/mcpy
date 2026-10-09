@@ -62,6 +62,12 @@ class BaseEnsemble(ABC):
         self._traj_handle = None
         self._outfile_handle = None
         self._initialized = False
+        # Set by finalize_run: a later run() continues the files it wrote
+        # instead of truncating them.
+        self._resume_files = False
+        # Step of the last trajectory frame, so a frame is never written
+        # twice for the same state (e.g. finalize_run after an aligned write).
+        self._last_traj_step = None
 
         self._minima_file = minima_file
         self._minima_mode = minima_mode
@@ -120,10 +126,16 @@ class BaseEnsemble(ABC):
             self.logger.exception("Error writing to file %s", self._outfile)
 
     def write_coordinates(self, atoms: Atoms, energy: float) -> None:
+        """Write one trajectory frame, at most once per step. Reset
+        ``_last_traj_step`` to ``None`` when the configuration changes without
+        a step (a replica-exchange swap) so the new state gets its frame."""
         if self._traj_file is None or self._traj_handle is None:
+            return
+        if self._last_traj_step == self._step:
             return
         try:
             write_xyz(atoms, energy, self._traj_handle)
+            self._last_traj_step = self._step
         except (OSError, AttributeError):
             self.logger.exception("Error writing to trajectory file %s", self._traj_file)
 
@@ -183,9 +195,10 @@ class BaseEnsemble(ABC):
         """Create the outfile, write header/metadata, leave handle open for appends."""
         if self._outfile is None:
             return
+        mode = 'a' if self._resume_files else self._outfile_mode
         try:
-            with open(self._outfile, self._outfile_mode) as outfile:
-                if self._outfile_mode == 'w':
+            with open(self._outfile, mode) as outfile:
+                if mode == 'w':
                     outfile.write(self.get_outfile_header())
                     outfile.write(self.get_outfile_metadata())
             self._outfile_handle = open(self._outfile, 'a')
@@ -199,15 +212,20 @@ class BaseEnsemble(ABC):
             return
         if self._traj_file is not None and self._traj_handle is None:
             try:
-                self._traj_handle = open(self._traj_file, self._traj_mode)
+                mode = 'a' if self._resume_files else self._traj_mode
+                self._traj_handle = open(self._traj_file, mode)
             except OSError:
                 self.logger.exception("Failed to open trajectory file '%s'", self._traj_file)
                 raise
         if self._minima_file is not None and self._minima_handle is None:
             try:
                 # 'w' opens read+write so we can truncate on each improvement
-                # without losing the handle (single-best mode).
-                mode = 'w+' if self._minima_mode == 'w' else 'a'
+                # without losing the handle (single-best mode). A resumed run
+                # keeps the current best ('a+' still truncates on improvement).
+                if self._minima_mode != 'w':
+                    mode = 'a'
+                else:
+                    mode = 'a+' if self._resume_files else 'w+'
                 self._minima_handle = open(self._minima_file, mode)
             except OSError:
                 self.logger.exception("Failed to open minima file '%s'", self._minima_file)
@@ -231,6 +249,7 @@ class BaseEnsemble(ABC):
             self.logger.info("Final energy (eV): %.6f", self.E_old)
         self.close_files()
         self._initialized = False
+        self._resume_files = True
 
     def get_outfile_header(self) -> str:
         return "STEP ENERGY\n"
@@ -253,16 +272,29 @@ class BaseEnsemble(ABC):
             self.finalize_run()
 
 
-def write_global_minimum(path, atoms, energy, score, rank, logger):
-    """Write one XYZ frame for the best configuration seen across replicas.
+def write_global_minimum(path, bests, per_rung, logger):
+    """Write the replicas' best configurations to ``path``.
+
+    ``bests`` holds one ``(score, energy, atoms)`` per replica, or ``None``
+    for a replica that recorded no minimum. Scores are grand potentials
+    Omega = E - sum mu N under each replica's own mu, so they are comparable
+    only when all replicas share mu (a temperature ladder): then the single
+    lowest-score frame is written. On a mu ladder (``per_rung=True``) no
+    common score exists, so one frame per rung is written in rung order,
+    each tagged with its ``rank`` and own-mu score.
 
     Shared by ``ReplicaExchange`` (which gathers over MPI ranks) and
-    ``BatchedReplicaExchange`` (which picks the local minimum); only finding
-    the winner differs between them.
+    ``BatchedReplicaExchange`` (which reads its in-process replicas).
     """
+    entries = [(rank, best) for rank, best in enumerate(bests) if best is not None]
+    if not entries:
+        return
+    if not per_rung:
+        entries = [min(entries, key=lambda kv: kv[1][0])]
     try:
         with open(path, 'w') as fh:
-            write_xyz(atoms, energy, fh, extra=f'rank={rank} score={score:.6f}')
+            for rank, (score, energy, atoms) in entries:
+                write_xyz(atoms, energy, fh, extra=f'rank={rank} score={score:.6f}')
     except OSError:
         logger.exception("Error writing global minimum to %s", path)
 
