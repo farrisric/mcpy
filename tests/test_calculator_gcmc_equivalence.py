@@ -2,10 +2,14 @@
 
 This is an *integration* test: unlike the rest of ``tests/`` it needs ``torch``,
 ``mace-torch``, ``nvalchemi`` and (in practice) a GPU, plus the ``medium-mpa-0``
-MACE-MP checkpoint. It is skipped automatically when any of those are missing, so
-the lightweight CI matrix is unaffected. Run it in the GPU env with::
+MACE-MP checkpoint. It is opt-in, not CI. Run it in the GPU env with::
 
-    pytest tests/test_calculator_gcmc_equivalence.py -v -s
+    MCPY_GPU_TESTS=1 pytest tests/test_calculator_gcmc_equivalence.py -v -s
+
+Without ``MCPY_GPU_TESTS`` the module skips before it touches torch. The gate is
+an environment variable rather than an import probe on purpose: importing torch
+in an env where it is misconfigured raises SIGBUS, which ``importorskip`` cannot
+catch, so a probe would take the whole collection down.
 
 Why a "shadow" comparison instead of two independent runs
 ---------------------------------------------------------
@@ -33,6 +37,10 @@ import os
 import numpy as np
 import pytest
 from ase.cluster import Octahedron
+
+if not os.environ.get('MCPY_GPU_TESTS'):
+    pytest.skip('set MCPY_GPU_TESTS=1 to run (needs torch, mace, nvalchemi, GPU)',
+                allow_module_level=True)
 
 torch = pytest.importorskip('torch')
 pytest.importorskip('mace')
