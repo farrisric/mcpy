@@ -72,7 +72,7 @@ class CustomCell(Cell):
         return bool(np.all((frac >= 0.0) & (frac < 1.0)))
 
     def is_point_exchangeable(self, point):
-        """Same asymmetry as :meth:`get_atoms_specie_inside_cell`: inside the
+        """Same asymmetry as ``get_atoms_specie_inside_cell``: inside the
         xy footprint and at or above the cell floor, with the z upper bound
         dropped.
 

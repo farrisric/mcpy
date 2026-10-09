@@ -14,7 +14,7 @@ place; the ensemble rolls back on rejection.
 .. autoclass:: mcpy.moves.MoveSelector
    :members:
 
-.. autoclass:: mcpy.moves.base_move.BaseMove
+.. autoclass:: mcpy.moves.BaseMove
    :members:
 
 Particle exchange

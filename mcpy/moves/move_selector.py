@@ -27,9 +27,9 @@ class MoveSelector:
 
     Tracks two sets of counters:
       * per-interval counters (``move_counter`` / ``move_acceptance``) cleared
-        by :meth:`reset_counters` — used for live "recent" acceptance ratios.
+        by ``reset_counters()`` - used for live "recent" acceptance ratios.
       * cumulative counters (``move_counter_total`` /
-        ``move_acceptance_total``) — never reset; used by ``finalize_run``.
+        ``move_acceptance_total``) - never reset; used by ``finalize_run``.
 
     Failed trial moves (``do_trial_move`` returning ``False`` in place of the
     atoms) are recorded in ``move_failed_counter`` /
@@ -111,7 +111,7 @@ class MoveSelector:
         Molecule moves set ``last_exchange_count`` (in-cell molecule count of
         their species); atomic moves don't have the attribute, so this returns
         ``None`` and the ensemble falls back to its total-atom convention
-        (docs/gcmc_acceptance_convention.rst). Stateful like :meth:`get_volume`:
+        (docs/gcmc_acceptance_convention.rst). Stateful like the cell's ``get_volume()``:
         valid for the move chosen by the last :meth:`do_trial_move`.
         """
         return getattr(self.move_list[self.to_use], 'last_exchange_count', None)
@@ -134,7 +134,7 @@ class MoveSelector:
         return out
 
     def interval_ratios(self):
-        """Acceptance ratios since the last :meth:`reset_counters`."""
+        """Acceptance ratios since the last ``reset_counters()``."""
         return self._ratios(self.move_acceptance, self.move_counter,
                             self.move_failed_counter)
 

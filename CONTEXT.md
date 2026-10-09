@@ -65,7 +65,7 @@ _Avoid_: cell, unit cell, box (when it risks ambiguity)
 ### Acceptance & thermodynamics
 
 **Acceptance criterion**:
-The Metropolis-style rule deciding whether a trial move is kept, combining the energy change, the inverse temperature, and — for insertion and deletion — the de Broglie factor.
+The Metropolis-style rule deciding whether a trial move is kept, combining the energy change, the inverse temperature, and - for insertion and deletion - the de Broglie factor.
 _Avoid_: acceptance condition, accept/reject rule
 
 **Chemical potential (μ)**:
@@ -91,3 +91,21 @@ _Avoid_: element, atom type, particle type
 **Calculator**:
 The energy-and-forces backend that returns a configuration's energy to the acceptance criterion.
 _Avoid_: potential, model, engine
+
+### Molecules
+
+**Molecular species**:
+An exchangeable species that is a rigid molecule, registered by name with an ASE template; the name is also its key in the chemical potential.
+_Avoid_: molecule type, compound
+
+**Molecule insertion / deletion / displacement**:
+Moves that add, remove, or rigidly translate and rotate one whole molecule; their acceptance counts molecules of that species, not atoms.
+_Avoid_: rigid-body move, group move
+
+**molecule_id**:
+The per-atom array that records membership: atoms of one molecule share a value, free atoms carry -1. It is restored on rejection and written to the trajectory.
+_Avoid_: molecule tag, mol index
+
+**Exchangeable region**:
+The part of the sampling volume from which particles may be deleted and in which they are counted. It equals the insertion region except for the custom slab volume, whose exchangeable region has no upper bound so desorbed particles stay deletable.
+_Avoid_: deletion region, counting region

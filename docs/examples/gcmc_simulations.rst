@@ -1,108 +1,56 @@
-Minimal GCMC on an Ag(111) slab
-===============================
+GCMC on a laptop: Lennard-Jones atoms and dimers
+=================================================
 
-Shortest possible GCMC example using only EMT, suitable for a quick smoke
-test of the install. For a calibrated MLIP-based run see
-:doc:`../getting_started`.
+Two CPU examples run the grand-canonical loop on a Lennard-Jones (LJ) fluid
+in a periodic box.
+They need only ASE, and their averages can be checked against LAMMPS
+``fix gcmc`` at the same conditions (``benchmark/README.md`` in the
+repository).
+For a surface with a machine-learned potential, go to
+:doc:`gcmc_custom_cell` or :doc:`../getting_started`.
 
-Goal
-----
 
-Run 500 GCMC steps of oxygen insertion/deletion on a clean Ag(111) slab at
-:math:`T = 500\,\mathrm{K}` and :math:`\mu_{\mathrm{O}} = -0.2\,\mathrm{eV}`,
-using EMT so it runs anywhere without GPUs or MACE checkpoints.
+Atomic GCMC: ``examples/00_hello_gcmc.py``
+------------------------------------------
 
-.. note::
+The script fills an empty 9 :math:`\sigma` box from a reservoir at
+:math:`T^* = 2` and :math:`\mu^* = -3`.
+Insertion and deletion change the particle count, and a displacement move
+equilibrates the particles already present.
+Every random stream is seeded, so the run repeats exactly.
 
-   EMT is **only** for plumbing tests — its O–Ag interaction is not
-   physical. Swap in MACE (or any ASE calculator) for production.
-   EMT also has its own energy scale: adsorbing one O changes the energy by
-   only about :math:`-0.05` eV, so :math:`\mu_{\mathrm{O}}` must sit near
-   that value. An MLIP-scale chemical potential such as :math:`-5` eV never
-   accepts an insertion on EMT.
+.. literalinclude:: ../../examples/00_hello_gcmc.py
+   :language: python
 
-Code
-----
+The run takes about three minutes on a laptop CPU.
+At the end it prints the average particle count over the second half of the
+run next to the LAMMPS value, :math:`\langle N \rangle = 219.2 \pm 1.0`.
+One run of 6000 steps lands within a few particles of it.
+:doc:`../getting_started` shows the particle-count trace of this exact run.
 
-.. code-block:: python
+The run writes two files.
+``hello_gcmc.out`` holds one line every 100 steps: the step, the particle
+count, the energy, and the acceptance ratio of each move over the last 100
+steps.
+``hello_gcmc.xyz`` holds the configuration every 100 steps, whether or not
+the last move was accepted, and frame 0 is the starting configuration.
 
-   import numpy as np
-   from ase.build import fcc111
-   from ase.calculators.emt import EMT
-   from ase.constraints import FixAtoms
 
-   from mcpy.calculators import BaseCalculator
-   from mcpy.cell import CustomCell
-   from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-   from mcpy.moves import InsertionMove, DeletionMove
-   from mcpy.moves.move_selector import MoveSelector
+Molecular GCMC: ``examples/02_molecule_gcmc.py``
+------------------------------------------------
 
-   atoms = fcc111('Ag', a=4.085, size=(3, 3, 3), vacuum=8.0, periodic=True)
-   atoms.set_constraint(FixAtoms(indices=[a.index for a in atoms if a.tag == 3]))
+The same box exchanges rigid LJ dimers instead of single atoms.
+The chemical potential is that of the whole molecule.
+``species`` stays empty because no atomic species is exchanged, and
+``molecules`` registers the dimer template under its name.
 
-   cell = CustomCell(
-       atoms,
-       custom_height=5.0,
-       bottom_z=atoms.positions[:, 2].max() + 0.5,
-       species_radii={'Ag': 2.75, 'O': 0.0},
-   )
+.. literalinclude:: ../../examples/02_molecule_gcmc.py
+   :language: python
 
-   # BaseCalculator wraps an ASE calculator with LBFGS pre-relaxation,
-   # which is the hybrid-GCMC workflow used throughout mcpy.
-   calculator = BaseCalculator(calculator=EMT(), steps=20, fmax=0.1)
-
-   ss = np.random.SeedSequence(0)
-   s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
-   moves = MoveSelector(
-       [1, 1],
-       [InsertionMove(cell, species=['O'], seed=s1),
-        DeletionMove(cell, species=['O'], seed=s2)],
-   )
-
-   gcmc = GrandCanonicalEnsemble(
-       atoms=atoms,
-       cells=[cell],
-       calculator=calculator,
-       mu={'O': -0.2},
-       units_type='metal',
-       species=['O'],
-       temperature=500.0,
-       move_selector=moves,
-       outfile='gcmc_demo.out',
-       traj_file='gcmc_demo.xyz',
-   )
-   gcmc.run(steps=500)
-
-Outputs
--------
-
-- ``gcmc_demo.out`` — step log with per-move acceptance ratios.
-- ``gcmc_demo.xyz`` — extended XYZ trajectory; each frame's comment line
-  carries ``energy=`` and ``Lattice=``.
-
-What the trajectory looks like
-------------------------------
-
-Running the same setup with a MACE-MP small foundation model (in place
-of EMT) over four :math:`\Delta\mu_O` values produces the following
-coverage trace — each line follows :math:`N_O` on the slab as a function
-of GCMC step:
-
-.. figure:: ../_static/coverage_evolution.png
-   :alt: O coverage vs GCMC step for four chemical potentials.
-   :width: 80%
-   :align: center
-
-   N\ :sub:`O` vs GCMC step at four :math:`\Delta\mu_O` values, Ag(111)
-   3×3×3, :math:`T = 500\,\mathrm{K}`. More oxidizing conditions (yellow)
-   drive higher coverage; reducing conditions (purple) keep the slab
-   nearly clean.
-
-The four trajectories can be concatenated and fed into the phase-diagram
-analyzer — see :doc:`phase_diagram_analysis`.
-
-Next steps
-----------
-
-- Replace EMT with a MACE checkpoint and sweep :math:`\mu_{\mathrm{O}}` to
-  build a phase diagram: see :doc:`../getting_started`.
+The run takes about two minutes on a laptop CPU.
+It prints the average molecule count over the second half of the run next
+to the LAMMPS value, :math:`\langle N_{\mathrm{mol}} \rangle = 72.5 \pm 1.0`.
+The trajectory carries the ``molecule_id`` array, so a restart from it keeps
+every molecule whole.
+:doc:`../molecular_adsorbates` explains the molecular moves and their
+chemical potential.

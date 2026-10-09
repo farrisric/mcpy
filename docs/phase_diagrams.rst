@@ -1,7 +1,7 @@
 Building phase diagrams from GCMC output
 ========================================
 
-:func:`mcpy.utils.phase_diagram.plot_phase_diagram` turns the trajectories of a
+:func:`mcpy.utils.plot_phase_diagram` turns the trajectories of a
 chemical-potential sweep into a phase diagram: it computes the formation energy
 of every frame, takes the lower envelope over a :math:`\Delta\mu` grid, and
 renders the figure with a structure thumbnail per stable phase.
@@ -18,7 +18,7 @@ function:
 
    from ase.io import read
 
-   from mcpy.utils.phase_diagram import plot_phase_diagram
+   from mcpy.utils import plot_phase_diagram
 
    # keep frame 0 (the clean starting slab) as the reference
    clean = read('sweep/dmu_-0.80/gcmc.xyz', index='0')
@@ -32,7 +32,7 @@ function:
        frames,
        adsorbate='O',
        metal_symbols=('Ag',),
-       mu_ref=e_o2 / 2,          # adsorbate reference on your calculator's scale
+       mu_ref=mu_o_ref,          # E(O2)/2 on your calculator's scale (derive_mu_gas)
        kind='surface',           # or 'nano' for nanoparticles
        T=500.0,
        dmu_range=(-1.0, 0.0),

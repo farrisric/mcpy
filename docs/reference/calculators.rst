@@ -24,16 +24,16 @@ With ``enable_cueq=True``, a checkpoint that MACE's cuEq conversion would corrup
 .. autoclass:: mcpy.calculators.BaseCalculator
    :members:
 
-.. autoclass:: mcpy.calculators.mace_f_calculator.MACE_F_Calculator
+.. autoclass:: mcpy.calculators.MACE_F_Calculator
    :members:
 
 .. autoclass:: mcpy.calculators.alchemi._AlchemiBase
    :members:
 
-.. autoclass:: mcpy.calculators.alchemi.AlchemiCalculator
+.. autoclass:: mcpy.calculators.AlchemiCalculator
    :members:
    :show-inheritance:
 
-.. autoclass:: mcpy.calculators.alchemi.AlchemiFCalculator
+.. autoclass:: mcpy.calculators.AlchemiFCalculator
    :members:
    :show-inheritance:

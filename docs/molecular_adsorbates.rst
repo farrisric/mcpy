@@ -74,7 +74,7 @@ convergence.
 The capped proposal stays symmetric, so no acceptance correction is needed.
 
 **BatchedReplicaExchange is the replica-exchange path.**
-The MPI :class:`ReplicaExchange` counts species by chemical symbol, which is
+The MPI :class:`~mcpy.ensembles.ReplicaExchange` counts species by chemical symbol, which is
 always zero for a molecular name, so its constructor raises
 ``NotImplementedError`` rather than silently accepting every swap.
 The batched variant counts molecules in its grand-potential bookkeeping and

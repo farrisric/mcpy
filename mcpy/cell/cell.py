@@ -121,7 +121,7 @@ class Cell(BaseCell):
         the exchangeable region.
 
         ``specie`` may be a single symbol or a list. The region test is
-        :meth:`_inside_mask`, which the box cell answers with "everywhere";
+        ``_inside_mask``, which the box cell answers with "everywhere";
         the region cells override it.
         """
         if len(atoms) == 0:

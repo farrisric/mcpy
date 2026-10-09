@@ -127,14 +127,18 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
     def get_outfile_metadata(self) -> str:
         ratio_label = f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
+        # LJ runs are in reduced units: energy in epsilon, T in epsilon/k_B.
+        lj = self.units.unit_type == "LJ"
+        energy_label = "Energy (eps)" if lj else "Energy (eV)"
+        temperature_label = "Temperature (reduced)" if lj else "Temperature (K)"
         header_row = "{:<10} {:<10} {:<15} {:<{w}}".format(
-            "Step", "N_atoms", "Energy (eV)", ratio_label,
+            "Step", "N_atoms", energy_label, ratio_label,
             w=self._ratio_col_width,
         )
         return (
             "Simulation Parameters:\n"
             f"  Units type: {self.units.unit_type}\n"
-            f"  Temperature (K): {self._temperature}\n"
+            f"  {temperature_label}: {self._temperature}\n"
             f"  Chemical potentials: {self._mu}\n"
             "  Acceptance ratios are per write-interval (cumulative totals "
             "in the finalize_run log).\n"
@@ -152,7 +156,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         """Write one row: step, N, energy, per-interval acceptance ratios.
 
         ``step``/``energy`` are accepted for compatibility with the
-        :class:`BaseEnsemble` signature but ignored — GCMC always logs its
+        :class:`BaseEnsemble` signature but ignored - GCMC always logs its
         own ``_step``/``E_old`` so the row matches the sampler state.
         """
         if self._last_logged_step == self._step:

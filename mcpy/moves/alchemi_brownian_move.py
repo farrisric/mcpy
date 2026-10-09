@@ -31,8 +31,11 @@ class AlchemiBrownianMove(BaseMove):
 
     Parameters
     ----------
-    calculator : AlchemiCalculator | AlchemiFCalculator
+    calculator : AlchemiFCalculator | AlchemiCalculator
         Calculator exposing ``run_md``; its model is reused for the MD.
+        The MD needs forces: an ``AlchemiCalculator`` that loads its own
+        model is energy-only by default, so build it with
+        ``energy_only=False`` (``run_md`` raises ``ValueError`` otherwise).
     temperature : float
         Langevin target temperature in Kelvin.
     friction : float

@@ -33,13 +33,14 @@ class BaseEnsemble(ABC):
 
         Files are not opened in ``__init__``; they are opened by
         :meth:`initialize_run`, which is called automatically from
-        :meth:`run`. Pass ``traj_file=None`` or ``outfile=None`` to disable
-        either output channel. Use ``traj_mode='a'`` / ``outfile_mode='a'``
-        to append to existing files (e.g. for restart).
+        :meth:`~mcpy.ensembles.BaseEnsemble.run`. Pass ``traj_file=None`` or
+        ``outfile=None`` to disable either output channel. Use
+        ``traj_mode='a'`` / ``outfile_mode='a'`` to append to existing files
+        (e.g. for restart).
 
         ``minima_file`` (off by default) enables basin-hopping-style output:
         a frame is written every time a new strictly-lower score is observed
-        (see :meth:`_minimum_score`). ``minima_mode='a'`` appends a history of
+        (see ``_minimum_score``). ``minima_mode='a'`` appends a history of
         improving minima; ``'w'`` keeps only the current running best.
         """
         self.logger = logger

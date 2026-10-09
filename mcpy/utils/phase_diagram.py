@@ -291,7 +291,7 @@ def plot_phase_diagram(
         Host species, used for per-atom normalization and structure labels.
     mu_ref : float
         Reference chemical potential of the adsorbate (e.g. ½E(H2)) [eV].
-    kind : {"surface", "nano"}
+    kind : str
         ``"surface"`` normalizes gamma by the in-plane cell area (meV/Å²);
         ``"nano"`` normalizes by the number of metal atoms (meV/atom).
     T : float
@@ -318,7 +318,7 @@ def plot_phase_diagram(
         Report the unnormalized formation energy in eV instead of the default
         per-atom (nano) or per-area (surface) value in meV.
     adsorbate_label : str | None
-        Species name used in the axis labels. Defaults to ``adsorbate`` —
+        Species name used in the axis labels. Defaults to ``adsorbate`` -
         pass e.g. ``"CO"`` when the adsorbate is counted via a proxy atom.
     atoms_per_reservoir_molecule : int
         Adsorbed units per reservoir gas molecule, used in the pressure
@@ -450,7 +450,7 @@ def plot_phase_diagram(
     for i in range(len(region_bounds) - 1):
         ax.axvspan(
             region_bounds[i], region_bounds[i + 1],
-            facecolor=colors[min(i, len(colors) - 1)], alpha=1.0, zorder=0,
+            facecolor=colors[min(i, len(colors) - 1)], alpha=0.35, zorder=0,
         )
 
     for x in transitions:

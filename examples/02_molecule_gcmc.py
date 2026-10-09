@@ -1,8 +1,12 @@
 """Molecular GCMC: rigid Lennard-Jones dimers exchanged with a reservoir.
 
 Same box and potential as ``00_hello_gcmc.py``, but the exchanged species is
-a whole molecule instead of a single atom. This is the setup mcpy's molecular
-moves are validated against LAMMPS ``fix gcmc`` with (``benchmark/README.md``).
+a whole molecule instead of a single atom. Box, dimer, temperature and mu are
+those of stage 2 of mcpy's LAMMPS ``fix gcmc mol`` validation
+(``benchmark/README.md``), where LAMMPS gives <N_mol> = 72.5 +- 1.0. That
+benchmark is exchange-only; the displacement move added here changes how fast
+the run equilibrates, not the average it equilibrates to. Runs on a laptop CPU
+in about two minutes.
 
 Three molecular moves appear here:
   * ``MoleculeInsertionMove`` places the rigid template at a random position
@@ -16,12 +20,14 @@ own ``.xyz`` with molecules intact.
 
     python examples/02_molecule_gcmc.py
 
-Writes ``molecule_gcmc.out`` and ``molecule_gcmc.xyz``. For a real adsorbate
+Writes ``molecule_gcmc.out`` and ``molecule_gcmc.xyz``, then prints <N_mol>
+over the second half of the run next to the LAMMPS reference. For a real adsorbate
 (CO, H2O, O2) on a surface, swap the template for an ASE-built molecule and
 the calculator for a machine-learned potential; see ``docs/molecular_adsorbates.rst``.
 """
 from ase import Atoms
 from ase.calculators.lj import LennardJones
+from ase.io import read
 
 from mcpy.cell import Cell
 from mcpy.ensembles import GrandCanonicalEnsemble
@@ -36,7 +42,9 @@ TEMPERATURE = 2.0  # reduced temperature
 # molecule in the reservoir plus its translational, rotational and pressure
 # contributions. It is not the per-atom value.
 MU = -6.0
-STEPS = 1000
+STEPS = 4000       # N_mol plateaus after ~2000 steps; the second half is averaged
+# Stage 2 of benchmark/README.md: LAMMPS fix gcmc mol at this box, T and mu.
+LAMMPS_N_MOL, LAMMPS_N_MOL_ERR = 72.48, 0.97
 
 SEED_INS, SEED_DEL, SEED_DIS, SEED_SEL, SEED_ENS, SEED_CELL = 1, 2, 3, 4, 5, 6
 
@@ -81,8 +89,11 @@ def main():
     )
     gcmc.run(STEPS)
 
-    print(f'final: {len(gcmc.atoms) // len(template)} molecules, '
-          f'E = {gcmc.E_old:.3f}')
+    frames = read('molecule_gcmc.xyz', index=':')
+    second_half = frames[len(frames) // 2:]
+    n_mol = sum(len(f) for f in second_half) / len(second_half) / len(template)
+    print(f'<N_mol> over the second half = {n_mol:.1f} '
+          f'(LAMMPS fix gcmc mol: {LAMMPS_N_MOL} +- {LAMMPS_N_MOL_ERR})')
 
 
 if __name__ == '__main__':

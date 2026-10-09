@@ -14,7 +14,8 @@ surface, and both species exchanged with their reservoirs.
     is a physical knob, and its balance point differs per checkpoint.
 
 Every setting is a constant below; edit and re-run. Set EXCHANGE_AG to False
-for the O-only setup that ``tests/test_ag111_gcmc_golden.py`` pins.
+for the O-only setup. ``tests/test_ag111_gcmc_golden.py`` pins that O-only
+setup with a different checkpoint and that checkpoint's own calibration.
 
 Requirements: pip install 'nvalchemi-toolkit[mace]', and a CUDA GPU.
 
@@ -41,32 +42,41 @@ RELAX_STEPS = 300     # max FIRE steps per energy evaluation
 FMAX = 0.05           # FIRE force threshold (eV/A)
 OPTIMIZER = 'fire2'   # 'fire2' usually converges in fewer steps than 'fire'
 
+# --- calibration -----------------------------------------------------------
+# Measured with CHECKPOINT = 'medium-mpa-0'. Shared with
+# examples/04_replica_exchange_batched.py: keep the two copies identical, and
+# re-measure all of them when you change the potential (docs/species_radii.rst).
+AG_LATTICE = 4.165   # fcc Ag lattice constant (A): the minimum of E(a), 4.166 A
+# Relaxed O-Ag bond of O in the fcc hollow of Ag(111) (2.136 A). Used twice:
+# as the exclusion radius an incoming O sees around Ag, and as how far below
+# the top layer the exchange region starts, so subsurface sites are reachable.
+R_O_AG = 2.14
+# An incoming Ag needs a larger radius: 2.75 A sits just below the relaxed Ag
+# adatom-Ag bond on Ag(111) (2.78 A). This is why each species gets its own
+# cell over the same region.
+R_AG_AG = 2.75
+# Exclusion radius around an existing O (A). A minimal clearance that stops an
+# insertion on top of an O atom, not a bond length.
+R_O = 0.5
+# Shift (eV) on the bulk Ag energy per atom. Carried over from the group's
+# earlier Ag-oxidation setup; set 0.0 for Ag in equilibrium with bulk Ag.
+MU_AG_CORRECTION = -0.176
+
 # --- system ----------------------------------------------------------------
-# Calibrated for O on Ag(111) with the small-density-agnesi MACE checkpoint.
-# Fixture geometry, not per-checkpoint numbers: only mu is derived at run time.
-AG_LATTICE = 4.165          # Ag fcc lattice constant (A)
 SLAB_SIZE = (16, 16, 4)     # fcc111 supercell (Nx, Ny, Nlayers) = 1024 atoms
 VACUUM = 10.0               # vacuum above and below the slab (A)
 FIX_LAYERS = 2              # bottom layers frozen
-
-# Relaxed O-Ag pair distance. Used twice: as the exclusion radius an incoming
-# O sees, and as how far below the top layer the exchange region starts.
-# Anchoring the region at the top layer instead would make it pure vacuum.
-R_O_AG = 2.068
-# An incoming Ag needs a full Ag-Ag distance instead, which is why each
-# species gets its own cell over the same region.
-R_AG_AG = 2.75
 CELL_HEIGHT = 7.0           # height of the exchange region (A)
-MIN_INSERT = 0.5            # O exclusion radius: no insertion closer than this to an O (A)
 
 # --- thermodynamics --------------------------------------------------------
 TEMPERATURE = 500.0
 DELTA_MU_O = -0.3           # shift applied to mu_O = E(O2)/2
-MU_AG_CORRECTION = -0.176   # bulk Ag reference correction
-EXCHANGE_AG = True          # False = O only, the golden-test setup
+EXCHANGE_AG = True          # False = O only
 
 # --- run -------------------------------------------------------------------
-STEPS = 5_000_000
+# A step takes a few seconds on one GPU (3.7 s measured on a 3.7k-atom
+# system), so this is several hours: a first look, not a converged sweep.
+STEPS = 10_000
 WRITE_INTERVAL = 10
 SEED = 42                   # one master seed; every RNG below derives from it
 
@@ -100,9 +110,9 @@ def main():
     z_top = float(atoms.positions[atoms.get_tags() == 1, 2].max())
     bottom_z = z_top - R_O_AG
     cell_o = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                        species_radii={'Ag': R_O_AG, 'O': MIN_INSERT}, seed=seed_cell_o)
+                        species_radii={'Ag': R_O_AG, 'O': R_O}, seed=seed_cell_o)
     cell_ag = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                         species_radii={'Ag': R_AG_AG, 'O': MIN_INSERT}, seed=seed_cell_ag)
+                         species_radii={'Ag': R_AG_AG, 'O': R_O}, seed=seed_cell_ag)
 
     # AlchemiFCalculator relaxes each trial structure with GPU-native FIRE,
     # honouring the FixAtoms constraint. Swap in AlchemiCalculator for
@@ -135,7 +145,7 @@ def main():
     move_selector = MoveSelector([1] * len(moves), moves, seed=seed_sel)
 
     nx, ny, nlayers = SLAB_SIZE
-    tag = f'Ag{nx * ny * nlayers}_111_dmuO_{DELTA_MU_O}_fire_fmax{FMAX}'
+    tag = f'Ag{nx * ny * nlayers}_111_dmuO_{DELTA_MU_O}_{OPTIMIZER}_fmax{FMAX}'
 
     gcmc = GrandCanonicalEnsemble(
         atoms=atoms,

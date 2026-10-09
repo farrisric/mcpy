@@ -7,19 +7,22 @@ provides random points for insertion, classifies atoms as "inside" the active re
 returns the accessible volume :math:`V_{\mathrm{free}}` used by the GCMC acceptance rules
 (see :ref:`free-volume`).
 
-Four cell geometries are exported from `mcpy.cell`:
+Five cell types are exported from `mcpy.cell`: four region geometries, and `NullCell` for
+moves that sample no region at all (displacement, shake, permutation and MD moves).
 
 .. code-block:: python
 
-   from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell
+   from mcpy.cell import Cell, CustomCell, SphericalCell, DomeCell, NullCell
 
 .. figure:: _static/fig_cells.png
-   :alt: Side views of the four cell geometries with the active region shaded.
+   :alt: Side views of the five cell types with the insertion region shaded.
    :width: 100%
    :align: center
 
-   The four cell geometries (side views). The shaded region is where
-   insertion points are drawn.
+   The five cell types (side views, ``docs/make_figures.py``). The shaded
+   region is where insertion points are drawn. The ``DomeCell`` sphere is
+   clipped at the support surface (``bottom_z``), and ``NullCell`` has no
+   region.
 
 
 Choosing exclusion radii (`species_radii`)
@@ -172,7 +175,7 @@ Key parameters:
        particle_species="Ag",
        bottom_z=surface_z,
        vacuum=3.0,
-       species_radii={"Ag": 2.068, "O": 0.0, "Al": 3.0},
+       species_radii={"Ag": 2.14, "O": 0.5, "Al": 3.0},
        mc_sample_points=100_000,
    )
    dome_cell.calculate_volume(atoms)
@@ -185,3 +188,6 @@ Choosing the right cell
 - `CustomCell` -- slab/surface windows inside a periodic box.
 - `SphericalCell` -- isolated clusters and nanoparticles.
 - `DomeCell` -- nanoparticles supported on a substrate (keeps insertions on the particle).
+- `NullCell` -- moves that need no region: ``DisplacementMove``, ``ShakeMove``,
+  ``PermutationMove``, ``BrownianMove`` and
+  ``AlchemiBrownianMove`` use it internally. Its region queries raise an error.

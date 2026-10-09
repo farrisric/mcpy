@@ -102,6 +102,14 @@ Runs a short Velocity-Verlet trajectory at a target temperature as the trial mov
 as a relaxation-like perturbation that explores the local basin more thoroughly than a
 single random displacement.
 
+`AlchemiBrownianMove`
+~~~~~~~~~~~~~~~~~~~~~
+
+Runs a short Langevin MD trajectory on the GPU as the trial move, reusing the model of an
+Alchemi calculator, so no second model is loaded. The MD needs forces: pass an
+``AlchemiFCalculator``, or an ``AlchemiCalculator`` built with ``energy_only=False``
+(an ``AlchemiCalculator`` that loads its own model is energy-only by default).
+
 .. warning::
 
    `BrownianMove` and `AlchemiBrownianMove` do not satisfy exact detailed balance.
@@ -111,3 +119,29 @@ single random displacement.
    Do not use them with an energy-only calculator when you need equilibrium averages.
 
 
+Molecular moves
+---------------
+
+Three moves exchange and move whole rigid molecules. They identify a molecule by the
+per-atom ``molecule_id`` array and take the ASE template and the species name used as the
+key in ``mu``. :doc:`molecular_adsorbates` explains the bookkeeping and the chemical
+potential.
+
+`MoleculeInsertionMove`
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Inserts the template at a random center of mass drawn from the cell's free volume, with a
+uniform random orientation. Optional ``max_molecules`` caps the population.
+
+`MoleculeDeletionMove`
+~~~~~~~~~~~~~~~~~~~~~~
+
+Deletes one whole molecule, drawn uniformly among those whose center of mass lies in the
+cell's exchangeable region. Optional ``min_molecules`` keeps a floor.
+
+`MoleculeDisplacementMove`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Translates one molecule by up to ``max_displacement`` and rotates it about its center of
+mass, rigidly. Optional ``max_angle`` caps the rotation for strongly anchored adsorbates.
+A move that would carry the center of mass out of the cell counts as a rejection.

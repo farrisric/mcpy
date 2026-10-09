@@ -160,7 +160,7 @@ def _load_model(
         # MACEWrapper.forward passes training=self.training down to MACE, where
         # it becomes create_graph/retain_graph on the force autograd. nn.Module
         # defaults to train mode, and from_checkpoint's wrapper.eval() (alias
-        # path below) never runs here — without this every force pass builds a
+        # path below) never runs here - without this every force pass builds a
         # retained second-order graph.
         wrapper.eval()
         return wrapper
@@ -266,7 +266,7 @@ class _AlchemiBase:
 
     Holds the model and the device/dtype/chunking state, the batching and
     neighbour-list helpers, the chunked ``get_potential_energies`` template, and
-    Langevin MD. A subclass implements :meth:`_evaluate_chunk`, which is the
+    Langevin MD. A subclass implements ``_evaluate_chunk``, which is the
     only thing that differs between evaluating and relaxing.
 
     Parameters
@@ -279,7 +279,7 @@ class _AlchemiBase:
     dtype : torch.dtype
         Model and data dtype. float32 recommended for speed.
     enable_cueq : bool
-        cuEquivariance kernel fusion — significant speedup on GPU.
+        cuEquivariance kernel fusion - significant speedup on GPU.
     compile_model : bool
         torch.compile the model. Adds ~30s warmup, then faster.
     max_neighbors : int | None
@@ -359,7 +359,7 @@ class _AlchemiBase:
         """
         Per-graph energies over multiple (possibly differently sized) structures.
 
-        One CUDA kernel launch per layer instead of N — the win behind batched
+        One CUDA kernel launch per layer instead of N - the win behind batched
         replica exchange on a single GPU.
 
         ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
@@ -453,7 +453,7 @@ class AlchemiCalculator(_AlchemiBase):
     Single-point MACE evaluation on the nvalchemi GPU-native stack. Use this
     when mcpy handles its own MC moves and only needs E(atoms).
 
-    Takes the shared parameters of :class:`_AlchemiBase`, plus:
+    Takes the shared parameters of :class:`~mcpy.calculators.alchemi._AlchemiBase`, plus:
 
     Parameters
     ----------
@@ -538,10 +538,10 @@ class AlchemiFCalculator(_AlchemiBase):
     Alchemi calculator with FIRE geometry relaxation.
 
     Mirrors MACE_F_Calculator: relax atoms with FIRE then return energy. Uses
-    the fully GPU-resident nvalchemi dynamics stack — significantly faster than
+    the fully GPU-resident nvalchemi dynamics stack - significantly faster than
     ASE FIRE above ~100 atoms.
 
-    Takes the shared parameters of :class:`_AlchemiBase`, plus:
+    Takes the shared parameters of :class:`~mcpy.calculators.alchemi._AlchemiBase`, plus:
 
     Parameters
     ----------
@@ -558,7 +558,7 @@ class AlchemiFCalculator(_AlchemiBase):
         to dt_max = 10*dt, unlike ASE's dtmax=1.0 cap; per-step displacement
         stays clamped by maxstep=0.2 A either way.
     optimizer : str
-        'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant —
+        'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant -
         typically converges in fewer steps).
     """
 
@@ -661,7 +661,7 @@ class AlchemiFCalculator(_AlchemiBase):
 
         Batch rows are removed with ``Batch.index_select`` and the optimizer's
         per-graph FIRE state is shrunk in lockstep with
-        ``_sync_state_to_batch`` — the same primitives nvalchemi's inflight
+        ``_sync_state_to_batch`` - the same primitives nvalchemi's inflight
         refill machinery uses. Positions and energy are harvested per graph at
         retirement; returns ``(per_graph_energies, step_count)``.
         """

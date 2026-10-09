@@ -16,7 +16,7 @@ The acceptance criterion
 
 Insertion and deletion are accepted with the de Broglie (grand-canonical)
 probabilities (see :class:`mcpy.ensembles.GrandCanonicalEnsemble` and
-:mod:`mcpy.utils.set_unit_constant`):
+:class:`mcpy.utils.SetUnits`):
 
 .. math::
 
@@ -96,7 +96,7 @@ mcpy meets this condition as follows:
 - ``DeletionMove`` and ``MoleculeDeletionMove`` compute the free volume of
   the trial state after the deletion, and report it through
   ``get_volume``.
-  Before this change the deletion used the volume of the state that still
+  Before ADR 0003 the deletion used the volume of the state that still
   held the deleted particle.
   That volume is too small by the particle's own exclusion sphere, which
   biased the deletion acceptance.
@@ -165,7 +165,7 @@ dissolve below the cell floor. ``CustomCell.get_atoms_specie_inside_cell``
 excludes atoms with ``z < bottom_z`` (subsurface, "absorbed"), so such atoms are
 neither counted nor eligible for deletion. Under the per-species convention this
 undercount inflates :math:`V/((N+1)\Lambda^3)` and insertion stays favored no
-matter how negative ``mu`` is — one-way accumulation decoupled from ``mu``.
+matter how negative ``mu`` is - one-way accumulation decoupled from ``mu``.
 
 The total-atom-count convention sidesteps this: as oxygen accumulates anywhere
 (surface *or* subsurface), ``N_total`` grows, which suppresses further insertion.
@@ -176,27 +176,29 @@ is never a deletion candidate), but it no longer drives runaway uptake.
 Change history
 --------------
 
-- ``668e732`` / earlier — both ensembles born using the total atom count.
-- ``adcc15b`` — switched ``GrandCanonicalEnsemble`` to the per-species count.
-- ``9a15425`` — switched ``BatchedReplicaExchange`` to the per-species count.
-- *this change* — reverted both back to the total atom count for reproducibility,
-  and recorded the discussion here.
+- ``668e732`` / earlier - both ensembles born using the total atom count.
+- ``adcc15b`` - switched ``GrandCanonicalEnsemble`` to the per-species count.
+- ``9a15425`` - switched ``BatchedReplicaExchange`` to the per-species count.
+- ``b97361f`` - reverted both back to the total atom count for reproducibility,
+  and recorded the discussion here (``8eabe76``).
+- ADR 0003 - the free volume ``V`` became one rule for insertion proposals,
+  insertion acceptance and deletion acceptance (section `The volume V`_).
 
 
 Where this lives in the code and tests
 --------------------------------------
 
-- ``mcpy/ensembles/grand_canonical_ensemble.py`` — ``do_gcmc_step`` passes
+- ``mcpy/ensembles/grand_canonical_ensemble.py`` - ``do_gcmc_step`` passes
   ``self.n_atoms`` to ``_acceptance_condition``.
-- ``mcpy/ensembles/batched_replica_exchange.py`` — ``_batched_single_move``
+- ``mcpy/ensembles/batched_replica_exchange.py`` - ``_batched_single_move``
   passes ``r.n_atoms``.
-- ``tests/test_acceptance.py`` — ``test_do_gcmc_step_feeds_total_atom_count``
+- ``tests/test_acceptance.py`` - ``test_do_gcmc_step_feeds_total_atom_count``
   guards the convention; ``test_total_vs_perspecies_count_shifts_effective_mu``
   and ``test_perspecies_count_inserts_where_total_rejects`` quantify the gap.
 - ``tests/test_audit_2026_10.py``: the ``test_p1_*`` tests guard the
   volume rule, including a two-state detailed-balance check of the full
   GCMC loop (``test_p1_two_state_gcmc_obeys_detailed_balance``).
-- ``tests/test_custom_cell_region.py`` —
+- ``tests/test_custom_cell_region.py`` -
   ``test_subsurface_oxygen_is_excluded_from_deletion_candidates`` documents the
   buried-O caveat.
 

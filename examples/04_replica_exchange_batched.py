@@ -39,19 +39,36 @@ EXCHANGE_INTERVAL = 10   # GCMC steps between swap attempts
 GCMC_STEPS = 200         # GCMC steps per replica, in total
 
 # --- potential -------------------------------------------------------------
-CHECKPOINT = 'mace-small-density-agnesi-stress.model'
+# A named checkpoint, downloaded on first use, or a path to a local .pt file.
+CHECKPOINT = 'medium-mpa-0'
 DEVICE = 'cuda'
 ENABLE_CUEQ = True       # cuEquivariance kernel fusion; verify per checkpoint
 COMPILE_MODEL = True     # torch.compile: ~2x faster forward pass
 
+# --- calibration -----------------------------------------------------------
+# Measured with CHECKPOINT = 'medium-mpa-0'. Shared with
+# examples/03_gcmc_surface_mace.py: keep the two copies identical, and
+# re-measure all of them when you change the potential (docs/species_radii.rst).
+AG_LATTICE = 4.165   # fcc Ag lattice constant (A): the minimum of E(a), 4.166 A
+# Relaxed O-Ag bond of O in the fcc hollow of Ag(111) (2.136 A). Used twice:
+# as the exclusion radius an incoming O sees around Ag, and as how far below
+# the top layer the exchange region starts, so subsurface sites are reachable.
+R_O_AG = 2.14
+# An incoming Ag needs a larger radius: 2.75 A sits just below the relaxed Ag
+# adatom-Ag bond on Ag(111) (2.78 A). This is why each species gets its own
+# cell over the same region.
+R_AG_AG = 2.75
+# Exclusion radius around an existing O (A). A minimal clearance that stops an
+# insertion on top of an O atom, not a bond length.
+R_O = 0.5
+# Shift (eV) on the bulk Ag energy per atom. Carried over from the group's
+# earlier Ag-oxidation setup; set 0.0 for Ag in equilibrium with bulk Ag.
+MU_AG_CORRECTION = -0.176
+
 # --- system ----------------------------------------------------------------
-AG_LATTICE = 4.1592
 SLAB_SIZE = (4, 4, 3)
 VACUUM = 8.0
-R_O_AG = 2.11            # exclusion radius an incoming O sees
-R_AG_AG = 2.75           # exclusion radius an incoming Ag sees
 CELL_HEIGHT = 7.0
-MIN_INSERT = 0.5         # O exclusion radius (A)
 
 # --- thermodynamics --------------------------------------------------------
 DELTA_MU_O = -0.3        # shift applied to mu_O = E(O2)/2
@@ -90,7 +107,7 @@ def main():
 
     # Measured with the running potential rather than hardcoded, so swapping
     # the checkpoint keeps the setup self-consistent.
-    mus = {'Ag': derive_mu_bulk(calculator, 'Ag', a=AG_LATTICE),
+    mus = {'Ag': derive_mu_bulk(calculator, 'Ag', a=AG_LATTICE) + MU_AG_CORRECTION,
            'O': derive_mu_gas(calculator, 'O2') + DELTA_MU_O}
 
     def gcmc_factory(T, rank):
@@ -109,9 +126,9 @@ def main():
         # Same region for both species, differing only in the radii, i.e. in
         # how much of that region each species may be inserted into.
         cell_ag = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                             species_radii={'Ag': R_AG_AG, 'O': MIN_INSERT}, seed=s[0])
+                             species_radii={'Ag': R_AG_AG, 'O': R_O}, seed=s[0])
         cell_o = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                            species_radii={'Ag': R_O_AG, 'O': MIN_INSERT}, seed=s[1])
+                            species_radii={'Ag': R_O_AG, 'O': R_O}, seed=s[1])
 
         move_selector = MoveSelector(
             [1, 1, 1, 1],

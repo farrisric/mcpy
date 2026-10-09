@@ -8,7 +8,7 @@ reference chemical potentials, and phase-diagram post-processing.
 matplotlib.
 
 
-.. autoclass:: mcpy.utils.set_unit_constant.SetUnits
+.. autoclass:: mcpy.utils.SetUnits
    :members:
 
 .. autoclass:: mcpy.utils.RandomNumberGenerator
@@ -27,6 +27,6 @@ Phase diagrams
 
 A worked example is in :doc:`../examples/phase_diagram_analysis`.
 
-.. autofunction:: mcpy.utils.phase_diagram.plot_phase_diagram
+.. autofunction:: mcpy.utils.plot_phase_diagram
 
-.. autofunction:: mcpy.utils.phase_diagram.analyze_phase_diagram_results
+.. autofunction:: mcpy.utils.analyze_phase_diagram_results

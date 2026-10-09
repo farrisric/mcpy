@@ -5,15 +5,16 @@ Requirements
 ------------
 
 - Python >= 3.11
-- ASE >= 3.23 (pulls in NumPy, SciPy, matplotlib)
-- (Optional) An MLIP backend such as MACE (``.[mace]``) or NVIDIA Alchemi (``.[alchemi]``)
-- (Optional) `mpi4py` for MPI replica-exchange runs
+- ASE >= 3.23, NumPy and SciPy (installed with mcpy)
+- Optional: matplotlib for the phase-diagram utilities (``.[plot]``)
+- Optional: an MLIP backend, MACE (``.[mace]``) or NVIDIA Alchemi (``.[alchemi]``)
+- Optional: ``mpi4py`` for MPI replica exchange (``.[mpi]`` or conda)
 
 From source
 -----------
 
-``mcpy`` is not published on PyPI (the ``mcpy`` name there is an unrelated
-macro library) — install from the repository:
+``mcpy`` is not published on PyPI (the ``mcpy`` name there belongs to an
+unrelated macro library), so install it from the repository:
 
 .. code-block:: bash
 
@@ -21,6 +22,7 @@ macro library) — install from the repository:
    cd mcpy
    pip install -e .
 
+This is enough for the CPU examples ``examples/00`` to ``examples/02``.
 Add the ``test`` extra to run the test suite (``pip install -e .[test]``).
 
 Verify the installation
@@ -28,40 +30,37 @@ Verify the installation
 
 .. code-block:: bash
 
-   python -c "import mcpy, ase; print('mcpy', mcpy.__version__)"
+   python -c "import mcpy; print('mcpy', mcpy.__version__)"
+   python examples/00_hello_gcmc.py   # about three minutes on a CPU
 
-MLIP backends
--------------
+MACE backend
+------------
 
-Install only the backends you intend to use. For MACE
-(``MACE_F_Calculator`` and the bundled examples):
+``MACE_F_Calculator`` wraps a MACE model in a relaxation and needs
+``mace-torch``:
 
 .. code-block:: bash
 
    pip install -e .[mace]
 
-GPU support follows each backend's own installation guide.
+GPU support follows the MACE installation guide.
 
 NVIDIA Alchemi backend (optional)
 ---------------------------------
 
-For GPU-native MACE evaluation, ``mcpy`` ships an optional ``AlchemiCalculator``
-and ``AlchemiFCalculator`` backed by `nvalchemi-toolkit
-<https://github.com/NVIDIA/nvalchemi-toolkit>`_. Recommended for systems
-with **≥500 atoms** on CUDA — the repository benchmark measured a **3.08x
-speedup on a 586-atom GCMC run** (20 steps, MACE+LBFGS vs Alchemi+FIRE,
-RTX 5090; see the README).
-
-Install via the ``alchemi`` extra:
+``AlchemiCalculator`` and ``AlchemiFCalculator`` evaluate MACE on the GPU
+through `nvalchemi-toolkit <https://github.com/NVIDIA/nvalchemi-toolkit>`_,
+and ``AlchemiFCalculator`` also relaxes each trial with a GPU-native FIRE
+optimizer.
+They are the backend of ``examples/03`` and ``examples/04``.
+Install them with the ``alchemi`` extra:
 
 .. code-block:: bash
 
    pip install -e .[alchemi]
 
-This pulls in ``nvalchemi-toolkit[mace]``. Requires a CUDA-enabled PyTorch
-build matching your driver.
-
-Usage (drop-in replacement for ``MACE_F_Calculator``):
+This pulls in ``nvalchemi-toolkit[mace]``.
+It needs a CUDA-enabled PyTorch build that matches your driver.
 
 .. code-block:: python
 
@@ -69,30 +68,43 @@ Usage (drop-in replacement for ``MACE_F_Calculator``):
 
    calc = AlchemiFCalculator(
        checkpoint='medium-mpa-0',
-       steps=500,
+       steps=300,
        fmax=0.05,
        device='cuda',
        enable_cueq=True,
        compile_model=True,    # one-time warmup, then faster even at varying N
-       dt=1.0,                # tuned default; not 0.1
    )
 
-See ``NVALCHEMI_NOTES.md`` in the repository root for tuning details and
-known pitfalls.
+:doc:`reference/calculators` documents every parameter, the batched
+evaluation and the GPU-memory controls.
 
-MPI for Replica Exchange
+GCMC changes the atom count on every accepted insertion or deletion, so the
+PyTorch CUDA allocator caches blocks of many sizes and its reserved memory
+grows during a long run.
+Start long runs with expandable segments to keep it near the real peak:
+
+.. code-block:: bash
+
+   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python examples/03_gcmc_surface_mace.py
+
+MPI for replica exchange
 ------------------------
 
-`mpi4py` is not pulled in automatically, since it depends on a system MPI implementation.
-Install it with conda before running RE-GCMC:
+``ReplicaExchange`` runs one replica per MPI rank and needs ``mpi4py``.
+Install it with conda, which links a matching MPI library:
 
 .. code-block:: bash
 
    conda install mpi4py
 
-Then launch a replica-exchange simulation with one MPI rank per replica. On a
-single GPU prefer ``BatchedReplicaExchange``, which needs no MPI:
+Then launch the script with exactly one rank per rung of the ladder, for
+example four ranks for four temperatures:
 
 .. code-block:: bash
 
-   python examples/04_replica_exchange_batched.py
+   mpirun -n 4 python re_lj.py
+
+:doc:`examples/replica_exchange` gives a complete ``re_lj.py``.
+On a single GPU, ``BatchedReplicaExchange`` is the better choice: it needs no
+MPI and runs as a plain Python process
+(``python examples/04_replica_exchange_batched.py``).

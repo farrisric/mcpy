@@ -517,3 +517,15 @@ def test_missing_species_radius_raises_a_named_error():
                       species_radii={'Cu': 2.4}, mc_sample_points=64, seed=0)
     with pytest.raises(ValueError, match=r"no radius for \['O'\]"):
         cell.calculate_volume(atoms)
+
+
+def test_displacement_on_empty_box_is_a_failed_proposal():
+    """A GCMC box starts empty; drawing the displacement move first must not
+    crash the run (it raised ValueError before)."""
+    from ase import Atoms
+
+    from mcpy.moves import DisplacementMove
+
+    result = DisplacementMove(species=['H'], seed=1).do_trial_move(
+        Atoms(cell=[5.0] * 3, pbc=True))
+    assert result[0] is False and result[1] == 0

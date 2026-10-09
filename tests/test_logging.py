@@ -257,3 +257,10 @@ def test_do_gcmc_step_debug_is_lazy(caplog):
         g.do_gcmc_step()
     assert g.n_atoms == 2
     _assert_lazy(caplog, 'Volume:')
+
+
+def test_lj_outfile_header_uses_reduced_units():
+    """An LJ run is in reduced units, so its log must not claim eV or K."""
+    header = _lj_gcmc().get_outfile_metadata()
+    assert 'Energy (eps)' in header and 'Temperature (reduced)' in header
+    assert '(eV)' not in header and '(K)' not in header

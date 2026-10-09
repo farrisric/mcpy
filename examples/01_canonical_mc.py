@@ -1,13 +1,17 @@
 """Canonical (NVT) Monte Carlo: chemical ordering in a CuAu nanoparticle.
 
-Runs on a laptop CPU in about a minute with ASE's built-in EMT potential,
+Runs on a laptop CPU in about ten seconds with ASE's built-in EMT potential,
 which is a genuine (if simple) potential for Cu and Au.
 
-The particle count never changes here. Two moves explore the configuration
-space instead: ``PermutationMove`` swaps a Cu and an Au atom, and
-``DisplacementMove`` nudges atoms. Every trial is relaxed with LBFGS before
-the Metropolis test, so this doubles as a basin-hopping search --
-``minima_file`` collects every configuration that beats the previous best.
+The particle count never changes here. Two permutation moves explore the
+chemical ordering instead: a single Cu-Au swap refines the order, and a
+compound move swaps four pairs at once to jump between orderings that one
+swap cannot connect. Every trial is relaxed with LBFGS before the Metropolis
+test, so this doubles as a basin-hopping search: ``minima_file`` collects
+every configuration that beats the previous best.
+
+The run starts from a random Cu-Au mix. Au segregates to the surface, and the
+script prints how many of the 42 surface sites Au holds at the end.
 
     python examples/01_canonical_mc.py
 
@@ -19,7 +23,7 @@ from ase.cluster import Icosahedron
 from ase.optimize import LBFGS
 
 from mcpy.ensembles import CanonicalEnsemble
-from mcpy.moves import DisplacementMove, MoveSelector, PermutationMove
+from mcpy.moves import MoveSelector, PermutationMove
 from mcpy.utils.logging import configure as configure_logging
 
 TEMPERATURE = 500
@@ -27,7 +31,7 @@ STEPS = 300
 
 # One seed per stochastic component. Leaving any of them at None makes the
 # run unrepeatable.
-SEED_STRUCTURE, SEED_PERM, SEED_DIS, SEED_SEL, SEED_ENS = 0, 1, 2, 3, 4
+SEED_STRUCTURE, SEED_SWAP, SEED_JUMP, SEED_SEL, SEED_ENS = 0, 1, 2, 3, 4
 
 
 def build_particle():
@@ -46,13 +50,13 @@ def main():
 
     atoms = build_particle()
 
-    # PermutationMove changes the chemical order; DisplacementMove relaxes
-    # the geometry around it. The permutation is sampled three times as often
-    # because ordering is what this run is about.
+    # Single swaps are cheap to accept and do most of the work; the rarer
+    # four-pair jump is accepted less often but escapes orderings that single
+    # swaps would have to climb out of one uphill step at a time.
     move_selector = MoveSelector(
         [3, 1],
-        [PermutationMove(species=['Cu', 'Au'], seed=SEED_PERM),
-         DisplacementMove(species=['Cu', 'Au'], max_displacement=0.1, seed=SEED_DIS)],
+        [PermutationMove(species=['Cu', 'Au'], seed=SEED_SWAP),
+         PermutationMove(species=['Cu', 'Au'], n_swaps=4, seed=SEED_JUMP)],
         seed=SEED_SEL,
     )
 
@@ -73,6 +77,16 @@ def main():
         trajectory_write_interval=10,
     )
     mc.run(STEPS)
+
+    # The icosahedron's 13 innermost atoms are the core; the other 42 are the
+    # surface. EMT puts Au, the larger atom with the lower surface energy,
+    # on the surface.
+    final = mc.atoms
+    dist = np.linalg.norm(final.positions - final.positions.mean(axis=0), axis=1)
+    surface = np.argsort(dist)[13:]
+    n_au = sum(final[i].symbol == 'Au' for i in surface)
+    print(f'Au on the surface: {n_au} of {len(surface)} sites '
+          f'({final.get_chemical_symbols().count("Au")} Au in total)')
 
 
 if __name__ == '__main__':

@@ -58,12 +58,11 @@ class DisplacementMove(BaseMove):
         classic single-atom displacement; larger values bundle several
         displacements into a single trial for basin-hopping-style sampling.
         """
-        n = len(atoms)
-        if n == 0:
-            raise ValueError("No atoms to displace.")
         to_move = self._movable_indices(atoms)
         if to_move.size == 0:
-            return False, 0, 'X'  # e.g. no atom of ``species`` present yet
+            # An empty GCMC box, or no atom of ``species`` present yet: a
+            # failed proposal, like a deletion with nothing to delete.
+            return False, 0, 'X'
         if self.n_steps > to_move.size:
             raise ValueError(
                 f"n_steps={self.n_steps} exceeds movable atom count {to_move.size}"

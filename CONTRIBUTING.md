@@ -33,8 +33,14 @@ pip install -e ".[test]"
 pytest tests/
 ```
 
-The test suite covers the cell, move, and logging modules and does not require
-`mace-torch`, `torch`, or `mpi4py`. CI runs these tests on Python 3.11–3.13.
+The test suite covers the cells and their free-volume rule, every move
+(atomic and molecular), the acceptance criteria and their detailed balance,
+rollback of arrays and constraints, the canonical and grand-canonical
+ensembles, both replica-exchange drivers and their swap rules, output files,
+reference chemical potentials, the phase-diagram utilities, and logging.
+It does not require `mace-torch`, `torch`, or `mpi4py`; the MPI and GPU tests
+skip when those are missing, and the GPU tests run only with
+`MCPY_GPU_TESTS=1`. CI runs the suite on Python 3.11-3.13.
 
 ## Linting
 

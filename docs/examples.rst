@@ -1,90 +1,50 @@
 Examples
 ========
 
-This section collects minimal, self-contained scripts for the three standard `mcpy`
-workflows: canonical Monte Carlo, grand-canonical Monte Carlo, and replica-exchange GCMC.
+The ``examples/`` directory of the repository holds five runnable scripts.
+Run them in order.
+None of them take command-line flags: every setting is a named constant at the
+top of the file, so you edit the file and run it again.
 
-Before browsing the individual examples, it is useful to recall the acceptance rules each
-workflow relies on and the thermodynamic definitions used downstream to build phase
-diagrams. The full derivations live in :doc:`ensembles` and :doc:`species_radii`; what
-follows is a quick reference.
+.. list-table::
+   :header-rows: 1
+   :widths: 30 46 24
 
+   * - Script
+     - What it shows
+     - Needs, runtime
+   * - `00_hello_gcmc.py <https://github.com/farrisric/mcpy/blob/main/examples/00_hello_gcmc.py>`_
+     - The GCMC loop on a Lennard-Jones fluid, checked against LAMMPS
+       ``fix gcmc``.
+     - ASE only, about 3 min on a CPU
+   * - `01_canonical_mc.py <https://github.com/farrisric/mcpy/blob/main/examples/01_canonical_mc.py>`_
+     - Canonical Monte Carlo and basin hopping: chemical ordering in a CuAu
+       nanoparticle with EMT.
+     - ASE only, about 10 s on a CPU
+   * - `02_molecule_gcmc.py <https://github.com/farrisric/mcpy/blob/main/examples/02_molecule_gcmc.py>`_
+     - Molecular GCMC: rigid Lennard-Jones dimers, checked against LAMMPS
+       ``fix gcmc mol``.
+     - ASE only, about 2 min on a CPU
+   * - `03_gcmc_surface_mace.py <https://github.com/farrisric/mcpy/blob/main/examples/03_gcmc_surface_mace.py>`_
+     - Production GCMC: O and Ag exchanged on Ag(111) with MACE-MPA-0.
+     - ``.[alchemi]`` and a CUDA GPU, hours
+   * - `04_replica_exchange_batched.py <https://github.com/farrisric/mcpy/blob/main/examples/04_replica_exchange_batched.py>`_
+     - Replica exchange on one GPU with batched energy evaluation.
+     - ``.[alchemi]`` and a CUDA GPU, hours
 
-Acceptance rules
-----------------
-
-Basin Hopping and Metropolis MC share the same functional form
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For a trial move from state :math:`i` to :math:`j`, both Basin Hopping (BH) and Metropolis
-Monte Carlo (MC) accept with
-
-.. math::
-
-   P_{ij}^{\mathrm{acc}} = \min\!\left(1,\; e^{-\beta (E_j - E_i)}\right),
-
-with :math:`\beta = 1/(k_B T)`. The interpretation of :math:`T` differs: in BH it is an
-*effective* control parameter that governs how aggressively the search escapes basins, while
-in Metropolis MC it is a *physical* temperature that sets the canonical distribution.
-
-GCMC insertion and deletion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Number-changing moves carry an extra de-Broglie factor relative to the Metropolis form:
-
-Deletion :math:`(N \rightarrow N-1)`:
-
-.. math::
-
-   P_{ij}^{\,N \rightarrow N-1} =
-   \min\!\left(1,\; \frac{N\, \Lambda^3}{z\, V_{\mathrm{free}}}
-   \,e^{-\beta (E_j - E_i)}\right),
-
-Insertion :math:`(N \rightarrow N+1)`:
-
-.. math::
-
-   P_{ij}^{\,N \rightarrow N+1} =
-   \min\!\left(1,\; \frac{z\, V_{\mathrm{free}}}{(N+1)\, \Lambda^3}
-   \,e^{-\beta (E_j - E_i)}\right),
-
-with activity :math:`z = e^{\beta \mu}` and thermal de Broglie wavelength
-:math:`\Lambda = h/\sqrt{2\pi m k_B T}`. The accessible free volume
-:math:`V_{\mathrm{free}}` -- estimated by the cell, with element-wise exclusion radii --
-replaces the geometric :math:`V` of the textbook expressions (see :doc:`species_radii`).
-
-
-Phase diagrams from GCMC ensembles
-----------------------------------
-
-The formation-energy construction, the lower-envelope logic, and the
-post-processing utilities are described in :doc:`phase_diagrams`.
-
-
-Examples by workflow
---------------------
-
-Canonical Monte Carlo (NVT)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The first three use simple potentials on purpose: they run anywhere, and their
+results can be checked against known values.
+The last two use a machine-learned potential for real chemistry.
+The pages below show each script in full and explain what to look for in its
+output.
+The acceptance rules that every script relies on are derived in
+:doc:`ensembles`.
 
 .. toctree::
    :maxdepth: 1
 
-   examples/mc_simulations.rst
-
-Grand Canonical Monte Carlo (GCMC)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. toctree::
-   :maxdepth: 1
-
-   examples/gcmc_custom_cell.rst
-   examples/gcmc_simulations.rst
-
-Replica-Exchange GCMC (RE-GCMC)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. toctree::
-   :maxdepth: 1
-
-   examples/phase_diagram_analysis.rst
+   examples/gcmc_simulations
+   examples/mc_simulations
+   examples/gcmc_custom_cell
+   examples/replica_exchange
+   examples/phase_diagram_analysis

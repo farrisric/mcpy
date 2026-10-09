@@ -32,6 +32,15 @@ autodoc_typehints = 'description'
 
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# Every cross-reference must resolve, so -W catches a broken one. Types from
+# ASE, NumPy, torch and the standard library are not documented here and are
+# ignored by name.
+nitpicky = True
+nitpick_ignore_regex = [
+    (r'py:.*', r'(ase|numpy|np|torch|mace|nvalchemi|mpi4py|logging)(\..*)?'),
+    (r'py:class', r'(optional|callable|MACEWrapper)'),
+]
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
