@@ -1,6 +1,8 @@
 [flake8]
 max-line-length = 100
 extend-ignore = E203
+# inline-quotes / multiline-quotes take effect only when the flake8-quotes
+# plugin is installed. CI does not install it yet.
 inline-quotes = '
 multiline-quotes = """
 exclude = .ipynb_checkpoints

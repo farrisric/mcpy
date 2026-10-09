@@ -1,8 +1,10 @@
 from .random_number_generator import RandomNumberGenerator
 from .reference_mu import derive_mu_bulk, derive_mu_gas
+from .set_unit_constant import SetUnits
 
 __all__ = [
     'RandomNumberGenerator',
+    'SetUnits',
     'analyze_phase_diagram_results',
     'derive_mu_bulk',
     'derive_mu_gas',
