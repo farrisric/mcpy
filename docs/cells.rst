@@ -29,6 +29,10 @@ Every non-trivial cell takes a `species_radii` argument: an element-wise diction
 exclusion radii. These radii control how the free-volume Monte Carlo estimator labels each
 sampled point as occupied or free, and therefore directly determine the
 :math:`V_{\mathrm{free}}` that appears in the GCMC acceptance terms.
+Insertion moves apply the same rule: a point within an atom's radius (periodic images
+included) is redrawn, so insertions are uniform over :math:`V_{\mathrm{free}}`.
+Deletion moves use :math:`V_{\mathrm{free}}` of the state after the deletion.
+See :doc:`gcmc_acceptance_convention` for why both rules are needed.
 
 The thesis underlying this library calls this quantity :math:`r_{\mathrm{relax}}` and defines
 it operationally as the position of the first maximum in the radial distribution function of
@@ -46,8 +50,8 @@ Sampling resolution (`mc_sample_points`)
 `mc_sample_points` sets the number of random points used in the free-volume estimate.
 Larger values reduce statistical noise on :math:`V_{\mathrm{free}}` at the cost of one
 up-front sweep per configuration change. In practice, :math:`10^5` points is a good default
-for nanoparticle- and slab-sized systems. The cached estimate is reused until the atom count
-changes, so the cost is amortised over many trial moves of equal :math:`N`.
+for nanoparticle- and slab-sized systems. The ensemble recomputes the estimate after every
+accepted move, and each deletion trial computes one for its post-deletion state.
 
 
 `Cell` -- full periodic simulation box
@@ -57,6 +61,8 @@ changes, so the cost is amortised over many trial moves of equal :math:`N`.
 points are sampled uniformly in fractional coordinates and mapped to Cartesian space.
 
 Use this when the active region is simply the entire periodic box.
+Without `species_radii` nothing is excluded and the volume is the exact box volume.
+With `species_radii` the volume is the free volume, as for the other cells.
 
 .. code-block:: python
 
@@ -99,8 +105,10 @@ Key parameters:
 `SphericalCell` -- nanoparticle-centred region
 ----------------------------------------------
 
-`SphericalCell` is designed for finite clusters. On construction it centres the structure on
-the origin and defines a spherical active region of radius
+`SphericalCell` is designed for finite clusters. On construction it moves the center of mass
+of the structure to the center of the periodic box (to the origin when the atoms have no box).
+Wrapping the atoms into the box then keeps the particle whole.
+It defines a spherical active region of radius
 
 .. math::
 
@@ -109,6 +117,9 @@ the origin and defines a spherical active region of radius
 i.e. the distance from the centre to the outermost atom plus a user-specified vacuum gap.
 Insertions outside this radius are automatically rejected, so the sampling stays close to
 the particle surface without wasting moves in pure vacuum.
+The sphere must fit inside the periodic box along every periodic direction.
+If it does not, the constructor raises ``ValueError``.
+`DomeCell` applies the same check, and also raises when ``bottom_z`` leaves the dome empty.
 
 .. code-block:: python
 

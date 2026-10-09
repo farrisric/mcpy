@@ -141,7 +141,6 @@ move_list = [[1, 1],
                            seed=43215423143),
               InsertionMove(scell,
                             species=['O'],
-                            min_insert=0.5,
                             seed=3675437856)]]
 
 move_selector = MoveSelector(*move_list)
@@ -183,7 +182,7 @@ e_co = calculator.get_potential_energy(molecule('CO', cell=[20.0] * 3))
 
 moves = MoveSelector(
     [2, 2, 1],
-    [MoleculeInsertionMove(scell, co, 'CO', seed=1, min_insert=1.3),
+    [MoleculeInsertionMove(scell, co, 'CO', seed=1),
      MoleculeDeletionMove(scell, co, 'CO', seed=2),
      MoleculeDisplacementMove(scell, co, 'CO', seed=3,
                               max_displacement=0.6, max_angle=0.6)],

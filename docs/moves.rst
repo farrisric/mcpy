@@ -32,7 +32,7 @@ denominator, so the reported ratios reflect *viable* attempts only.
    selector = MoveSelector(
        probabilities=[1, 1],
        move_list=[
-           InsertionMove(cell, ["O"], seed=1, min_insert=0.5),
+           InsertionMove(cell, ["O"], seed=1),
            DeletionMove(cell, ["O"], seed=2),
        ],
    )
@@ -101,5 +101,13 @@ perturbation, typically combined with a local relaxation in the calculator wrapp
 Runs a short Velocity-Verlet trajectory at a target temperature as the trial move. Useful
 as a relaxation-like perturbation that explores the local basin more thoroughly than a
 single random displacement.
+
+.. warning::
+
+   `BrownianMove` and `AlchemiBrownianMove` do not satisfy exact detailed balance.
+   The acceptance uses the potential energy only.
+   It has no kinetic-energy term, and an MD or Langevin trajectory is not a symmetric proposal.
+   Use these moves for basin-hopping-style exploration with a relaxing calculator.
+   Do not use them with an energy-only calculator when you need equilibrium averages.
 
 

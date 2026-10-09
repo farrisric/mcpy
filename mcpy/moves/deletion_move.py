@@ -15,6 +15,7 @@ class DeletionMove(BaseMove):
                  min_atoms: int | None = None):
         super().__init__(cell, species, seed)
         self.min_atoms = min_atoms
+        self._trial_volume = None
 
     def do_trial_move(self, atoms) -> int:
         """
@@ -44,4 +45,12 @@ class DeletionMove(BaseMove):
             return False, -1, 'X'
         remove_index = int(self.rng.random.choice(indices_of_species))
         del atoms[remove_index]
+        self._trial_volume = self.cell.free_volume(atoms)
         return atoms, -1, selected_species
+
+    def get_volume(self) -> float:
+        """Free volume of the post-deletion state of the last trial: the
+        volume the reverse insertion would be proposed in. Exact detailed
+        balance needs this, not the volume of the state still holding the
+        deleted particle (docs/gcmc_acceptance_convention.rst)."""
+        return self._trial_volume

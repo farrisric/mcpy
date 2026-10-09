@@ -12,6 +12,14 @@ class AlchemiBrownianMove(BaseMove):
     calculator, exactly like any other move. ``FixAtoms`` constraints are
     honored.
 
+    .. warning::
+       Not exact detailed balance. The ensemble accepts on the potential
+       energy only: there is no kinetic-energy term, and a Langevin
+       trajectory is not a symmetric proposal. Use it as basin-hopping-style
+       exploration with a relaxing calculator (``AlchemiFCalculator``). Do
+       not use it with an energy-only calculator when you need equilibrium
+       averages.
+
     This move is pure Python; the nvalchemi dependency enters only through
     ``calculator.run_md`` at call time.
 

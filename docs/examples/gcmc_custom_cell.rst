@@ -88,7 +88,7 @@ Move selection
 --------------
 This tutorial combines four moves: Ag insertion/deletion in the Ag-targeting cell and
 O insertion/deletion in the O-targeting cell. The move weights balance these proposals, and
-``min_insert`` controls the minimum clearance required for an insertion.
+each cell's ``species_radii`` sets the minimum clearance required for an insertion.
 
 .. code-block:: python
 
@@ -100,8 +100,8 @@ O insertion/deletion in the O-targeting cell. The move weights balance these pro
         [
             DeletionMove(cell_ag_ag, species=['Ag'], seed=12346783764),
             DeletionMove(cell_ag_o,  species=['O'],  seed=43215423143),
-            InsertionMove(cell_ag_ag, species=['Ag'], min_insert=0.5, seed=6758763657),
-            InsertionMove(cell_ag_o,  species=['O'],  min_insert=0.5, seed=3675437856),
+            InsertionMove(cell_ag_ag, species=['Ag'], seed=6758763657),
+            InsertionMove(cell_ag_o,  species=['O'],  seed=3675437856),
         ],
     ]
     move_selector = MoveSelector(*move_list)
@@ -169,7 +169,7 @@ user-defined intervals; adjust these for your system size and performance goals.
 Interpretation
 --------------
 Scan ``Δμ_O`` to build coverage vs chemical-potential curves at fixed temperature.
-If acceptance is poor, check acceptance ratios by move type and tune ``min_insert``, cell height,
+If acceptance is poor, check acceptance ratios by move type and tune ``species_radii``, cell height,
 and move weights.
 Finally, verify that ``bottom_z``/``custom_height`` cover the adsorption region without overlapping
 the slab interior.
@@ -178,5 +178,5 @@ Common pitfalls
 ---------------
 - Mismatch between calculator units and ensemble settings.
 - ``bottom_z`` too low or ``custom_height`` too large, causing insertions inside the slab or in vacuum.
-- Overly tight ``min_insert`` leading to near-zero insertion acceptance.
+- Overly large ``species_radii`` leading to near-zero insertion acceptance.
 - Using reference energies computed with different relaxation tolerances than the production run without justification.

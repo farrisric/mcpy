@@ -51,7 +51,7 @@ VACUUM = 8.0
 R_O_AG = 2.11            # exclusion radius an incoming O sees
 R_AG_AG = 2.75           # exclusion radius an incoming Ag sees
 CELL_HEIGHT = 7.0
-MIN_INSERT = 0.5
+MIN_INSERT = 0.5         # O exclusion radius (A)
 
 # --- thermodynamics --------------------------------------------------------
 DELTA_MU_O = -0.3        # shift applied to mu_O = E(O2)/2
@@ -109,15 +109,15 @@ def main():
         # Same region for both species, differing only in the radii, i.e. in
         # how much of that region each species may be inserted into.
         cell_ag = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                             species_radii={'Ag': R_AG_AG, 'O': 0.0}, seed=s[0])
+                             species_radii={'Ag': R_AG_AG, 'O': MIN_INSERT}, seed=s[0])
         cell_o = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                            species_radii={'Ag': R_O_AG, 'O': 0.0}, seed=s[1])
+                            species_radii={'Ag': R_O_AG, 'O': MIN_INSERT}, seed=s[1])
 
         move_selector = MoveSelector(
             [1, 1, 1, 1],
-            [InsertionMove(cell_ag, species=['Ag'], min_insert=MIN_INSERT, seed=s[2]),
+            [InsertionMove(cell_ag, species=['Ag'], seed=s[2]),
              DeletionMove(cell_ag, species=['Ag'], seed=s[3]),
-             InsertionMove(cell_o, species=['O'], min_insert=MIN_INSERT, seed=s[4]),
+             InsertionMove(cell_o, species=['O'], seed=s[4]),
              DeletionMove(cell_o, species=['O'], seed=s[5])],
             seed=s[6],
         )

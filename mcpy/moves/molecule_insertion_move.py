@@ -1,12 +1,10 @@
 import numpy as np
 from ase import Atoms
-from ase.geometry import find_mic
 
 from .base_move import BaseMove
+from .insertion_move import _warn_min_insert
 from .molecule_utils import find_molecules, random_rotation_matrix
 from ..cell import Cell
-
-_MAX_INSERT_ATTEMPTS = 1000
 
 
 class MoleculeInsertionMove(BaseMove):
@@ -16,6 +14,13 @@ class MoleculeInsertionMove(BaseMove):
     rolls back on rejection via its arrays snapshot. The template is centered
     on its center of mass at construction and inserted rigidly (uniform
     random rotation, target COM drawn from the cell).
+
+    The center of mass is uniform over the cell free volume
+    (:meth:`mcpy.cell.Cell.get_random_free_point`): the exclusion rule tests
+    the COM only, exactly like the free-volume estimate, so the proposal
+    density is ``1 / V`` for the ``V`` the acceptance uses. Overlaps of the
+    other member atoms are left to the energy. ``min_insert`` is deprecated
+    and ignored: use the cell ``species_radii``.
 
     Sets ``last_exchange_count`` to the pre-move count of molecules of this
     species with COM inside the cell: the N of the textbook rigid-molecule
@@ -34,9 +39,8 @@ class MoleculeInsertionMove(BaseMove):
         self.molecule = molecule.copy()
         self.molecule.positions -= self.molecule.get_center_of_mass()
         self._template_symbols = sorted(self.molecule.get_chemical_symbols())
-        self.min_insert = min_insert
+        _warn_min_insert(min_insert)
         self.max_molecules = max_molecules
-        self._min_insert_sq = min_insert ** 2 if min_insert is not None else None
         self.last_exchange_count = None
 
     def do_trial_move(self, atoms) -> Atoms:
@@ -46,34 +50,10 @@ class MoleculeInsertionMove(BaseMove):
             return False, 1, self.name
         self.last_exchange_count = n_mol
 
-        insert_position = self.cell.get_random_point()
+        insert_position = self.cell.get_random_free_point(atoms)
+        if insert_position is None:
+            return False, 1, self.name
         rotation = random_rotation_matrix(self.rng)
-
-        if self._min_insert_sq is not None:
-            indices = self.cell.get_atoms_specie_inside_cell(
-                atoms, self.cell.get_species()
-            )
-            if len(indices) > 0:
-                positions_bias = atoms.positions[indices]
-                min_sq = self._min_insert_sq
-                use_mic = bool(np.any(np.asarray(atoms.pbc)))
-                placed = False
-                for _ in range(_MAX_INSERT_ATTEMPTS):
-                    frag_positions = self.molecule.positions @ rotation.T + insert_position
-                    diff = (positions_bias[:, None, :] -
-                            frag_positions[None, :, :]).reshape(-1, 3)
-                    if use_mic:
-                        diff = find_mic(diff, atoms.cell, pbc=atoms.pbc)[0]
-                    d2 = np.einsum('ij,ij->i', diff, diff)
-                    if d2.min() >= min_sq:
-                        placed = True
-                        break
-                    insert_position = self.cell.get_random_point()
-                    rotation = random_rotation_matrix(self.rng)
-                # Cell too packed to honour min_insert: report a failed move
-                # rather than insert a guaranteed overlap (wasted energy eval).
-                if not placed:
-                    return False, 1, self.name
 
         fragment = self.molecule.copy()
         fragment.positions = fragment.positions @ rotation.T + insert_position

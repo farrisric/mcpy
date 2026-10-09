@@ -2,7 +2,7 @@ import numpy as np
 from ase import Atoms
 from ase.geometry import find_mic, wrap_positions
 
-from .base_move import BaseMove
+from .base_move import PROPOSAL_REJECTED, BaseMove
 from .molecule_utils import (exchangeable_predicate, find_molecules,
                              molecule_com, random_rotation_matrix)
 from ..cell import Cell
@@ -45,7 +45,8 @@ class MoleculeDisplacementMove(BaseMove):
     def do_trial_move(self, atoms) -> Atoms:
         """Rigidly translate + rotate one molecule. Returns the same
         ``atoms`` (mutated), 0, name; ``(False, 0, name)`` if the cell holds
-        no molecule of this species."""
+        no molecule of this species; ``(PROPOSAL_REJECTED, 0, name)`` with
+        ``atoms`` untouched if the displacement would leave the region."""
         groups = find_molecules(atoms, self._template_symbols, self.cell)
         if len(groups) == 0:
             return False, 0, self.name
@@ -70,7 +71,9 @@ class MoleculeDisplacementMove(BaseMove):
         if np.any(np.asarray(atoms.pbc)):
             new_com = wrap_positions([new_com], atoms.cell, pbc=atoms.pbc)[0]
         if not exchangeable_predicate(self.cell)(new_com):
-            return False, 0, self.name
+            # A proposed move with zero acceptance: a rejection, not a
+            # failure to propose, so it lowers the reported acceptance.
+            return PROPOSAL_REJECTED, 0, self.name
         if self.max_angle is None:
             rotation = random_rotation_matrix(self.rng)
         else:
@@ -81,7 +84,10 @@ class MoleculeDisplacementMove(BaseMove):
         offsets = atoms.positions[members] - com
         if np.any(np.asarray(atoms.pbc)):
             offsets = find_mic(offsets, atoms.cell, pbc=atoms.pbc)[0]
-        atoms.positions[members] = com + shift + offsets @ rotation.T
+        positions = atoms.get_positions()
+        positions[members] = com + shift + offsets @ rotation.T
+        # set_positions applies the constraints: a FixAtoms member stays put.
+        atoms.set_positions(positions)
         return atoms, 0, self.name
 
     def _capped_rotation(self):

@@ -10,6 +10,9 @@ class PermutationMove(BaseMove):
     Mutates ``atoms`` in place by swapping two atomic numbers. The ensemble
     rolls back the arrays snapshot on rejection.
 
+    Atoms that belong to a rigid molecule (``molecule_id >= 0``) are not
+    candidates.
+
     ``n_swaps > 1`` turns the trial into a single compound perturbation:
     ``n_swaps`` independent pair swaps are applied before the energy is
     evaluated — useful for basin-hopping where a single swap typically falls
@@ -33,6 +36,13 @@ class PermutationMove(BaseMove):
         """
         nums = atoms.arrays['numbers']
         symbols = np.asarray(atoms.get_chemical_symbols())
+        # Molecule members are never swapped: a swap would change the
+        # molecule's composition (CO -> PtC) and strand it outside every
+        # molecule move. Blanking their symbols drops them from the
+        # candidate sets below.
+        mol_ids = atoms.arrays.get('molecule_id')
+        if mol_ids is not None:
+            symbols[mol_ids >= 0] = ''
         # Resolve the usable species once, up front. A swap preserves every
         # species count, so a species absent now stays absent for the whole
         # trial: bailing out from inside the loop would leave the earlier

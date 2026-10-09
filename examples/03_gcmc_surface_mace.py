@@ -57,7 +57,7 @@ R_O_AG = 2.068
 # species gets its own cell over the same region.
 R_AG_AG = 2.75
 CELL_HEIGHT = 7.0           # height of the exchange region (A)
-MIN_INSERT = 0.5            # reject insertions closer than this to any atom (A)
+MIN_INSERT = 0.5            # O exclusion radius: no insertion closer than this to an O (A)
 
 # --- thermodynamics --------------------------------------------------------
 TEMPERATURE = 500.0
@@ -100,9 +100,9 @@ def main():
     z_top = float(atoms.positions[atoms.get_tags() == 1, 2].max())
     bottom_z = z_top - R_O_AG
     cell_o = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                        species_radii={'Ag': R_O_AG, 'O': 0.0}, seed=seed_cell_o)
+                        species_radii={'Ag': R_O_AG, 'O': MIN_INSERT}, seed=seed_cell_o)
     cell_ag = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
-                         species_radii={'Ag': R_AG_AG, 'O': 0.0}, seed=seed_cell_ag)
+                         species_radii={'Ag': R_AG_AG, 'O': MIN_INSERT}, seed=seed_cell_ag)
 
     # AlchemiFCalculator relaxes each trial structure with GPU-native FIRE,
     # honouring the FixAtoms constraint. Swap in AlchemiCalculator for
@@ -122,12 +122,12 @@ def main():
     mu_ag = derive_mu_bulk(calculator, 'Ag', a=AG_LATTICE) + MU_AG_CORRECTION
     mu_o = derive_mu_gas(calculator, 'O2') + DELTA_MU_O
 
-    moves = [InsertionMove(cell_o, species=['O'], min_insert=MIN_INSERT, seed=seed_ins_o),
+    moves = [InsertionMove(cell_o, species=['O'], seed=seed_ins_o),
              DeletionMove(cell_o, species=['O'], seed=seed_del_o)]
     cells = [cell_o]
     species = ['O']
     if EXCHANGE_AG:
-        moves += [InsertionMove(cell_ag, species=['Ag'], min_insert=MIN_INSERT,
+        moves += [InsertionMove(cell_ag, species=['Ag'],
                                 seed=seed_ins_ag),
                   DeletionMove(cell_ag, species=['Ag'], seed=seed_del_ag)]
         cells.append(cell_ag)

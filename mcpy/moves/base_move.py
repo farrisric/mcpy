@@ -3,6 +3,13 @@ from ase import Atoms
 from ..utils import RandomNumberGenerator
 from ..cell import Cell
 
+# Returned by a move in place of the atoms when it proposed a configuration
+# whose acceptance probability is zero by construction (e.g. a molecule
+# displacement that leaves the region). ``MoveSelector`` counts it as a
+# rejected attempt, not a failed proposal, and hands the ensembles the usual
+# ``False`` so no energy is evaluated.
+PROPOSAL_REJECTED = object()
+
 
 class BaseMove(ABC):
     """Abstract base class for Monte Carlo moves."""

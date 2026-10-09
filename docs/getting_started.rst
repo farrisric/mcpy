@@ -110,7 +110,8 @@ derive them for your own potential and system.
 
 Composition changes need an insertion move and a deletion move.
 ``InsertionMove`` places a new O atom at a random point in the cell,
-rejecting draws that land within ``min_insert`` of an existing atom, and
+redrawing points that land inside an atom's exclusion sphere (the cell's
+``species_radii``), and
 ``DeletionMove`` removes a random O atom from inside the cell.
 Together they let the oxygen count fluctuate, which is the defining feature
 of the grand-canonical ensemble.
@@ -136,7 +137,7 @@ Each move owns its random-number generator, and deriving both seeds from one
 
    moves = MoveSelector(
        [1, 1],
-       [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1),
+       [InsertionMove(cell, species=['O'], seed=s1),
         DeletionMove(cell, species=['O'], seed=s2)],
    )
 

@@ -3,6 +3,8 @@ import re
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
 
+from .base_move import PROPOSAL_REJECTED
+
 
 def _abbreviate(class_name):
     """Short but still distinct label for a move class.
@@ -32,7 +34,9 @@ class MoveSelector:
     Failed trial moves (``do_trial_move`` returning ``False`` in place of the
     atoms) are recorded in ``move_failed_counter`` /
     ``move_failed_counter_total`` and excluded from the acceptance-ratio
-    denominator so ratios reflect viable attempts only.
+    denominator so ratios reflect viable attempts only. A move that returns
+    ``PROPOSAL_REJECTED`` proposed a configuration with zero acceptance: it
+    counts as a rejected attempt, and the ensembles receive ``False``.
 
     Parameters
     ----------
@@ -89,6 +93,10 @@ class MoveSelector:
         # species). An identity check, not truthiness: a legitimately empty
         # Atoms object (last atom deleted) is falsy but IS a valid proposal.
         atoms_new = result[0] if isinstance(result, tuple) else result
+        if atoms_new is PROPOSAL_REJECTED:
+            # Proposed but rejected by construction: an attempt, not a
+            # failure. The ensembles get the usual False so nothing is scored.
+            return (False,) + tuple(result[1:]) if isinstance(result, tuple) else False
         if atoms_new is False or atoms_new is None:
             self.move_failed_counter[self.to_use] += 1
             self.move_failed_counter_total[self.to_use] += 1

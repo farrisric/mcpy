@@ -99,18 +99,16 @@ class TestInsertionMove:
         assert atoms_new is self.atoms
         assert len(self.atoms) == n0 + 1
 
-    def test_min_insert_respected(self):
-        """Inserted atom must be at least min_insert away from prior atoms."""
-        min_dist = 1.0
-        move = InsertionMove(self.cell, species=['H'], seed=1, min_insert=min_dist)
+    def test_species_radii_exclusion_respected(self):
+        """Inserted atom stays outside every prior atom's exclusion sphere."""
+        radii = self.cell.species_radii
+        move = InsertionMove(self.cell, species=['H'], seed=1)
         for _ in range(20):
-            prior = self.atoms.positions.copy()
-            atoms_new, delta, species = move.do_trial_move(self.atoms)
-            inserted_pos = self.atoms.positions[-1]
-            dists = np.linalg.norm(prior - inserted_pos, axis=1)
-            assert dists.min() >= min_dist - 1e-10, (
-                f"Inserted atom too close: min dist={dists.min():.4f} < {min_dist}"
-            )
+            prior = self.atoms.copy()
+            move.do_trial_move(self.atoms)
+            dists = self.atoms.get_distances(len(prior), range(len(prior)), mic=True)
+            limits = np.array([radii[s] for s in prior.get_chemical_symbols()])
+            assert np.all(dists >= limits)
 
     def test_insertion_without_min_insert(self):
         n0 = len(self.atoms)
@@ -118,12 +116,13 @@ class TestInsertionMove:
         move.do_trial_move(self.atoms)
         assert len(self.atoms) == n0 + 1
 
-    def test_impossible_min_insert_does_not_loop_forever(self):
+    def test_full_cell_insertion_fails_cleanly(self):
         n0 = len(self.atoms)
-        move = InsertionMove(self.cell, species=['H'], seed=3, min_insert=1e9)
+        self.cell.species_radii = {'Cu': 1e9, 'H': 1e9}
+        move = InsertionMove(self.cell, species=['H'], seed=3)
         result, delta_n, _ = move.do_trial_move(self.atoms)
-        # min_insert cannot be honoured: the move reports failure and leaves
-        # atoms untouched rather than inserting a guaranteed overlap.
+        # No free point: the move reports failure and leaves atoms untouched
+        # rather than inserting a guaranteed overlap.
         assert result is False
         assert len(self.atoms) == n0
 

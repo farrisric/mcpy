@@ -9,7 +9,8 @@ class ShakeMove(BaseMove):
         """
         Initialize the Shake move with the maximum displacement distance.
         Each atom is displaced by a vector uniformly distributed inside a
-        ball of radius ``r_max``.
+        ball of radius ``r_max``. Atoms fixed by ``atoms.constraints``
+        (``FixAtoms``) are not moved.
         """
         cell = NullCell()
         super().__init__(cell, species=['X'], seed=seed)
@@ -33,5 +34,6 @@ class ShakeMove(BaseMove):
         # Uniform-in-ball radius: r_max * u^(1/3) with u ~ U(0,1).
         u = self._np_rng.random(size=(n, 1))
         radii = self.r_max * np.cbrt(u)
-        atoms.positions += directions * radii
+        # set_positions applies the constraints: FixAtoms atoms stay put.
+        atoms.set_positions(atoms.positions + directions * radii)
         return atoms, 0, 'X'

@@ -230,8 +230,7 @@ def _run_one_emt_gcmc(outdir, mu, seed=0, steps=1000):
     s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
     moves = MoveSelector(
         [1, 1],
-        [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1,
-                       max_atoms=MAX_O_DEMO),
+        [InsertionMove(cell, species=['O'], seed=s1, max_atoms=MAX_O_DEMO),
          DeletionMove(cell, species=['O'], seed=s2)])
     gcmc = GrandCanonicalEnsemble(
         atoms=atoms, cells=[cell], calculator=calculator,

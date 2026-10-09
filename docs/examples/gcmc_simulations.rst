@@ -55,7 +55,7 @@ Code
    s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
    moves = MoveSelector(
        [1, 1],
-       [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1),
+       [InsertionMove(cell, species=['O'], seed=s1),
         DeletionMove(cell, species=['O'], seed=s2)],
    )
 

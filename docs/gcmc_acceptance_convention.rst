@@ -59,10 +59,77 @@ Two related conventions to keep in mind:
   ideal/:math:`\Lambda` term. So ``mu`` must be referenced on the
   calculator's absolute energy scale (e.g. an O\ :sub:`2` gas reference at
   the target ``T`` and ``p``).
-- mcpy uses a *free* volume (``cell_volume * (1 - occupied_fraction)``) in
-  the combinatorial factor while still sampling insertion points over the
-  full cell box, so the proposal and acceptance volumes differ at high
-  density.
+- ``V`` is the cell *free* volume, and insertion points are drawn
+  uniformly over that same free volume.
+  The deletion uses the free volume of the state after the deletion.
+  See `The volume V`_ below.
+
+
+The volume V
+------------
+
+Detailed balance between an insertion and its reverse deletion needs one
+condition on ``V``.
+The insertion proposal density must be exactly :math:`1/V`, and the
+deletion must use the same ``V``.
+Both refer to the state *without* the exchanged particle.
+
+mcpy meets this condition as follows:
+
+- One exclusion rule, defined in :class:`mcpy.cell.Cell`.
+  A point is excluded when it lies within ``species_radii[symbol]`` of any
+  atom.
+  The rule includes every atom, also atoms outside the region (for example
+  the slab below the ``CustomCell`` floor).
+  It also includes the periodic images of the atoms along every periodic
+  direction.
+- The free-volume estimate (``Cell.free_volume``) counts the uniform region
+  points that the rule does not exclude.
+- The insertion proposal (``Cell.get_random_free_point``) redraws uniform
+  region points until the rule does not exclude the point.
+  The result is uniform over the free volume, so its density is
+  :math:`1/V`.
+  ``MoleculeInsertionMove`` applies the rule to the center of mass only.
+  The energy handles overlaps of the other member atoms.
+- The insertion uses the cell volume that the ensemble computes for the
+  current (pre-insertion) state.
+- ``DeletionMove`` and ``MoleculeDeletionMove`` compute the free volume of
+  the trial state after the deletion, and report it through
+  ``get_volume``.
+  Before this change the deletion used the volume of the state that still
+  held the deleted particle.
+  That volume is too small by the particle's own exclusion sphere, which
+  biased the deletion acceptance.
+- A cell without ``species_radii`` excludes nothing.
+  Its volume is the exact region volume and the proposal is the plain
+  uniform draw.
+  The periodic box ``Cell`` therefore keeps its previous behaviour and its
+  previous random streams (the LAMMPS-parity runs do not change).
+
+``min_insert`` is deprecated and ignored.
+It was a per-move redraw distance that the cell volume did not know about,
+so the proposal and acceptance volumes differed.
+Set a ``species_radii`` entry of at least the old ``min_insert`` for every
+species to keep the old clearance.
+The constructors of ``InsertionMove`` and ``MoleculeInsertionMove`` emit a
+``FutureWarning`` when ``min_insert`` is set.
+
+Remaining limits:
+
+- ``V`` is a Monte Carlo estimate with ``mc_sample_points`` points.
+  Its relative noise is about :math:`\sqrt{(1-f)/(f\,n)}` for a free
+  fraction ``f``.
+- The rule is a hard core only for proposals.
+  A displacement or a relaxation can move a particle into an exclusion
+  sphere.
+  A deletion can leave such a state, but an insertion cannot enter it.
+  The sampling is exact only when the exclusion radii are also hard cores
+  of the potential.
+  With a relaxing calculator the sampling is already basin-level (ADR 0002).
+- Periodic images are taken one box length in each direction, so every
+  radius must be shorter than the box.
+
+Decision record: ``docs/adr/0003-insertion-proposal-matches-free-volume.md``.
 
 
 Why mcpy keeps the total atom count
@@ -126,6 +193,9 @@ Where this lives in the code and tests
 - ``tests/test_acceptance.py`` — ``test_do_gcmc_step_feeds_total_atom_count``
   guards the convention; ``test_total_vs_perspecies_count_shifts_effective_mu``
   and ``test_perspecies_count_inserts_where_total_rejects`` quantify the gap.
+- ``tests/test_audit_2026_10.py``: the ``test_p1_*`` tests guard the
+  volume rule, including a two-state detailed-balance check of the full
+  GCMC loop (``test_p1_two_state_gcmc_obeys_detailed_balance``).
 - ``tests/test_custom_cell_region.py`` —
   ``test_subsurface_oxygen_is_excluded_from_deletion_candidates`` documents the
   buried-O caveat.
@@ -167,14 +237,11 @@ irreversibility noted above applies to them unchanged.
 one-way-door guard, so the candidacy region and the region a molecule may be
 displaced within always agree.
 
-The textbook form above holds for ``min_insert=None``. When ``min_insert``
-is set, ``MoleculeInsertionMove`` retries the random position/orientation
-draw (up to 1000 times) against the cell's ``species_radii`` atoms until it
-clears that minimum separation, which effectively restricts the *proposal*
-to the non-overlapping volume; the *acceptance* test still divides by the
-full cell volume ``V``. This is the same proposal/acceptance mismatch
-already noted above for atomic moves: at high density it over-accepts
-insertions by roughly :math:`V/V_\text{accessible}`.
+``V`` in the molecular acceptance is the cell *free* volume, not the full
+cell volume.
+The center of mass is drawn uniformly over that free volume, and the
+deletion uses the free volume after the molecule is removed (see
+`The volume V`_).
 
 Atomic and molecular species of the same element can coexist (e.g. atomic O
 alongside O2 molecules): an atomic :class:`mcpy.moves.InsertionMove` tags its

@@ -4,33 +4,82 @@ from scipy.spatial import cKDTree
 from .base_cell import BaseCell
 
 
+_MAX_INSERT_ATTEMPTS = 1000
+
+
 class Cell(BaseCell):
-    def __init__(self, atoms, species_radii=None, seed=None):
+    """The whole periodic box as the sampling volume.
+
+    Also the base of the region cells, and the one place that defines the
+    insertion exclusion rule: a point is excluded when it lies within
+    ``species_radii[symbol]`` of any atom, periodic images included. The
+    insertion proposal (:meth:`get_random_free_point`) and the free-volume
+    estimate (:meth:`free_volume`) both test that rule, so the proposal
+    density is exactly ``1 / V`` for the ``V`` the acceptance uses (see
+    docs/gcmc_acceptance_convention.rst). Without ``species_radii`` nothing
+    is excluded and the volume is the exact region volume.
+    """
+
+    def __init__(self, atoms, species_radii=None, seed=None,
+                 mc_sample_points: int = 100_000):
         """
         Initialize the Cell object.
 
         :param atoms: ASE Atoms object containing the atomic configuration.
-        :param species_radii: Optional dict mapping species to radii.
+        :param species_radii: Optional dict mapping species to exclusion
+                              radii. When given, the volume is the free
+                              volume and insertions avoid the excluded
+                              spheres.
         :param seed: Optional seed for the cell-local numpy RNG used by
-                     :meth:`get_random_point`. ``None`` falls back to the
-                     numpy global generator.
+                     :meth:`get_random_point` and the free-volume sampler.
+                     ``None`` seeds that generator from OS entropy, so the
+                     run is not repeatable.
+        :param mc_sample_points: Number of random points used to estimate
+                                 the free volume when ``species_radii`` is set.
         """
         super().__init__()
         self.original_dimensions = np.array(atoms.cell)
         self.dimensions = self.original_dimensions
+        self.offset = np.zeros(3)
         self.species_radii = species_radii if species_radii else {}
-        # Dimensions are fixed at construction; cache the box volume so
-        # ``calculate_volume`` is a single attribute assignment.
-        self._box_volume = float(abs(np.linalg.det(self.dimensions)))
-        self.volume = self._box_volume
+        self.mc_sample_points = int(mc_sample_points)
+        self.cell_volume = float(abs(np.linalg.det(self.dimensions)))
+        self.volume = self.cell_volume
         self._rng = np.random.default_rng(seed)
 
     def calculate_volume(self, atoms):
+        """Store the free volume for ``atoms`` (see :meth:`free_volume`)."""
+        self.volume = self.free_volume(atoms)
+
+    def free_volume(self, atoms):
+        """Free volume of the region for ``atoms``, without storing it.
+
+        The region volume minus the exclusion spheres of every atom
+        (periodic images included), estimated from ``mc_sample_points``
+        uniform points. Exact region volume when nothing can be excluded.
         """
-        Set the cell volume. ``dimensions`` is fixed at construction so the
-        determinant is taken once in ``__init__``.
+        trees = self._exclusion_trees(atoms)
+        if not trees:
+            return self._region_volume()
+        points, domain_volume = self._volume_samples()
+        n_free = np.count_nonzero(~self._covered(points, trees))
+        return self._clamp_free_volume(
+            domain_volume * n_free / self.mc_sample_points, domain_volume)
+
+    def get_random_free_point(self, atoms):
+        """A point uniform over the free volume of ``atoms``.
+
+        Redraws :meth:`get_random_point` until the point is outside every
+        exclusion sphere, the same test :meth:`free_volume` counts with.
+        Returns ``None`` when ``_MAX_INSERT_ATTEMPTS`` draws all land in
+        excluded volume (region effectively full).
         """
-        self.volume = self._box_volume
+        trees = self._exclusion_trees(atoms)
+        for _ in range(_MAX_INSERT_ATTEMPTS):
+            point = self.get_random_point()
+            if not trees or not self._covered(point[None, :], trees)[0]:
+                return point
+        return None
 
     def get_random_point(self):
         """
@@ -39,7 +88,25 @@ class Cell(BaseCell):
         :return: A numpy array representing the random point (x, y, z).
         """
         frac_coords = self._rng.random(3)
-        return frac_coords @ self.dimensions
+        return frac_coords @ self.dimensions + self.offset
+
+    def _region_volume(self):
+        """Exact volume of the proposal region."""
+        return self.cell_volume
+
+    def _volume_samples(self):
+        """``mc_sample_points`` uniform draws over a domain that contains the
+        region, keeping only the ones inside the region, and the domain
+        volume. The free volume is ``domain_volume * n_free / n_drawn``."""
+        frac = self._rng.random((self.mc_sample_points, 3))
+        return frac @ self.dimensions + self.offset, self.cell_volume
+
+    def _bounds(self):
+        """Axis-aligned bounding box (lo, hi) of the proposal region."""
+        corners = np.array([[i, j, k] for i in (0, 1) for j in (0, 1)
+                            for k in (0, 1)], dtype=float)
+        corners = corners @ self.dimensions + self.offset
+        return corners.min(axis=0), corners.max(axis=0)
 
     def get_volume(self):
         """
@@ -101,29 +168,38 @@ class Cell(BaseCell):
         return np.fromiter((self.species_radii[s] for s in symbols),
                            dtype=float, count=len(symbols))
 
-    def _covered_mask(self, points, atoms, positions=None, radii=None):
-        """Which of ``points`` fall inside some atom's exclusion sphere.
+    def _periodic_images(self, atoms):
+        """Positions of the atoms plus their -1/0/+1 periodic images along
+        each periodic direction, and the number of copies."""
+        pbc = np.asarray(atoms.pbc, dtype=bool)
+        shifts = [(-1, 0, 1) if p else (0,) for p in pbc]
+        vectors = np.array([[i, j, k] for i in shifts[0] for j in shifts[1]
+                            for k in shifts[2]], dtype=float) @ np.array(atoms.cell)
+        images = (atoms.positions[None, :, :] + vectors[:, None, :]).reshape(-1, 3)
+        return images, len(vectors)
 
-        One cKDTree per distinct radius, querying the nearest atom of that
-        radius: a point is covered when that nearest atom is within it. Avoids
-        the O(N_points * N_atoms) broadcast. Shared by every cell that
-        estimates a free volume; the cells differ in how they *sample* the
-        points, not in how they test them.
+    def _exclusion_trees(self, atoms):
+        """One cKDTree per distinct positive radius over every atom and
+        periodic image whose sphere can reach the region. Empty when nothing
+        is excluded. Shared by the free-volume estimate and the insertion
+        proposal so both apply the same rule."""
+        if not self.species_radii or len(atoms) == 0:
+            return []
+        positions, n_copies = self._periodic_images(atoms)
+        radii = np.tile(self._radii_for(atoms), n_copies)
+        lo, hi = self._bounds()
+        reach = radii[:, None]
+        near = np.all((positions > lo - reach) & (positions < hi + reach), axis=1)
+        return [(cKDTree(positions[near & (radii == r)]), float(r))
+                for r in np.unique(radii[near]) if r > 0.0]
 
-        ``positions`` and ``radii`` override the ones taken from ``atoms``, for
-        the periodic-image expansion :class:`CustomCell` needs.
-        """
-        if radii is None:
-            radii = self._radii_for(atoms)
-        if positions is None:
-            positions = atoms.positions
+    @staticmethod
+    def _covered(points, trees):
+        """Which of ``points`` lie inside some exclusion sphere."""
         covered = np.zeros(len(points), dtype=bool)
-        for r in np.unique(radii):
-            if r <= 0.0:
-                continue
-            tree = cKDTree(positions[radii == r])
-            # distance_upper_bound returns inf above r; that is the rejection.
-            dists, _ = tree.query(points, k=1, distance_upper_bound=float(r))
+        for tree, r in trees:
+            # distance_upper_bound returns inf above r; that is "not covered".
+            dists, _ = tree.query(points, k=1, distance_upper_bound=r)
             covered |= np.isfinite(dists)
         return covered
 

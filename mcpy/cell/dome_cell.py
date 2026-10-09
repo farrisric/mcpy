@@ -56,9 +56,16 @@ class DomeCell(SphericalCell):
         self.radius = float(
             np.linalg.norm(particle_pos - self.center, axis=1).max() + vacuum
         )
+        if self.bottom_z >= self.center[2] + self.radius:
+            raise ValueError(
+                f'DomeCell is empty: bottom_z={self.bottom_z:.3f} lies at or '
+                f'above the top of the ball (center z {self.center[2]:.3f} + '
+                f'radius {self.radius:.3f}).')
+        self._check_fits_box(atoms, lower_z=max(self.bottom_z,
+                                                self.center[2] - self.radius))
         self.mc_sample_points = int(mc_sample_points)
         self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
-        self.volume = self.sphere_volume
+        self.volume = self._region_volume()
 
     def is_point_inside(self, point):
         """Inside the ball and at or above the support surface."""
@@ -89,25 +96,13 @@ class DomeCell(SphericalCell):
         within = np.einsum('ij,ij->i', diff, diff) <= self.radius ** 2
         return within & (atoms.positions[:, 2] >= self.bottom_z)
 
-    def calculate_volume(self, atoms):
-        """
-        Estimate the free volume of the dome: sample the full ball, keep points
-        above the surface, then exclude points covered by an atom (per-radius
-        cKDTree nearest-atom query). The free fraction is normalised by the full
-        ball sample count, so ``volume`` is the free dome volume in absolute
-        units.
-        """
+    def _region_volume(self):
+        """Ball volume minus the spherical cap below ``bottom_z``."""
+        cap = min(max(self.bottom_z - (self.center[2] - self.radius), 0.0),
+                  2.0 * self.radius)
+        return self.sphere_volume - np.pi * cap ** 2 * (3.0 * self.radius - cap) / 3.0
+
+    def _volume_samples(self):
+        """Ball samples above the surface; the domain is the full ball."""
         pts = self._sample_sphere_points(self.mc_sample_points)
-        above = pts[:, 2] >= self.bottom_z
-        pts = pts[above]
-
-        n_atoms = len(atoms)
-        if n_atoms == 0:
-            dome_fraction = float(np.count_nonzero(above)) / self.mc_sample_points
-            self.volume = dome_fraction * self.sphere_volume
-            return
-
-        covered = self._covered_mask(pts, atoms)
-        free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
-        self.volume = self._clamp_free_volume(
-            free_fraction * self.sphere_volume, self.sphere_volume)
+        return pts[pts[:, 2] >= self.bottom_z], self.sphere_volume

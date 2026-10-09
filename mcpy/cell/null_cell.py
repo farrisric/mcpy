@@ -6,6 +6,8 @@ class NullCell(BaseCell):
         """
         Initialize the NullCell object: a placeholder cell for moves that do
         not sample positions from a spatial region (displacement, shake, ...).
+        It has no region, so any region query raises a ``TypeError`` that
+        names the misuse instead of returning a meaningless answer.
         """
         super().__init__()
 
@@ -26,10 +28,14 @@ class NullCell(BaseCell):
         """
         return 0
 
-    def get_random_point(self):
-        """
-        Get a random point inside the cell or the custom cell.
+    def _no_region(self, *args, **kwargs):
+        raise TypeError(
+            'NullCell has no region: it is a placeholder for moves that sample '
+            'no positions. Insertion, deletion and molecule moves need a real '
+            'cell (Cell, CustomCell, SphericalCell or DomeCell).')
 
-        :return: A numpy array representing the random point (x, y, z).
-        """
-        return 0
+    get_random_point = _no_region
+    get_random_free_point = _no_region
+    free_volume = _no_region
+    is_point_inside = _no_region
+    get_atoms_specie_inside_cell = _no_region

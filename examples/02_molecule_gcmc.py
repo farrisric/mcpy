@@ -38,14 +38,14 @@ TEMPERATURE = 2.0  # reduced temperature
 MU = -6.0
 STEPS = 1000
 
-SEED_INS, SEED_DEL, SEED_DIS, SEED_SEL, SEED_ENS = 1, 2, 3, 4, 5
+SEED_INS, SEED_DEL, SEED_DIS, SEED_SEL, SEED_ENS, SEED_CELL = 1, 2, 3, 4, 5, 6
 
 
 def main():
     configure_logging()
 
     atoms = Atoms(cell=[BOX, BOX, BOX], pbc=True)
-    cell = Cell(atoms)
+    cell = Cell(atoms, seed=SEED_CELL)
     calculator = LennardJones(sigma=1.0, epsilon=1.0, rc=CUTOFF, smooth=False)
 
     # The template is centered on its center of mass when the move is built;

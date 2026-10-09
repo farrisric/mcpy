@@ -31,7 +31,7 @@ STEPS = 3000
 
 # One seed per stochastic component. Leaving any of them at None makes the
 # run unrepeatable.
-SEED_INS, SEED_DEL, SEED_DIS, SEED_SEL, SEED_ENS = 1, 2, 3, 4, 5
+SEED_INS, SEED_DEL, SEED_DIS, SEED_SEL, SEED_ENS, SEED_CELL = 1, 2, 3, 4, 5, 6
 
 
 def main():
@@ -42,7 +42,7 @@ def main():
 
     # 2. The region where particles may be inserted or deleted. ``Cell`` is
     #    the whole periodic box.
-    cell = Cell(atoms)
+    cell = Cell(atoms, seed=SEED_CELL)
 
     # 3. The calculator. Any ASE calculator works directly; wrap it in
     #    ``mcpy.calculators.BaseCalculator`` instead if each trial structure

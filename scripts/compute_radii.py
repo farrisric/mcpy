@@ -32,7 +32,6 @@ def create_insertion_move(atoms, insert_species, metal_species, cell_bottom, cel
     seed = np.random.randint(100_000_000, 1_000_000_000)
     insertion = InsertionMove(cell,
                               species=[insert_species],
-                              min_insert=0.5,
                               seed=seed)
     return insertion
 

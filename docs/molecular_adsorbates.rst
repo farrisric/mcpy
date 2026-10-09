@@ -104,14 +104,14 @@ Registering a molecular species
 Exchanging molecules with the reservoir
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``MoleculeInsertionMove(cell, molecule, name, seed, min_insert=None, max_molecules=None)``
+``MoleculeInsertionMove(cell, molecule, name, seed, max_molecules=None)``
    Inserts the template rigidly at a random position and orientation drawn
    from the cell.
    The template is centered on its center of mass at construction, and the
    whole molecule is appended in one step with a fresh ``molecule_id``.
-   ``min_insert`` retries the draw until every new atom clears that distance
-   from the existing structure, which spares the calculator from evaluating
-   hopeless overlaps.
+   The center of mass is drawn uniformly from the cell free volume: points
+   inside an exclusion sphere of the cell ``species_radii`` are redrawn.
+   ``min_insert`` is deprecated and ignored.
    ``max_molecules`` skips the trial once the population reaches a cap.
 
 ``MoleculeDeletionMove(cell, molecule, name, seed, min_molecules=None)``
