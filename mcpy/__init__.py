@@ -2,7 +2,7 @@ import logging
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version('mcpy')
+    __version__ = version('mcpy-gcmc')
 except PackageNotFoundError:  # not installed, e.g. run from a source checkout
     __version__ = '0.0.0.unknown'
 

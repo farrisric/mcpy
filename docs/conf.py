@@ -13,7 +13,7 @@ author = 'Riccardo Farris, Emanuele Telari, Konstantin M. Neyman, Albert Bruix'
 copyright = f'2023-2026, {author}'
 # Every docs builder installs mcpy (autodoc imports it), so the installed
 # metadata is the single source of the version.
-release = importlib.metadata.version('mcpy')
+release = importlib.metadata.version('mcpy-gcmc')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

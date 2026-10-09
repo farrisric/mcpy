@@ -30,7 +30,9 @@ The tables, the rerunnable scripts and a MACE comparison are in [`benchmark/READ
 ## Installation
 
 mcpy needs Python 3.11 or later.
-The `mcpy` name on PyPI belongs to an unrelated package, so install from the repository:
+The distribution is named `mcpy-gcmc` (the `mcpy` name on PyPI belongs to an unrelated package).
+You still write `import mcpy`.
+Until the first PyPI release, install from the repository:
 
 ```sh
 git clone https://github.com/farrisric/mcpy.git

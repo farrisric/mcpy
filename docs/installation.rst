@@ -22,6 +22,9 @@ unrelated macro library), so install it from the repository:
    cd mcpy
    pip install -e .
 
+The distribution is named ``mcpy-gcmc``, because the ``mcpy`` name on PyPI belongs to an unrelated package.
+The import name stays ``mcpy``.
+
 This is enough for the CPU examples ``examples/00`` to ``examples/02``.
 Add the ``test`` extra to run the test suite (``pip install -e .[test]``).
 

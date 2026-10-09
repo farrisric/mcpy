@@ -1,5 +1,5 @@
 [project]
-name = "mcpy"
+name = "mcpy-gcmc"
 version = "1.4.0"
 description = "A python package to run atomistic Monte Carlo simulations"
 readme = "README.md"
@@ -60,7 +60,7 @@ plot = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "mcpy[plot]",
+    "mcpy-gcmc[plot]",
 ]
 
 [build-system]

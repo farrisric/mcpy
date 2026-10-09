@@ -60,8 +60,8 @@ Only two numbers stay physical inputs.
 ``DELTA_MU_O`` sets the O\ :sub:`2` gas conditions relative to
 :math:`E(\mathrm{O_2})/2`.
 ``MU_AG_CORRECTION`` = -0.176 eV shifts the Ag reservoir below bulk Ag.
-It comes from the group's earlier Ag-oxidation setup; set it to 0.0 for a
-reservoir in equilibrium with bulk Ag.
+The value comes from thermodynamic tables, cited in the mcpy paper.
+Set it to 0.0 for a reservoir in equilibrium with bulk Ag.
 
 The calibration constants at the top of the script (``AG_LATTICE``,
 ``R_O_AG``, ``R_AG_AG``) were measured with MACE-MPA-0.

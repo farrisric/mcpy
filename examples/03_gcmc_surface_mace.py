@@ -58,8 +58,9 @@ R_AG_AG = 2.75
 # Exclusion radius around an existing O (A). A minimal clearance that stops an
 # insertion on top of an O atom, not a bond length.
 R_O = 0.5
-# Shift (eV) on the bulk Ag energy per atom. Carried over from the group's
-# earlier Ag-oxidation setup; set 0.0 for Ag in equilibrium with bulk Ag.
+# Shift (eV) on the bulk Ag energy per atom, taken from thermodynamic
+# tables (cited in the mcpy paper). Set 0.0 for Ag in equilibrium with
+# bulk Ag.
 MU_AG_CORRECTION = -0.176
 
 # --- system ----------------------------------------------------------------
