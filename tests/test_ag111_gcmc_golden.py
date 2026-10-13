@@ -11,15 +11,17 @@ importing torch in an env where it is misconfigured raises SIGBUS, which no
 
 What this covers that the torch-free suite cannot: the Alchemi FIRE relaxation
 with ``FreezeAtomsHook``, the real O/Ag(111) energetics, and the fact that the
-whole GCMC loop (CustomCell free volume with periodic images, ``min_insert``
-overlap rejection, de Broglie acceptance, arrays+constraints rollback,
+whole GCMC loop (CustomCell free volume with periodic images, insertion
+proposals redrawn against the same ``species_radii`` exclusion spheres
+(ADR 0003), de Broglie acceptance, arrays+constraints rollback,
 trajectory writing) reproduces exactly when seeded.
 
 Parameters come from ``examples/03_gcmc_surface_mace.py --no-ag-moves`` (the
 example exchanges Ag as well by default), the calibrated set for this
 checkpoint: a=4.165, the O-Ag exclusion radius 2.068 used both as the
-radius and as the region depth below the top layer, height 7, min_insert 0.5,
-and the -0.176 bulk Ag correction.
+radius and as the region depth below the top layer, height 7, an O-O
+clearance of 0.5 (``species_radii['O']``, formerly ``min_insert``), and the
+-0.176 bulk Ag correction.
 """
 import os
 import pathlib
@@ -39,7 +41,7 @@ from mcpy.moves.move_selector import MoveSelector
 AG_LATTICE = 4.165
 R_O_AG = 2.068          # O-Ag exclusion radius, and the region depth below z_top
 CELL_HEIGHT = 7.0
-MIN_INSERT = 0.5
+R_O_O = 0.5             # O-O clearance; replaces the deprecated min_insert=0.5
 SEED = 777
 STEPS = 60
 
@@ -59,9 +61,11 @@ DELTA_MU_O = -0.5       # balance point: both insertion and deletion accept
 # Energies are float32 GPU sums, so they repeat to ~1e-4 eV rather than
 # bitwise; every discrete decision repeats exactly. Regenerate only on a
 # deliberate physics change, never by pasting whatever a new run produced.
-GOLDEN_N = [48, 53, 53, 51, 52, 52, 53]
-GOLDEN_ACCEPTED = [5, 10]
-GOLDEN_ENERGY = -151.923111
+# Last regenerated for ADR 0003 (insertion proposal matches the free volume),
+# twice, with identical discrete outcomes.
+GOLDEN_N = [48, 52, 52, 52, 52, 52, 51]
+GOLDEN_ACCEPTED = [4, 7]
+GOLDEN_ENERGY = -141.450729
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get('MCPY_GPU_TESTS') or not CHECKPOINT.exists(),
@@ -75,7 +79,7 @@ def _build(seed_cell):
     atoms.set_constraint(FixAtoms(indices=[a.index for a in atoms if a.tag == 3]))
     z_top = float(atoms.positions[atoms.get_tags() == 1, 2].max())
     cell = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=z_top - R_O_AG,
-                      species_radii={'Ag': R_O_AG, 'O': 0.0}, seed=seed_cell)
+                      species_radii={'Ag': R_O_AG, 'O': R_O_O}, seed=seed_cell)
     return atoms, cell, z_top
 
 
@@ -91,7 +95,7 @@ def _run(tmp_path, steps=STEPS, write_interval=10):
     move_selector = MoveSelector(
         [1, 1],
         [DeletionMove(cell, species=['O'], seed=seed_del),
-         InsertionMove(cell, species=['O'], min_insert=MIN_INSERT, seed=seed_ins)],
+         InsertionMove(cell, species=['O'], seed=seed_ins)],
         seed=seed_sel,
     )
     calculator = AlchemiFCalculator(
@@ -203,9 +207,9 @@ RE_STEPS = 30
 RE_EXCHANGE_INTERVAL = 5
 
 # Golden values: seed 777, ladder above, 30 steps.
-RE_GOLDEN_N = [56, 53, 50]                  # final atom count per replica
-RE_GOLDEN_O = [8, 5, 2]                     # O count per replica, monotonic in mu
-RE_GOLDEN_ENERGY = [-167.4708, -151.8001, -136.2122]
+RE_GOLDEN_N = [53, 53, 51]                  # final atom count per replica
+RE_GOLDEN_O = [5, 5, 3]                     # O count per replica, monotonic in mu
+RE_GOLDEN_ENERGY = [-151.8250, -151.8484, -141.4654]
 
 
 def _replica_factory(tmp_path, calculator):
@@ -222,7 +226,7 @@ def _replica_factory(tmp_path, calculator):
         move_selector = MoveSelector(
             [1, 1],
             [DeletionMove(cell, species=['O'], seed=seed_del),
-             InsertionMove(cell, species=['O'], min_insert=MIN_INSERT, seed=seed_ins)],
+             InsertionMove(cell, species=['O'], seed=seed_ins)],
             seed=seed_sel,
         )
         return GrandCanonicalEnsemble(
@@ -315,12 +319,14 @@ def test_batched_re_conserves_silver(batched_re):
 
 
 def test_batched_re_writes_global_minimum(batched_re):
-    """The lowest grand potential across all replicas is written once."""
+    """One best frame per rung: on a mu ladder the rungs' grand potentials
+    are taken under different mu, so no single global minimum exists."""
     re, tmp_path = batched_re
     best = tmp_path / 'global_minimum.xyz'
     assert best.exists()
     frames = read(str(best), ':')
-    assert len(frames) == 1
+    assert len(frames) == len(RE_DELTA_MU_LADDER)
+    assert [f.info['rank'] for f in frames] == list(range(len(RE_DELTA_MU_LADDER)))
     assert min(r._best_score for r in re.replicas if r._best_atoms is not None) < float('inf')
 
 
