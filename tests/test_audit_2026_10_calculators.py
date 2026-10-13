@@ -247,17 +247,27 @@ def test_cueq_rebuild_check_on_mocked_models(alchemi):
     assert ok(_fake_mace(None, None))  # older blocks have no edge_irreps
 
 
+def _uses_cueq(calc):
+    return any('cuequivariance' in type(m).__module__
+               for m in calc.model.modules())
+
+
 @gpu
 @pytest.mark.skipif(not MH1.exists(), reason='mh-1 checkpoint not cached')
-def test_mh1_cueq_falls_back_to_e3nn(alchemi, caplog):
+def test_mh1_cueq_is_repaired_and_matches_e3nn(alchemi, caplog):
+    """mh-1 predates use_edge_irreps_first; mcpy sets it so the cuEq rebuild
+    keeps block 0's real width. Three fresh cuEq loads must use cuEq kernels
+    and match e3nn exactly (the unrepaired rebuild gave load-varying energies)."""
     import torch
     kw = dict(device='cuda', dtype=torch.float64, compile_model=False,
               head='mp_pbe_refit_add')
     ag = bulk('Ag', 'fcc', a=4.1592)
-    with caplog.at_level(logging.WARNING, logger='mcpy.calculators'):
-        cueq = alchemi.AlchemiCalculator(str(MH1), enable_cueq=True, **kw)
-    assert any('cuEq' in r.getMessage() for r in caplog.records)
     e3nn = alchemi.AlchemiCalculator(str(MH1), enable_cueq=False, **kw)
-    e = cueq.get_potential_energy(ag.copy())
-    assert e == pytest.approx(e3nn.get_potential_energy(ag.copy()), abs=1e-8)
-    assert e == pytest.approx(-2.81710, abs=1e-4)
+    ref = e3nn.get_potential_energy(ag.copy())
+    assert ref == pytest.approx(-2.81710, abs=1e-4)
+    for _ in range(3):
+        with caplog.at_level(logging.WARNING, logger='mcpy.calculators'):
+            cueq = alchemi.AlchemiCalculator(str(MH1), enable_cueq=True, **kw)
+        assert _uses_cueq(cueq)
+        assert cueq.get_potential_energy(ag.copy()) == pytest.approx(ref, abs=1e-6)
+    assert not any('cuEq disabled' in r.getMessage() for r in caplog.records)

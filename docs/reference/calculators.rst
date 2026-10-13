@@ -18,7 +18,9 @@ If the backend is not installed, that access raises the ``ImportError``.
 
 ``AlchemiCalculator`` is energy-only by default when it loads its own model.
 Pass ``energy_only=False`` to keep forces, for example for ``run_md``.
-With ``enable_cueq=True``, a checkpoint that MACE's cuEq conversion would corrupt (mh-1, ACEsuit/mace#1298) loads with the e3nn kernels instead, and a warning is logged.
+With ``enable_cueq=True``, mcpy repairs a checkpoint that MACE's cuEq conversion would otherwise corrupt (mh-1, ACEsuit/mace#1298).
+It sets the missing ``use_edge_irreps_first`` flag before the conversion, so cuEq gives the same energies as e3nn.
+A checkpoint that it cannot repair loads with the e3nn kernels, and a warning is logged.
 
 
 .. autoclass:: mcpy.calculators.BaseCalculator

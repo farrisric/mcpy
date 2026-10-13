@@ -73,6 +73,10 @@ def _cueq_rebuild_matches(raw) -> bool:
     (ACEsuit/mace#1298). This predicts block 0's edge irreps the way the
     rebuild does and compares them with the loaded block.
     """
+    # mace must be imported before e3nn: e3nn 0.4.4 torch.loads its Wigner
+    # constants at import, which only works once mace has set
+    # TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD.
+    import mace  # noqa: F401
     from e3nn import o3
 
     edge = getattr(raw, 'edge_irreps', None)
@@ -88,15 +92,31 @@ def _cueq_rebuild_matches(raw) -> bool:
 
 
 def _cueq_or_fallback(raw, checkpoint) -> bool:
-    """False, with a warning, when cuEq conversion would corrupt ``raw``."""
+    """Whether ``raw`` can be converted to cuEq, repairing it when possible.
+
+    A checkpoint that predates ``use_edge_irreps_first`` but was built with
+    scalar edge irreps on block 0 (mh-1) is repaired by setting the flag the
+    rebuild reads, so the converted model keeps block 0's real width and
+    every weight transfers (ACEsuit/mace#1298). Anything else that would
+    rebuild wrongly falls back to e3nn with a warning.
+    """
     if _cueq_rebuild_matches(raw):
         return True
+    if not hasattr(raw, 'use_edge_irreps_first'):
+        raw.use_edge_irreps_first = True
+        if _cueq_rebuild_matches(raw):
+            logger.info(
+                'cuEq: set use_edge_irreps_first=True on %s so the cuEq rebuild '
+                'keeps its first interaction block (ACEsuit/mace#1298).',
+                checkpoint)
+            return True
+        del raw.use_edge_irreps_first
     logger.warning(
         'cuEq disabled for %s: MACE cuEq conversion rebuilds its first '
-        'interaction block with the wrong edge irreps (checkpoint predates '
-        'use_edge_irreps_first) and leaves those weights random, giving '
-        'wrong, load-varying energies (ACEsuit/mace#1298). Using the e3nn '
-        'kernels instead; this is correct but slower.', checkpoint)
+        'interaction block with the wrong edge irreps and leaves those '
+        'weights random, giving wrong, load-varying energies '
+        '(ACEsuit/mace#1298). Using the e3nn kernels instead; this is '
+        'correct but slower.', checkpoint)
     return False
 
 
@@ -173,10 +193,14 @@ def _load_model(
         # from_checkpoint converts before we can look at the model, so check
         # the cached file it will load (an extra CPU load, cuEq aliases only).
         from mace.calculators.foundations_models import download_mace_mp_checkpoint
-        raw = torch.load(download_mace_mp_checkpoint(checkpoint),
-                         map_location='cpu', weights_only=False)
-        enable_cueq = _cueq_or_fallback(raw, checkpoint)
+        path = download_mace_mp_checkpoint(checkpoint)
+        raw = torch.load(path, map_location='cpu', weights_only=False)
+        matches = _cueq_rebuild_matches(raw)
         del raw
+        if not matches:
+            # from_checkpoint would convert its own unrepaired copy; load the
+            # cached file through the local path, which repairs it first.
+            return _load_model(path, device, dtype, enable_cueq, compile_model)
     return MACEWrapper.from_checkpoint(
         checkpoint,
         device=torch.device(device),
