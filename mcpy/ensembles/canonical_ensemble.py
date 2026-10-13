@@ -79,33 +79,33 @@ class CanonicalEnsemble(BaseEnsemble):
 
     def get_state(self):
         return {
-            "atoms": self.atoms.copy(),  # detached: no calculator, no aliasing
-            "energy": self._current_energy,
-            "temperature": self._temperature,
-            "beta": self._beta,
-            "step": self._step,
-            "exchange_attempts": self.exchange_attempts,
-            "exchange_successes": self.exchange_successes,
+            'atoms': self.atoms.copy(),  # detached: no calculator, no aliasing
+            'energy': self._current_energy,
+            'temperature': self._temperature,
+            'beta': self._beta,
+            'step': self._step,
+            'exchange_attempts': self.exchange_attempts,
+            'exchange_successes': self.exchange_successes,
         }
 
     def set_state(self, state):
         # Swap the configuration only. Each replica keeps its own temperature
         # (and thus _beta) across an exchange; restoring them would collapse
         # the temperature ladder.
-        self.atoms = state["atoms"]
+        self.atoms = state['atoms']
         self._last_traj_step = None  # new configuration, same step: new frame
         # The energy baseline the next trial_step compares against. It travels
         # in the state dict rather than in atoms.info, which would have to
         # survive being pickled across MPI.
-        self._current_energy = state["energy"]
+        self._current_energy = state['energy']
         # Restored only when present, so the restart round-trip is lossless;
         # ReplicaExchange strips these slot-bound keys before a swap -- see
         # GrandCanonicalEnsemble.set_state.
-        self._step = state.get("step", self._step)
+        self._step = state.get('step', self._step)
         self.exchange_attempts = state.get(
-            "exchange_attempts", self.exchange_attempts)
+            'exchange_attempts', self.exchange_attempts)
         self.exchange_successes = state.get(
-            "exchange_successes", self.exchange_successes)
+            'exchange_successes', self.exchange_successes)
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:
@@ -154,8 +154,8 @@ class CanonicalEnsemble(BaseEnsemble):
             return
         super().initialize_run()
         self.initialize_outfile()
-        self.logger.info("Canonical Ensemble Monte Carlo starting "
-                         "(T=%s K, outfile=%s)", self._temperature, self._outfile)
+        self.logger.info('Canonical Ensemble Monte Carlo starting '
+                         '(T=%s K, outfile=%s)', self._temperature, self._outfile)
 
         self._current_energy = self.relax(self.atoms)
         self.write_coordinates(self.atoms, self._current_energy)
@@ -171,7 +171,7 @@ class CanonicalEnsemble(BaseEnsemble):
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile(self._step, self._current_energy)
-            self.logger.debug("step=%d E=%s best_E=%s accepted=%d t=%.2fs",
+            self.logger.debug('step=%d E=%s best_E=%s accepted=%d t=%.2fs',
                               self._step, self._current_energy,
                               self._best_energy, self._accepted_trials,
                               self._last_step_seconds)

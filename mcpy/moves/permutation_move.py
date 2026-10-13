@@ -24,7 +24,7 @@ class PermutationMove(BaseMove):
                  n_swaps: int = 1,
                  ) -> None:
         if n_swaps < 1:
-            raise ValueError(f"n_swaps must be >= 1, got {n_swaps}")
+            raise ValueError(f'n_swaps must be >= 1, got {n_swaps}')
         cell = NullCell()
         super().__init__(cell, species, seed)
         self.n_swaps = int(n_swaps)

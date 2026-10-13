@@ -33,7 +33,7 @@ class DisplacementMove(BaseMove):
                  n_steps: int = 1,
                  ) -> None:
         if n_steps < 1:
-            raise ValueError(f"n_steps must be >= 1, got {n_steps}")
+            raise ValueError(f'n_steps must be >= 1, got {n_steps}')
         cell = NullCell()
         super().__init__(cell, species, seed)
         self.max_displacement = max_displacement
@@ -65,7 +65,7 @@ class DisplacementMove(BaseMove):
             return False, 0, 'X'
         if self.n_steps > to_move.size:
             raise ValueError(
-                f"n_steps={self.n_steps} exceeds movable atom count {to_move.size}"
+                f'n_steps={self.n_steps} exceeds movable atom count {to_move.size}'
             )
         if self.n_steps == 1:
             selected = (int(self.rng.random.choice(to_move)),)

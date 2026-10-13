@@ -59,7 +59,7 @@ class MoveSelector:
         if n_moves is None:
             n_moves = max(1, round(sum(probabilities)))
         if n_moves < 1:
-            raise ValueError(f"n_moves must be >= 1, got {n_moves}")
+            raise ValueError(f'n_moves must be >= 1, got {n_moves}')
         self.n_moves = int(n_moves)
         # Cumulative weights for random.choices; it bisects them against one
         # random() draw, which is exactly what the previous cumsum +

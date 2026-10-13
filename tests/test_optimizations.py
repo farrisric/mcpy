@@ -62,7 +62,7 @@ class TestSphericalCellVolume:
         self.cell.calculate_volume(atoms2)
         v2 = self.cell.volume
 
-        assert v2 > v1, "Moving atoms outside the sphere should free volume"
+        assert v2 > v1, 'Moving atoms outside the sphere should free volume'
 
     def test_empty_atoms_full_sphere(self):
         empty = Atoms()
@@ -156,7 +156,7 @@ class TestSphericalCellGetRandomPoint:
                     )
                     fraction = mask.sum() / n
                     assert abs(fraction - 0.125) < 0.03, \
-                        f"Octant ({sx},{sy},{sz}) fraction={fraction:.3f}, expected ~0.125"
+                        f'Octant ({sx},{sy},{sz}) fraction={fraction:.3f}, expected ~0.125'
 
 
 # ---------------------------------------------------------------------------

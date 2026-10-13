@@ -77,65 +77,65 @@ def test_nvt_uphill_matches_metropolis_boundary():
 
 def _gcmc(temperature, mu, rng_value):
     e = GrandCanonicalEnsemble.__new__(GrandCanonicalEnsemble)
-    e.units = SetUnits("metal", temperature, ["H"])
-    e._mu = {"H": mu}
+    e.units = SetUnits('metal', temperature, ['H'])
+    e._mu = {'H': mu}
     e.rng_acceptance = FixedRNG(rng_value)
     e.logger = types.SimpleNamespace(debug=lambda *a, **k: None)
-    e.move_selector = types.SimpleNamespace(get_name=lambda: "dummy")
+    e.move_selector = types.SimpleNamespace(get_name=lambda: 'dummy')
     return e
 
 
 def test_gcmc_displacement_reduces_to_metropolis():
     # delta_particles == 0 -> plain Metropolis on units.beta
     e = _gcmc(300.0, mu=0.0, rng_value=0.5)
-    assert e._acceptance_condition(-0.2, 0, volume=1000.0, species="H")
+    assert e._acceptance_condition(-0.2, 0, volume=1000.0, species='H')
 
     diff = 0.1
     p = np.exp(-diff * e.units.beta)
     e_lo = _gcmc(300.0, mu=0.0, rng_value=p * 0.99)
-    assert e_lo._acceptance_condition(diff, 0, volume=1000.0, species="H")
+    assert e_lo._acceptance_condition(diff, 0, volume=1000.0, species='H')
     e_hi = _gcmc(300.0, mu=0.0, rng_value=p * 1.01)
-    assert not (e_hi._acceptance_condition(diff, 0, volume=1000.0, species="H"))
+    assert not (e_hi._acceptance_condition(diff, 0, volume=1000.0, species='H'))
 
 
 def test_gcmc_insertion_favoured_by_high_mu():
     # Large positive mu drives the acceptance probability above 1 -> always accept.
     e = _gcmc(300.0, mu=0.5, rng_value=0.999)
-    assert e._acceptance_condition(0.0, 1, volume=1000.0, species="H",
+    assert e._acceptance_condition(0.0, 1, volume=1000.0, species='H',
                                    n_atoms=0)
     # Strongly negative mu suppresses insertion -> reject against a mid draw.
     e_rej = _gcmc(300.0, mu=-0.5, rng_value=0.5)
-    assert not e_rej._acceptance_condition(0.0, 1, volume=1000.0, species="H",
+    assert not e_rej._acceptance_condition(0.0, 1, volume=1000.0, species='H',
                                            n_atoms=0)
 
 
 def test_gcmc_insertion_probability_formula():
     e = _gcmc(300.0, mu=-0.3, rng_value=0.0)
     volume, n, diff = 1000.0, 4, 0.05
-    expected = (e.units.de_broglie_insertion(volume, n, "H")
-                * np.exp(-e.units.beta * (diff - e._mu["H"])))
+    expected = (e.units.de_broglie_insertion(volume, n, 'H')
+                * np.exp(-e.units.beta * (diff - e._mu['H'])))
     # Choose a draw straddling the expected probability.
     below = _gcmc(300.0, mu=-0.3, rng_value=expected * 0.99)
     above = _gcmc(300.0, mu=-0.3, rng_value=min(expected * 1.01, 1.0))
-    assert below._acceptance_condition(diff, 1, volume, "H", n_atoms=n)
+    assert below._acceptance_condition(diff, 1, volume, 'H', n_atoms=n)
     if expected < 1.0:
-        assert not (above._acceptance_condition(diff, 1, volume, "H", n_atoms=n))
+        assert not (above._acceptance_condition(diff, 1, volume, 'H', n_atoms=n))
 
 
 def test_gcmc_deletion_uses_opposite_mu_sign():
     # Deletion exp term carries +mu, the opposite sign from insertion.
     e = _gcmc(300.0, mu=-0.3, rng_value=0.0)
     volume, n, diff = 1000.0, 6, 0.05
-    expected = (e.units.de_broglie_deletion(volume, n, "H")
-                * np.exp(-e.units.beta * (diff + e._mu["H"])))
+    expected = (e.units.de_broglie_deletion(volume, n, 'H')
+                * np.exp(-e.units.beta * (diff + e._mu['H'])))
     below = _gcmc(300.0, mu=-0.3, rng_value=expected * 0.99)
-    assert below._acceptance_condition(diff, -1, volume, "H", n_atoms=n)
+    assert below._acceptance_condition(diff, -1, volume, 'H', n_atoms=n)
 
 
 def test_gcmc_rejects_unexpected_delta_particles():
     e = _gcmc(300.0, mu=0.0, rng_value=0.5)
     with pytest.raises(ValueError):
-        e._acceptance_condition(0.0, 2, volume=1000.0, species="H")
+        e._acceptance_condition(0.0, 2, volume=1000.0, species='H')
 
 
 # --------------------------------------------------------------------------
@@ -152,11 +152,11 @@ def test_gcmc_rejects_unexpected_delta_particles():
 
 def _gcmc_sp(temperature, mu, rng_value, species):
     e = GrandCanonicalEnsemble.__new__(GrandCanonicalEnsemble)
-    e.units = SetUnits("metal", temperature, [species])
+    e.units = SetUnits('metal', temperature, [species])
     e._mu = {species: mu}
     e.rng_acceptance = FixedRNG(rng_value)
     e.logger = types.SimpleNamespace(debug=lambda *a, **k: None)
-    e.move_selector = types.SimpleNamespace(get_name=lambda: "dummy")
+    e.move_selector = types.SimpleNamespace(get_name=lambda: 'dummy')
     return e
 
 
@@ -166,11 +166,11 @@ def test_total_vs_perspecies_count_shifts_effective_mu():
     cell), the per-species choice would insert far more readily -- an effective
     chemical potential shift of +kT*ln((N_total+1)/(N_species+1)). mcpy keeps
     the total count, so this shift is exactly what would change if we switched."""
-    units = SetUnits("metal", 500.0, ["O"])
+    units = SetUnits('metal', 500.0, ['O'])
     volume = 1500.0
     n_total, n_species = 1000, 20  # total atoms vs O atoms inside the cell
-    p_total = units.de_broglie_insertion(volume, n_total, "O")
-    p_species = units.de_broglie_insertion(volume, n_species, "O")
+    p_total = units.de_broglie_insertion(volume, n_total, 'O')
+    p_species = units.de_broglie_insertion(volume, n_species, 'O')
     assert p_species > p_total
     np.testing.assert_allclose(p_species / p_total, (n_total + 1) / (n_species + 1))
     dmu = np.log((n_total + 1) / (n_species + 1)) / units.beta  # eV
@@ -182,16 +182,16 @@ def test_perspecies_count_inserts_where_total_rejects():
     insertion that the total-atom count (mcpy's convention) rejects."""
     volume, diff, mu, T = 1500.0, 0.0, -0.3, 500.0
     n_total, n_species = 1000, 20
-    units = SetUnits("metal", T, ["O"])
+    units = SetUnits('metal', T, ['O'])
     exp_term = np.exp(-units.beta * (diff - mu))
-    p_total = units.de_broglie_insertion(volume, n_total, "O") * exp_term
-    p_species = units.de_broglie_insertion(volume, n_species, "O") * exp_term
+    p_total = units.de_broglie_insertion(volume, n_total, 'O') * exp_term
+    p_species = units.de_broglie_insertion(volume, n_species, 'O') * exp_term
     assert p_total < 1.0  # total-count path is probabilistic, not auto-accept
     draw = 0.5 * (p_total + min(p_species, 1.0))  # between the two -> they disagree
-    e_species = _gcmc_sp(T, mu, rng_value=draw, species="O")
-    e_total = _gcmc_sp(T, mu, rng_value=draw, species="O")
-    assert e_species._acceptance_condition(diff, 1, volume, "O", n_atoms=n_species)
-    assert not e_total._acceptance_condition(diff, 1, volume, "O", n_atoms=n_total)
+    e_species = _gcmc_sp(T, mu, rng_value=draw, species='O')
+    e_total = _gcmc_sp(T, mu, rng_value=draw, species='O')
+    assert e_species._acceptance_condition(diff, 1, volume, 'O', n_atoms=n_species)
+    assert not e_total._acceptance_condition(diff, 1, volume, 'O', n_atoms=n_total)
 
 
 def test_do_gcmc_step_feeds_total_atom_count():

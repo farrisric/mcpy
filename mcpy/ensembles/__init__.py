@@ -5,9 +5,9 @@ from .grand_canonical_ensemble import GrandCanonicalEnsemble
 from .replica_exchange import ReplicaExchange
 
 __all__ = [
-    "BaseEnsemble",
-    "BatchedReplicaExchange",
-    "CanonicalEnsemble",
-    "GrandCanonicalEnsemble",
-    "ReplicaExchange",
+    'BaseEnsemble',
+    'BatchedReplicaExchange',
+    'CanonicalEnsemble',
+    'GrandCanonicalEnsemble',
+    'ReplicaExchange',
 ]

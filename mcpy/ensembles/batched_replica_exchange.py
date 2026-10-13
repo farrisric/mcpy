@@ -57,9 +57,9 @@ class BatchedReplicaExchange:
         consolidate_logging: bool = True,
     ) -> None:
         if temperatures is None and mus is None:
-            raise ValueError("Provide either temperatures or mus (one per replica).")
+            raise ValueError('Provide either temperatures or mus (one per replica).')
         if temperatures is not None and mus is not None:
-            raise ValueError("Pass temperatures OR mus, not both.")
+            raise ValueError('Pass temperatures OR mus, not both.')
 
         if temperatures is not None:
             self.temperatures = list(temperatures)
@@ -93,13 +93,13 @@ class BatchedReplicaExchange:
                 f"replicas share {', '.join(shared)}; gcmc_factory must build "
                 'a fresh ensemble with its own atoms, cells and move_selector '
                 'per replica (see the module docstring). Shared objects mix '
-                'the replicas\' volumes, counters and RNG streams silently.'
+                "the replicas' volumes, counters and RNG streams silently."
             )
 
         if not hasattr(calculator, 'get_potential_energies'):
             raise TypeError(
-                "calculator must implement get_potential_energies(atoms_list). "
-                "Use AlchemiCalculator or wrap your calculator."
+                'calculator must implement get_potential_energies(atoms_list). '
+                'Use AlchemiCalculator or wrap your calculator.'
             )
         self.calculator = calculator
 
@@ -179,7 +179,7 @@ class BatchedReplicaExchange:
                 try:
                     self._outfile_handle.close()
                 except OSError:
-                    self.logger.exception("Error closing %s", self._outfile)
+                    self.logger.exception('Error closing %s', self._outfile)
                 self._outfile_handle = None
             self._write_global_minimum()
 
@@ -331,8 +331,8 @@ class BatchedReplicaExchange:
         # exp() overflows to inf for a large positive delta; short-circuit.
         p = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
-            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f "
-            "Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f",
+            'swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f '
+            'Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f',
             i, j, beta_i, beta_j, phi_ii, phi_jj, phi_ji, phi_ij, delta, p,
         )
         return self.rng.get_uniform() < p
@@ -386,22 +386,22 @@ class BatchedReplicaExchange:
             return
         try:
             with open(self._outfile, 'w') as fh:
-                fh.write("+-------------------------------------------------+\n")
-                fh.write("| Batched Replica Exchange (single-GPU) GCMC      |\n")
-                fh.write("+-------------------------------------------------+\n")
-                fh.write(f"Total GCMC steps: {self.gcmc_steps}\n")
-                fh.write(f"Exchange interval (steps): {self.exchange_interval}\n")
-                fh.write(f"Number of replicas: {self.n_replicas}\n")
+                fh.write('+-------------------------------------------------+\n')
+                fh.write('| Batched Replica Exchange (single-GPU) GCMC      |\n')
+                fh.write('+-------------------------------------------------+\n')
+                fh.write(f'Total GCMC steps: {self.gcmc_steps}\n')
+                fh.write(f'Exchange interval (steps): {self.exchange_interval}\n')
+                fh.write(f'Number of replicas: {self.n_replicas}\n')
                 if self.temperatures is not None:
-                    fh.write(f"Temperatures (K): {self.temperatures}\n")
+                    fh.write(f'Temperatures (K): {self.temperatures}\n')
                 if self.mus is not None:
                     for k, mu in enumerate(self.mus):
-                        fh.write(f"Chemical potentials replica {k}: {mu}\n")
-                fh.write(re_header("Replica", 8) + "\n")
-                fh.write(RE_RULE + "\n")
+                        fh.write(f'Chemical potentials replica {k}: {mu}\n')
+                fh.write(re_header('Replica', 8) + '\n')
+                fh.write(RE_RULE + '\n')
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
-            self.logger.exception("Error opening output file %s", self._outfile)
+            self.logger.exception('Error opening output file %s', self._outfile)
             raise
 
     def _log_status(self, step: int) -> None:
@@ -495,13 +495,13 @@ class BatchedReplicaExchange:
         try:
             for i, r in enumerate(self.replicas):
                 symbols = r.atoms.get_chemical_symbols()
-                count_str = ', '.join(f"{s}: {c}" for s, c in Counter(symbols).items())
-                mu_str = ', '.join(f"{s}: {v:.3f}" for s, v in r._mu.items())
+                count_str = ', '.join(f'{s}: {c}' for s, c in Counter(symbols).items())
+                mu_str = ', '.join(f'{s}: {v:.3f}' for s, v in r._mu.items())
                 attempts = self.exchange_attempts[i]
                 pct = (self.exchange_successes[i] / attempts * 100) if attempts else 0.0
                 self._outfile_handle.write(re_row(
                     i, r._step, count_str, r.E_old, mu_str, r._temperature,
-                    pct, width=8) + "\n")
+                    pct, width=8) + '\n')
             self._outfile_handle.flush()
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to %s", self._outfile)
+            self.logger.exception('Error writing to %s', self._outfile)

@@ -85,33 +85,33 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         # the calculator, which may not pickle or may ship a whole model) and
         # must not alias the configuration the sampler keeps mutating.
         return {
-            "atoms": self.atoms.copy(),
-            "n_atoms": self.n_atoms,
-            "energy": self.E_old,
-            "mu": self._mu,
-            "temperature": self._temperature,
-            "beta": self.units.beta,
-            "lambda_dbs": self.units.lambda_dbs,
-            "step": self._step,
-            "exchange_attempts": self.exchange_attempts,
-            "exchange_successes": self.exchange_successes,
+            'atoms': self.atoms.copy(),
+            'n_atoms': self.n_atoms,
+            'energy': self.E_old,
+            'mu': self._mu,
+            'temperature': self._temperature,
+            'beta': self.units.beta,
+            'lambda_dbs': self.units.lambda_dbs,
+            'step': self._step,
+            'exchange_attempts': self.exchange_attempts,
+            'exchange_successes': self.exchange_successes,
         }
 
     def set_state(self, state: Dict[str, Any]) -> None:
-        self.atoms = state["atoms"]
+        self.atoms = state['atoms']
         self._last_traj_step = None  # new configuration, same step: new frame
-        self.E_old = state["energy"]
-        self.n_atoms = state["n_atoms"]
+        self.E_old = state['energy']
+        self.n_atoms = state['n_atoms']
         # Step count and exchange statistics are restored only when the dict
         # carries them, so the get_state()/set_state() restart round-trip is
         # lossless. ``ReplicaExchange`` strips them before applying a swap:
         # they describe the *slot*, not the config, and trading them between
         # ranks made the per-rank "Accepted Exchange (%)" column meaningless.
-        self._step = state.get("step", self._step)
+        self._step = state.get('step', self._step)
         self.exchange_attempts = state.get(
-            "exchange_attempts", self.exchange_attempts)
+            'exchange_attempts', self.exchange_attempts)
         self.exchange_successes = state.get(
-            "exchange_successes", self.exchange_successes)
+            'exchange_successes', self.exchange_successes)
         # The configuration changed under the cells: refresh their free
         # volumes now, or the next insertion/deletion acceptance would use
         # the previous configuration's volume (GCMC only recalculates on
@@ -120,35 +120,35 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
     def get_outfile_header(self) -> str:
         return (
-            "+-------------------------------------------------+\n"
-            "| Grand Canonical Ensemble Monte Carlo Simulation |\n"
-            "+-------------------------------------------------+\n\n"
+            '+-------------------------------------------------+\n'
+            '| Grand Canonical Ensemble Monte Carlo Simulation |\n'
+            '+-------------------------------------------------+\n\n'
         )
 
     def get_outfile_metadata(self) -> str:
         ratio_label = f"Acceptance Ratios ({', '.join(self.move_selector.move_list_names)})"
         # LJ runs are in reduced units: energy in epsilon, T in epsilon/k_B.
-        lj = self.units.unit_type == "LJ"
-        energy_label = "Energy (eps)" if lj else "Energy (eV)"
-        temperature_label = "Temperature (reduced)" if lj else "Temperature (K)"
-        header_row = "{:<10} {:<10} {:<15} {:<{w}}".format(
-            "Step", "N_atoms", energy_label, ratio_label,
+        lj = self.units.unit_type == 'LJ'
+        energy_label = 'Energy (eps)' if lj else 'Energy (eV)'
+        temperature_label = 'Temperature (reduced)' if lj else 'Temperature (K)'
+        header_row = '{:<10} {:<10} {:<15} {:<{w}}'.format(
+            'Step', 'N_atoms', energy_label, ratio_label,
             w=self._ratio_col_width,
         )
         return (
-            "Simulation Parameters:\n"
-            f"  Units type: {self.units.unit_type}\n"
-            f"  {temperature_label}: {self._temperature}\n"
-            f"  Chemical potentials: {self._mu}\n"
-            "  Acceptance ratios are per write-interval (cumulative totals "
-            "in the finalize_run log).\n"
-            "Starting simulation...\n"
+            'Simulation Parameters:\n'
+            f'  Units type: {self.units.unit_type}\n'
+            f'  {temperature_label}: {self._temperature}\n'
+            f'  Chemical potentials: {self._mu}\n'
+            '  Acceptance ratios are per write-interval (cumulative totals '
+            'in the finalize_run log).\n'
+            'Starting simulation...\n'
             + header_row
-            + "\n" + "-" * self._table_width + "\n"
+            + '\n' + '-' * self._table_width + '\n'
         )
 
     def _row(self, ratio_str: str) -> str:
-        return "{:<10} {:<10} {:<15.6f} {:<{w}}".format(
+        return '{:<10} {:<10} {:<15.6f} {:<{w}}'.format(
             self._step, self.n_atoms, self.E_old, ratio_str,
             w=self._ratio_col_width)
 
@@ -170,16 +170,16 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         if self._outfile is None or self._outfile_handle is None:
             self._last_logged_step = self._step
             return
-        ratio_str = ", ".join(
-            f"{r * 100:.1f}%" if not np.isnan(r) else "N/A"
+        ratio_str = ', '.join(
+            f'{r * 100:.1f}%' if not np.isnan(r) else 'N/A'
             for r in acceptance_ratios
         )
         try:
-            self._outfile_handle.write(self._row(ratio_str) + "\n")
+            self._outfile_handle.write(self._row(ratio_str) + '\n')
             self._outfile_handle.flush()
             self._last_logged_step = self._step
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to file %s", self._outfile)
+            self.logger.exception('Error writing to file %s', self._outfile)
 
     def _species_count(self, atoms: Atoms, specie: str) -> int:
         """Particle count for one μ species: molecules for molecular keys,
@@ -230,8 +230,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             exp_term = np.exp(-self.units.beta * (potential_diff - self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                "Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, "
-                "Exp Arg %s, Potential diff: %.3e, Delta_particles: %d",
+                'Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, '
+                'Exp Arg %s, Potential diff: %.3e, Delta_particles: %d',
                 self.units.lambda_dbs[species], p, self.units.beta, exp_term,
                 potential_diff - self._mu[species], potential_diff, delta_particles)
         elif delta_particles == -1:  # deletion
@@ -239,13 +239,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             exp_term = np.exp(-self.units.beta * (potential_diff + self._mu[species]))
             p = db_term * exp_term
             self.logger.debug(
-                "Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, "
-                "Exp Arg %s, Potential diff: %.3e, Delta_particles: %d",
+                'Lambda_db: %.3e, p: %.3e, Beta: %.3e, Exp: %.3e, '
+                'Exp Arg %s, Potential diff: %.3e, Delta_particles: %d',
                 self.units.lambda_dbs[species], p, self.units.beta, exp_term,
                 potential_diff + self._mu[species], potential_diff, delta_particles)
         else:
             raise ValueError(
-                f"unexpected delta_particles={delta_particles} from move "
+                f'unexpected delta_particles={delta_particles} from move '
                 f"'{self.move_selector.get_name()}'"
             )
 
@@ -297,9 +297,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         if atoms_new is not atoms:
             raise RuntimeError(
                 f"move '{self.move_selector.get_name()}' returned a "
-                "different Atoms object; GCMC moves must mutate the "
-                "passed atoms in place (copy-based moves are for "
-                "CanonicalEnsemble only)"
+                'different Atoms object; GCMC moves must mutate the '
+                'passed atoms in place (copy-based moves are for '
+                'CanonicalEnsemble only)'
             )
         return snapshot, (delta_particles, species)
 
@@ -329,7 +329,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.move_selector.acceptance_counter()
         self.calculate_cells_volume(self.atoms)
         self._record_minimum(self.atoms, self.E_old)
-        self.logger.debug("Volume: %.3f, Delta_particles: %d, Species: %s",
+        self.logger.debug('Volume: %.3f, Delta_particles: %d, Species: %s',
                           volume, delta_particles, species)
         return True
 
@@ -349,7 +349,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         super().initialize_run()
         self.initialize_outfile()
         self.logger.info(
-            "GCMC starting: T=%s K, mu=%s, outfile=%s",
+            'GCMC starting: T=%s K, mu=%s, outfile=%s',
             self._temperature, self._mu, self._outfile,
         )
         # Initial frame (step 0) for both outfile and trajectory so the
@@ -364,12 +364,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         if self._last_logged_step == self._step:
             return  # a resumed run: the previous run's last row is this one
         try:
-            placeholder = ", ".join("N/A" for _ in self.move_selector.move_list)
-            self._outfile_handle.write(self._row(placeholder) + "\n")
+            placeholder = ', '.join('N/A' for _ in self.move_selector.move_list)
+            self._outfile_handle.write(self._row(placeholder) + '\n')
             self._outfile_handle.flush()
             self._last_logged_step = self._step
         except (OSError, AttributeError):
-            self.logger.exception("Error writing initial row to %s", self._outfile)
+            self.logger.exception('Error writing initial row to %s', self._outfile)
 
     def finalize_run(self) -> None:
         if not self._initialized:
@@ -379,7 +379,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self.write_outfile()
         self.write_coordinates(self.atoms, self.E_old)
         self.logger.info(
-            "GCMC complete: steps=%d, final_energy=%.6f eV",
+            'GCMC complete: steps=%d, final_energy=%.6f eV',
             self._step, self.E_old,
         )
         super().finalize_run()
@@ -395,7 +395,7 @@ class GrandCanonicalEnsemble(BaseEnsemble):
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile()
-            self.logger.info("step=%d N=%d E=%.6f t=%.2fs",
+            self.logger.info('step=%d N=%d E=%.6f t=%.2fs',
                              self._step, self.n_atoms, self.E_old,
                              self._last_step_seconds)
 

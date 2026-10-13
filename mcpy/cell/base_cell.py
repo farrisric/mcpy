@@ -22,7 +22,7 @@ class BaseCell(ABC):
         Recompute the (free) volume of the cell for ``atoms`` and store it,
         so :meth:`get_volume` returns it.
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     @abstractmethod
     def get_random_point(self):
@@ -31,7 +31,7 @@ class BaseCell(ABC):
 
         :return: A numpy array representing the random point (x, y, z).
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     @abstractmethod
     def get_volume(self):
@@ -40,12 +40,12 @@ class BaseCell(ABC):
 
         :return: Volume of the cell.
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     @abstractmethod
     def is_point_inside(self, point):
         """Whether ``point`` lies in the region insertions are proposed in."""
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     def free_volume(self, atoms):
         """Free volume for ``atoms`` without storing it. Cells that exclude

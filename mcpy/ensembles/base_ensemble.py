@@ -124,7 +124,7 @@ class BaseEnsemble(ABC):
             self._outfile_handle.write(f'STEP: {step} ENERGY: {energy}\n')
             self._outfile_handle.flush()
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to file %s", self._outfile)
+            self.logger.exception('Error writing to file %s', self._outfile)
 
     def write_coordinates(self, atoms: Atoms, energy: float) -> None:
         """Write one trajectory frame, at most once per step. Reset
@@ -138,7 +138,7 @@ class BaseEnsemble(ABC):
             write_xyz(atoms, energy, self._traj_handle)
             self._last_traj_step = self._step
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to trajectory file %s", self._traj_file)
+            self.logger.exception('Error writing to trajectory file %s', self._traj_file)
 
     def _minimum_score(self, atoms: Atoms, energy: float) -> float:
         """Score used to compare configurations for the running minimum.
@@ -167,26 +167,26 @@ class BaseEnsemble(ABC):
             extra = f'step={self._step} score={score:.6f}'
             write_xyz(atoms, energy, self._minima_handle, extra=extra)
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to minima file %s", self._minima_file)
+            self.logger.exception('Error writing to minima file %s', self._minima_file)
 
     def close_files(self) -> None:
         if self._traj_handle is not None:
             try:
                 self._traj_handle.close()
             except OSError:
-                self.logger.exception("Error closing trajectory file %s", self._traj_file)
+                self.logger.exception('Error closing trajectory file %s', self._traj_file)
             self._traj_handle = None
         if self._outfile_handle is not None:
             try:
                 self._outfile_handle.close()
             except OSError:
-                self.logger.exception("Error closing outfile %s", self._outfile)
+                self.logger.exception('Error closing outfile %s', self._outfile)
             self._outfile_handle = None
         if self._minima_handle is not None:
             try:
                 self._minima_handle.close()
             except OSError:
-                self.logger.exception("Error closing minima file %s", self._minima_file)
+                self.logger.exception('Error closing minima file %s', self._minima_file)
             self._minima_handle = None
 
     def compute_energy(self, atoms: Atoms) -> float:
@@ -237,26 +237,26 @@ class BaseEnsemble(ABC):
         """Log summary statistics and close files. Idempotent."""
         if not self._initialized:
             return
-        self.logger.info("Simulation complete.")
+        self.logger.info('Simulation complete.')
         ms = getattr(self, 'move_selector', None)
         if ms is not None:
             if hasattr(ms, 'total_ratios'):
-                self.logger.info("Total attempts per move: %s", ms.move_counter_total)
-                self.logger.info("Cumulative acceptance ratios: %s", ms.total_ratios())
+                self.logger.info('Total attempts per move: %s', ms.move_counter_total)
+                self.logger.info('Cumulative acceptance ratios: %s', ms.total_ratios())
             else:
-                self.logger.info("Attempts per move: %s", ms.move_counter)
-                self.logger.info("Acceptance ratios: %s", ms.get_acceptance_ratio())
+                self.logger.info('Attempts per move: %s', ms.move_counter)
+                self.logger.info('Acceptance ratios: %s', ms.get_acceptance_ratio())
         if hasattr(self, 'E_old'):
-            self.logger.info("Final energy (eV): %.6f", self.E_old)
+            self.logger.info('Final energy (eV): %.6f', self.E_old)
         self.close_files()
         self._initialized = False
         self._resume_files = True
 
     def get_outfile_header(self) -> str:
-        return "STEP ENERGY\n"
+        return 'STEP ENERGY\n'
 
     def get_outfile_metadata(self) -> str:
-        return ""
+        return ''
 
     @abstractmethod
     def _run(self) -> None:
@@ -297,7 +297,7 @@ def write_global_minimum(path, bests, per_rung, logger):
             for rank, (score, energy, atoms) in entries:
                 write_xyz(atoms, energy, fh, extra=f'rank={rank} score={score:.6f}')
     except OSError:
-        logger.exception("Error writing global minimum to %s", path)
+        logger.exception('Error writing global minimum to %s', path)
 
 
 def write_xyz(atoms, energy, file_or_path, extra: str = ''):
@@ -312,7 +312,7 @@ def write_xyz(atoms, energy, file_or_path, extra: str = ''):
     positions = atoms.positions
     symbols = atoms.get_chemical_symbols()
     num_atoms = len(atoms)
-    cell_str = " ".join(f"{v:.8f}" for v in cell.ravel())
+    cell_str = ' '.join(f'{v:.8f}' for v in cell.ravel())
 
     mol_ids = atoms.arrays.get('molecule_id')
 
@@ -323,15 +323,15 @@ def write_xyz(atoms, energy, file_or_path, extra: str = ''):
     if mol_ids is not None:
         comment += ' Properties=species:S:1:pos:R:3:molecule_id:I:1'
     comment += '\n'
-    parts = [f"{num_atoms}\n", comment]
+    parts = [f'{num_atoms}\n', comment]
 
     for i, (s, p) in enumerate(zip(symbols, positions)):
-        line = f"{s} {p[0]} {p[1]} {p[2]}"
+        line = f'{s} {p[0]} {p[1]} {p[2]}'
         if mol_ids is not None:
-            line += f" {mol_ids[i]}"
-        line += "\n"
+            line += f' {mol_ids[i]}'
+        line += '\n'
         parts.append(line)
-    text = "".join(parts)
+    text = ''.join(parts)
 
     if isinstance(file_or_path, str):
         with open(file_or_path, 'a') as xyz_file:

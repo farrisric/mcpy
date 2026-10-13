@@ -18,4 +18,4 @@ def __getattr__(name):
     if name in ('analyze_phase_diagram_results', 'plot_phase_diagram'):
         from . import phase_diagram
         return getattr(phase_diagram, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

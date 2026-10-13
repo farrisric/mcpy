@@ -16,44 +16,44 @@ logger = logging.getLogger(__name__)
 # replica-exchange drivers. The first column differs between them (MPI numbers
 # ranks, the batched driver numbers replicas), so it is a parameter; everything
 # after it is shared.
-RE_COLUMNS = ("Step", "Atom Count (by species)", "Energy (eV)",
-              "Chemical Potentials (eV)", "Temperature (K)",
-              "Accepted Exchange (%)")
-_RE_TAIL_HEADER = "{:<10} {:<25} {:<15} {:<35} {:<20} {:<25}"
-_RE_TAIL_ROW = "{:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}"
-RE_RULE = "-" * 140
+RE_COLUMNS = ('Step', 'Atom Count (by species)', 'Energy (eV)',
+              'Chemical Potentials (eV)', 'Temperature (K)',
+              'Accepted Exchange (%)')
+_RE_TAIL_HEADER = '{:<10} {:<25} {:<15} {:<35} {:<20} {:<25}'
+_RE_TAIL_ROW = '{:<10} {:<25} {:<15.6f} {:<35} {:<20} {:<25.2f}'
+RE_RULE = '-' * 140
 
 
-def re_header(label="Rank", width=5):
-    return f"{label:<{width}} " + _RE_TAIL_HEADER.format(*RE_COLUMNS)
+def re_header(label='Rank', width=5):
+    return f'{label:<{width}} ' + _RE_TAIL_HEADER.format(*RE_COLUMNS)
 
 
 def re_row(index, *values, width=5):
-    return f"{index:<{width}} " + _RE_TAIL_ROW.format(*values)
+    return f'{index:<{width}} ' + _RE_TAIL_ROW.format(*values)
 
 
 def re_banner(gcmc_steps, exchange_interval, atom_count, temperatures, mus,
               n_ranks):
     """The parameter block both drivers print, as a list of lines."""
     lines = [
-        "+-------------------------------------------------+",
-        "| Replica Exchange Monte Carlo Simulation         |",
-        "+-------------------------------------------------+",
-        "Simulation Parameters:",
-        f"Total GCMC steps: {gcmc_steps}",
-        f"Exchange interval (steps): {exchange_interval}",
-        f"Number of atoms in initial configuration: {atom_count}",
+        '+-------------------------------------------------+',
+        '| Replica Exchange Monte Carlo Simulation         |',
+        '+-------------------------------------------------+',
+        'Simulation Parameters:',
+        f'Total GCMC steps: {gcmc_steps}',
+        f'Exchange interval (steps): {exchange_interval}',
+        f'Number of atoms in initial configuration: {atom_count}',
     ]
     if temperatures is not None:
-        lines.append(f"Temperatures (K): {temperatures}")
+        lines.append(f'Temperatures (K): {temperatures}')
     else:
-        lines.append("Temperatures: Not specified (default)")
+        lines.append('Temperatures: Not specified (default)')
     if mus is not None:
-        lines += [f"Chemical potentials: Rank {i} - {mu}"
+        lines += [f'Chemical potentials: Rank {i} - {mu}'
                   for i, mu in enumerate(mus)]
     else:
-        lines.append("Chemical potentials: Not specified (default)")
-    lines += [f"Number of MPI ranks: {n_ranks}", re_header(), RE_RULE]
+        lines.append('Chemical potentials: Not specified (default)')
+    lines += [f'Number of MPI ranks: {n_ranks}', re_header(), RE_RULE]
     return lines
 
 
@@ -64,10 +64,10 @@ class ReplicaExchange:
                  mus=None,
                  gcmc_steps=100,
                  exchange_interval=10,
-                 outfile="replica_exchange.log",
+                 outfile='replica_exchange.log',
                  write_out_interval=20,
                  seed=31,
-                 global_minimum_file="global_minimum.xyz"):
+                 global_minimum_file='global_minimum.xyz'):
         """ReplicaExchange for GCMC.
 
         ``gcmc_factory`` must produce per-rank unique output filenames (e.g.
@@ -75,27 +75,27 @@ class ReplicaExchange:
         ranks race on the same files.
         """
         if temperatures is None and mus is None:
-            raise ValueError("Provide either temperatures or mus (one per rank).")
+            raise ValueError('Provide either temperatures or mus (one per rank).')
         if temperatures is not None and mus is not None:
             # A joint (T, mu) ladder would need the full exchange criterion
             # with both the (beta2-beta1)(E2-E1) and the mu*N terms; neither
             # implemented rule covers it.
-            raise ValueError("Pass temperatures OR mus, not both.")
+            raise ValueError('Pass temperatures OR mus, not both.')
 
         if MPI is None:
-            raise ImportError("mpi4py is required for ReplicaExchange. Please install it.")
+            raise ImportError('mpi4py is required for ReplicaExchange. Please install it.')
 
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
         if temperatures:
-            assert len(temperatures) == self.size, "Number of temperatures must match MPI ranks."
+            assert len(temperatures) == self.size, 'Number of temperatures must match MPI ranks.'
             self.temperatures = temperatures
             self.gcmc = gcmc_factory(T=temperatures[self.rank], rank=self.rank)
 
         if mus:
-            assert len(mus) == self.size, "Number of mus must match MPI ranks."
+            assert len(mus) == self.size, 'Number of mus must match MPI ranks.'
             self.mus = mus
             self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
 
@@ -104,12 +104,12 @@ class ReplicaExchange:
         # ensemble here, so a units-less ensemble must pass the guard.
         if getattr(getattr(self.gcmc, 'units', None), 'molecules', None):
             raise NotImplementedError(
-                "ReplicaExchange (MPI) does not support molecular species: "
-                "its per-species swap bookkeeping (_exchange_prob_T / "
-                "_exchange_prob_mu) counts atoms by symbol via "
-                "`atoms.symbols.count(specie)`, which is always 0 for a "
+                'ReplicaExchange (MPI) does not support molecular species: '
+                'its per-species swap bookkeeping (_exchange_prob_T / '
+                '_exchange_prob_mu) counts atoms by symbol via '
+                '`atoms.symbols.count(specie)`, which is always 0 for a '
                 "molecular name such as 'H2O'. Use BatchedReplicaExchange "
-                "instead."
+                'instead.'
             )
 
         self.gcmc_steps = gcmc_steps
@@ -126,7 +126,7 @@ class ReplicaExchange:
         # identical seeds gave every pair in a round the same u. Rank 0's
         # stream (seed + 0) is the one broadcast for the pairing, unchanged.
         self.rng = RandomNumberGenerator(seed=seed + self.rank)
-        self.logger = logging.getLogger(f"{__name__}.rank{self.rank}")
+        self.logger = logging.getLogger(f'{__name__}.rank{self.rank}')
 
         self._outfile = outfile
         self._outfile_handle = None
@@ -213,11 +213,11 @@ class ReplicaExchange:
 
         self.logger.info(
             f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
-            f"Exponential Arg: {exponential_arg:.3f}, "
-            f"Exponential: {exponential:.3f}, "
-            f"Exchange Prob: {exchange_prob:.3f}, "
+            f'Exponential Arg: {exponential_arg:.3f}, '
+            f'Exponential: {exponential:.3f}, '
+            f'Exchange Prob: {exchange_prob:.3f}, '
             f"Deltas: {deltas}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
-            f"Rank: {self.rank}"
+            f'Rank: {self.rank}'
         )
         return exchange_prob
 
@@ -310,7 +310,7 @@ class ReplicaExchange:
 
         final_states = self.comm.gather(self.gcmc.get_state(), root=0)
         if self.rank == 0:
-            self.logger.info("Final states gathered from all ranks:")
+            self.logger.info('Final states gathered from all ranks:')
             for i, state in enumerate(final_states):
                 self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
                                  f"Energy: {state['energy']:.3f}, "
@@ -323,7 +323,7 @@ class ReplicaExchange:
             try:
                 self._outfile_handle.close()
             except OSError:
-                self.logger.exception("Error closing %s", self._outfile)
+                self.logger.exception('Error closing %s', self._outfile)
             self._outfile_handle = None
 
     def _write_global_minimum(self) -> None:
@@ -374,10 +374,10 @@ class ReplicaExchange:
                     symbols = atoms.get_chemical_symbols()
                     atom_count = Counter(symbols)
                     atom_count_by_species = ', '.join(
-                        [f"{species}: {count}" for species, count in atom_count.items()]
+                        [f'{species}: {count}' for species, count in atom_count.items()]
                     )
                 else:
-                    atom_count_by_species = "N/A"
+                    atom_count_by_species = 'N/A'
 
                 if exchange_attempts > 0:
                     accepted_percentage = (exchange_successes / exchange_attempts) * 100
@@ -386,18 +386,18 @@ class ReplicaExchange:
 
                 if chemical_potential is not None:
                     chemical_potential_str = ', '.join(
-                        [f"{species}: {mu:.3f}" for species, mu in chemical_potential.items()]
+                        [f'{species}: {mu:.3f}' for species, mu in chemical_potential.items()]
                     )
                 else:
-                    chemical_potential_str = "Not specified"
+                    chemical_potential_str = 'Not specified'
 
                 summary[i] = {
-                    "step": gcmc_step,
-                    "atom_count_by_species": atom_count_by_species,
-                    "energy": energy,
-                    "chemical_potential": chemical_potential_str,
-                    "temperature": temperature,
-                    "accepted_percentage": accepted_percentage
+                    'step': gcmc_step,
+                    'atom_count_by_species': atom_count_by_species,
+                    'energy': energy,
+                    'chemical_potential': chemical_potential_str,
+                    'temperature': temperature,
+                    'accepted_percentage': accepted_percentage
                 }
                 self.logger.info(re_row(
                     i, gcmc_step, atom_count_by_species, energy,
@@ -413,7 +413,7 @@ class ReplicaExchange:
                 outfile.write('\n'.join(self._banner()) + '\n')
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
-            self.logger.exception("Error opening output file %s", self._outfile)
+            self.logger.exception('Error opening output file %s', self._outfile)
             raise
 
     def write_outfile(self, step: int) -> None:
@@ -424,9 +424,9 @@ class ReplicaExchange:
         try:
             for rank, state in summary.items():
                 self._outfile_handle.write(re_row(
-                    rank, state["step"], state["atom_count_by_species"],
-                    state["energy"], state["chemical_potential"],
-                    state["temperature"], state["accepted_percentage"]) + "\n")
+                    rank, state['step'], state['atom_count_by_species'],
+                    state['energy'], state['chemical_potential'],
+                    state['temperature'], state['accepted_percentage']) + '\n')
             self._outfile_handle.flush()
         except (OSError, AttributeError):
-            self.logger.exception("Error writing summary to file %s", self._outfile)
+            self.logger.exception('Error writing summary to file %s', self._outfile)

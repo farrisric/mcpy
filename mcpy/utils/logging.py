@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-_DEFAULT_FORMAT = "%(asctime)s %(name)s %(levelname)s: %(message)s"
-_RANK_FORMAT = "%(asctime)s [rank {rank}] %(name)s %(levelname)s: %(message)s"
+_DEFAULT_FORMAT = '%(asctime)s %(name)s %(levelname)s: %(message)s'
+_RANK_FORMAT = '%(asctime)s [rank {rank}] %(name)s %(levelname)s: %(message)s'
 
 
 def configure(level: int = logging.INFO,
@@ -29,7 +29,7 @@ def configure(level: int = logging.INFO,
     Returns:
         The configured ``mcpy`` logger.
     """
-    logger = logging.getLogger("mcpy")
+    logger = logging.getLogger('mcpy')
     logger.setLevel(level)
     logger.propagate = False
 
@@ -38,7 +38,7 @@ def configure(level: int = logging.INFO,
 
     # Drop any handlers we previously attached so re-configure is idempotent.
     for h in list(logger.handlers):
-        if getattr(h, "_mcpy_managed", False):
+        if getattr(h, '_mcpy_managed', False):
             logger.removeHandler(h)
 
     if stream:

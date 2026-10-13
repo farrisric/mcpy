@@ -348,10 +348,10 @@ def test_import_does_not_mutate_matplotlib_rcparams():
     mpl = pytest.importorskip('matplotlib')
     del mpl
     code = (
-        "import matplotlib\n"
+        'import matplotlib\n'
         "dpi = matplotlib.rcParams['figure.dpi']\n"
-        "import mcpy.moves\n"
-        "import mcpy.utils\n"
+        'import mcpy.moves\n'
+        'import mcpy.utils\n'
         "assert matplotlib.rcParams['figure.dpi'] == dpi, "
         "matplotlib.rcParams['figure.dpi']\n"
     )

@@ -33,13 +33,13 @@ class CustomCell(Cell):
         """
         if custom_height is None or bottom_z is None:
             raise ValueError(
-                "CustomCell requires explicit custom_height and bottom_z "
-                f"(got custom_height={custom_height}, bottom_z={bottom_z})"
+                'CustomCell requires explicit custom_height and bottom_z '
+                f'(got custom_height={custom_height}, bottom_z={bottom_z})'
             )
         if custom_height > self.original_dimensions[2][2]:
-            raise ValueError("Custom height cannot be greater than the original cell height.")
+            raise ValueError('Custom height cannot be greater than the original cell height.')
         if bottom_z < 0 or bottom_z + custom_height > self.original_dimensions[2][2]:
-            raise ValueError("Custom cell exceeds the bounds of the original cell.")
+            raise ValueError('Custom cell exceeds the bounds of the original cell.')
 
         new_dimensions = np.copy(self.original_dimensions)
         new_dimensions[2][2] = custom_height

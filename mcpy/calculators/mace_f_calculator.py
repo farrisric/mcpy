@@ -33,7 +33,7 @@ class MACE_F_Calculator(BaseCalculator):
         :class:`BaseCalculator`.
         """
         if optimizer not in _OPTIMIZERS:
-            raise ValueError(f"optimizer must be one of {list(_OPTIMIZERS)}, got {optimizer!r}")
+            raise ValueError(f'optimizer must be one of {list(_OPTIMIZERS)}, got {optimizer!r}')
 
         if isinstance(model_paths, MACECalculator):
             if head is not None or default_dtype:

@@ -166,8 +166,8 @@ def _load_model(
         return wrapper
     if head is not None:
         raise ValueError(
-            "head= is only supported when loading a local .model path; "
-            f"got alias checkpoint {checkpoint!r}"
+            'head= is only supported when loading a local .model path; '
+            f'got alias checkpoint {checkpoint!r}'
         )
     if enable_cueq:
         # from_checkpoint converts before we can look at the model, so check
@@ -202,8 +202,8 @@ def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
     if e.numel() == n_graphs:
         return e.view(-1).numpy()
     raise RuntimeError(
-        f"Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. "
-        "Batched eval expects one energy per graph."
+        f'Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. '
+        'Batched eval expects one energy per graph.'
     )
 
 
@@ -488,11 +488,11 @@ class AlchemiCalculator(_AlchemiBase):
             # to one calculator, so refuse instead of breaking the other one
             # silently and order-dependently.
             raise ValueError(
-                "energy_only=True cannot be combined with a pre-loaded "
+                'energy_only=True cannot be combined with a pre-loaded '
                 "MACEWrapper: dropping 'forces' from its active outputs would "
-                "also disable forces for every other calculator sharing that "
-                "wrapper. Pass the checkpoint path instead, so this "
-                "calculator loads its own model."
+                'also disable forces for every other calculator sharing that '
+                'wrapper. Pass the checkpoint path instead, so this '
+                'calculator loads its own model.'
             )
         super().__init__(checkpoint, device, dtype, enable_cueq, compile_model,
                          max_neighbors, chunk_size, head)
@@ -584,7 +584,7 @@ class AlchemiFCalculator(_AlchemiBase):
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
             raise ValueError(
-                f"optimizer must be one of {list(_ALCHEMI_OPTIMIZERS)}, got {optimizer!r}"
+                f'optimizer must be one of {list(_ALCHEMI_OPTIMIZERS)}, got {optimizer!r}'
             )
         self._optimizer_cls = _ALCHEMI_OPTIMIZERS[optimizer]
         self.optimizer_name = optimizer
@@ -616,8 +616,8 @@ class AlchemiFCalculator(_AlchemiBase):
             # last = deepest chunk relaxation; total accumulates across chunks.
             self.last_relax_steps = max(self._chunk_steps)
             self.total_relax_steps += sum(self._chunk_steps)
-            logger.debug("FIRE relaxation (batched, %d graphs, %d chunk(s)): "
-                         "max %d/%d steps (fmax=%.3g eV/A)",
+            logger.debug('FIRE relaxation (batched, %d graphs, %d chunk(s)): '
+                         'max %d/%d steps (fmax=%.3g eV/A)',
                          len(atoms_list), len(self._chunk_steps),
                          self.last_relax_steps, self.steps, self.fmax)
         return energies
