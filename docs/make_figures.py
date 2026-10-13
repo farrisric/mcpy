@@ -18,8 +18,14 @@ Three kinds of figures are produced:
      ``plot_phase_diagram`` call;
    * relaxed EMT insertions give the ``species_radii`` histogram.
 
-3. Copied from executed notebooks by ``extract_notebook_figures()``: the MACE
-   phase diagrams, the CO coverage trace and the LJ equilibration trace.
+3. Copied from an executed notebook by ``extract_notebook_figures()``: the
+   LJ equilibration trace.
+
+The three MACE figures (``fig_co_coverage.png``,
+``fig_phase_diagram_co_cupd.png`` and ``fig_phase_diagram_ag_o.png``) need a
+GPU run of several hours. The notebooks ``co_on_cupd_replica_exchange.ipynb``
+and ``phase_diagram.ipynb`` write them directly, the phase diagrams with
+``plot_phase_diagram``; this script does not touch them.
 
 The full script takes about five minutes on a laptop CPU.
 """
@@ -455,9 +461,6 @@ def extract_notebook_figures(targets=None):
     copy to those output file names (default: all)."""
     wanted = {
         # (notebook, embedded-PNG index): target file
-        ('phase_diagram.ipynb', 0): 'fig_phase_diagram_ag_o.png',
-        ('co_on_cupd_replica_exchange.ipynb', 1): 'fig_phase_diagram_co_cupd.png',
-        ('co_on_cupd_replica_exchange.ipynb', 0): 'fig_co_coverage_raw.png',
         ('gcmc_basics_lj.ipynb', 1): 'fig_lj_equilibration.png',
     }
     for (nb_name, want_idx), target in wanted.items():
@@ -473,15 +476,6 @@ def extract_notebook_figures(targets=None):
                 if idx == want_idx:
                     (STATIC / target).write_bytes(base64.b64decode(png))
                 idx += 1
-
-    # The CO coverage figure pairs the per-replica trace with a rough demo
-    # isotherm; only the trace belongs in the docs. Crop the left panel.
-    raw = STATIC / 'fig_co_coverage_raw.png'
-    if raw.exists():
-        from PIL import Image
-        im = Image.open(raw)
-        im.crop((0, 0, int(im.width * 0.48), im.height)).save(STATIC / 'fig_co_coverage.png')
-        raw.unlink()
 
 
 if __name__ == '__main__':

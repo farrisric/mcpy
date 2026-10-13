@@ -447,10 +447,10 @@ normalisation and molecular adsorbates.
    The figure therefore shows how to read the diagram, not the physics of O
    on Ag.
    Grey lines are individual frames, the thick line is the stable envelope,
-   and the shading marks the stable phases, labelled by their structure
+   and the shading marks the stable phases, numbered like their structure
    thumbnails: the clean slab below
-   :math:`\Delta\mu_{\mathrm{O}} \approx -0.47` eV and the capped
-   monolayer above it.
+   :math:`\Delta\mu_{\mathrm{O}} \approx -0.47` eV, the capped
+   monolayer above -0.455 eV, and between them a narrow O\ :sub:`8` phase.
    The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
    pressure at 500 K.
    For a MACE diagram see :doc:`phase_diagrams`.
