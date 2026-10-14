@@ -1,6 +1,8 @@
 Ensembles
 =========
 
+.. currentmodule:: mcpy.ensembles
+
 An *ensemble* in `mcpy` is the object that owns the Monte Carlo loop. It holds the atomic
 configuration, the energy calculator, the set of cells used for free-volume estimation, and
 the `MoveSelector` that proposes trial configurations. It then evaluates the appropriate
@@ -46,6 +48,11 @@ with :math:`\beta = 1/(k_B T)`. The acceptance probability for a trial move
 
    P_{ij}^{\mathrm{acc}} = \min\!\left(1,\; e^{-\beta (E_j - E_i)}\right).
 
+``temperature=0`` gives :math:`\beta = \infty`, a greedy descent that accepts only moves
+that do not raise the energy. Each trial is relaxed with the configured optimizer for at
+most ``steps`` steps (default 1000); a warning is logged when a relaxation stops at the cap
+before reaching ``fmax``.
+
 Typical use: structural optimization or thermal sampling at fixed stoichiometry.
 
 
@@ -87,20 +94,28 @@ Insertion :math:`(N \rightarrow N+1)`:
    \min\!\left(1,\; \frac{z\,V_{\mathrm{free}}}{(N+1)\,\Lambda^3}
    \,e^{-\beta (E_j - E_i)}\right).
 
-Here :math:`z = e^{\beta \mu}` is the species activity, and
+Here :math:`z = e^{\beta \mu}` is the species activity.
+For atomic moves, :math:`N` is the **total atom count** before the move:
+every atom of every species, the fixed substrate included.
+This departs from the textbook per-species count on purpose, to keep the
+group's earlier results reproducible
+(``docs/adr/0001-gcmc-de-broglie-total-atom-count.md``).
+Molecular moves use the textbook count, the number of molecules of the
+exchanged species in the cell.
+:doc:`gcmc_acceptance_convention` records both conventions.
+The thermal de Broglie wavelength is
 
 .. math::
 
-   \Lambda = \frac{h}{\sqrt{2\pi m\, k_B T}}
+   \Lambda = \frac{h}{\sqrt{2\pi m\, k_B T}}.
 
-is the thermal de Broglie wavelength. The geometric volume :math:`V` of the textbook
+The geometric volume :math:`V` of the textbook
 formulation is replaced by the accessible free volume :math:`V_{\mathrm{free}}` returned by
 the configured cell -- see :ref:`free-volume`.
 
 .. code-block:: python
 
-   from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-   from mcpy.moves import MoveSelector
+   from mcpy.ensembles import GrandCanonicalEnsemble
 
    gcmc = GrandCanonicalEnsemble(
        atoms=atoms,
@@ -117,8 +132,9 @@ the configured cell -- see :ref:`free-volume`.
 Outputs
 ~~~~~~~
 
-- A trajectory is appended to `traj_file` (extended XYZ, with `energy=` and
-  `Lattice=` on the comment line) every `trajectory_write_interval` steps.
+- The current configuration is appended to `traj_file` (extended XYZ, with `energy=` and
+  `Lattice=` on the comment line) every `trajectory_write_interval` steps, whether or not
+  the last trial was accepted.
 - A human-readable log is written to `outfile` every `outfile_write_interval` steps,
   containing the step index, particle count, current energy, and the per-interval
   acceptance ratio of each registered move. The interval counters are reset after every
@@ -130,8 +146,10 @@ Outputs
    :align: center
 
    The signature of a converged GCMC run: the particle count climbs from
-   the empty box and settles into a fluctuating steady state (Lennard-Jones
-   gas, 30 000 trials, from the executed GCMC-basics notebook).
+   the empty box and settles into a fluctuating steady state around the
+   LAMMPS ``fix gcmc`` average for the same conditions (Lennard-Jones
+   fluid, :math:`\mu^* = -2.4`, 30 000 trials, from the executed
+   GCMC-basics notebook).
 
 
 Setting a unit system
@@ -178,8 +196,9 @@ When the trial move is followed by a local relaxation, the Metropolis loop is, b
 construction, a basin-hopping sampler: each accepted move corresponds to a local minimum of
 the potential energy surface. Two output channels coexist:
 
-- ``traj_file`` (extended XYZ) -- the **sampling** trajectory, written every
-  ``trajectory_write_interval`` accepted steps. Use this for thermodynamic averages and
+- ``traj_file`` (extended XYZ) -- the **sampling** trajectory: the current configuration
+  every ``trajectory_write_interval`` steps, whether or not the last trial was accepted, plus
+  the starting configuration as frame 0. Use this for thermodynamic averages and
   visualisation.
 - ``minima_file`` (extended XYZ, off by default) -- the **basin-hopping** output. A frame is
   written only when the score of the just-accepted configuration is strictly lower than every
@@ -236,11 +255,18 @@ Global minimum across replicas
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Both :class:`ReplicaExchange` and :class:`BatchedReplicaExchange` accept a
-``global_minimum_file`` argument. After all replicas finalise, the lowest-score
-configuration observed across the whole ladder is written as a single XYZ frame to that
-file. The MPI variant gathers per-rank bests to rank 0; the batched variant minimises
-over the in-process replicas. The per-replica ``minima_file`` history is independent of
-this and continues to live in the per-rank outputs (e.g. ``minima_rank_3.xyz``).
+``global_minimum_file`` argument. After all replicas finalise, each replica's best
+configuration is collected; the MPI variant gathers per-rank bests to rank 0, and the
+batched variant reads its in-process replicas.
+
+- On a temperature ladder all replicas share :math:`\mu`, so their scores :math:`\Omega` are
+  comparable. The lowest-score configuration is written as a single XYZ frame.
+- On a :math:`\mu` ladder each score uses its own replica's :math:`\mu`, so no common score
+  exists. The file then holds one frame per rung, in rung order. Each frame is tagged
+  ``rank=<i>`` and carries that rung's own-:math:`\mu` score.
+
+The per-replica ``minima_file`` history is independent of this and continues to live in
+the per-rank outputs (e.g. ``minima_rank_3.xyz``).
 
 
 .. _free-volume:
@@ -322,14 +348,20 @@ differ in chemical potentials. After acceptance, replicas swap their configurati
 energies; partner selection alternates between even and odd ranks on consecutive exchange
 attempts to ensure every replica eventually mixes with both neighbours.
 
+Launch one MPI rank per replica, e.g. ``mpirun -n 4 python my_run.py`` for a four-rung
+ladder; :doc:`examples/replica_exchange` has a complete script.
+
 Notes:
 
 - the ensemble factory must produce per-rank output filenames (e.g. by including `rank` in
   the trajectory, log, and minima paths) so that ranks do not race on the same files;
 - one MPI rank corresponds to one replica;
 - at the end of the run, rank 0 collects each replica's running best (via ``comm.gather``)
-  and writes the global minimum as a single XYZ frame to ``global_minimum_file``
-  (default ``"global_minimum.xyz"``; pass ``None`` to disable). See :ref:`running-minima`.
+  and writes it to ``global_minimum_file`` (default ``"global_minimum.xyz"``; pass ``None``
+  to disable): one frame on a temperature ladder, one frame per rung on a :math:`\mu`
+  ladder. See :ref:`running-minima`;
+- an exception on any rank aborts the whole MPI job (``comm.Abort``), because the other
+  ranks would otherwise wait forever in a collective call.
 
 
 `BatchedReplicaExchange`
@@ -351,7 +383,7 @@ Requirements:
 
 Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
 ``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
-written from ``min(replicas, key=best_score)`` after the run completes.
+written after the run completes (see :ref:`running-minima`).
 
 
 Choosing the right ensemble

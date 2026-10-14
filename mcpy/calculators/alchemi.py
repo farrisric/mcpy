@@ -61,6 +61,65 @@ class _HeadMACEWrapper(MACEWrapper):
         return d
 
 
+def _cueq_rebuild_matches(raw) -> bool:
+    """Whether MACE's cuEq conversion rebuilds interaction block 0 correctly.
+
+    ``convert_e3nn_cueq`` rebuilds the model from ``extract_config_mace_model``,
+    which reads ``use_edge_irreps_first`` as False when the checkpoint predates
+    that flag. mh-1 is such a checkpoint, yet its block 0 was built with scalar
+    edge irreps, so the rebuilt block 0 has the wrong width. The weight transfer
+    then skips the mismatched tensors with only a debug log and leaves them at
+    random init: energies are wrong and change on every load
+    (ACEsuit/mace#1298). This predicts block 0's edge irreps the way the
+    rebuild does and compares them with the loaded block.
+    """
+    # mace must be imported before e3nn: e3nn 0.4.4 torch.loads its Wigner
+    # constants at import, which only works once mace has set
+    # TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD.
+    import mace  # noqa: F401
+    from e3nn import o3
+
+    edge = getattr(raw, 'edge_irreps', None)
+    first = raw.interactions[0]
+    actual = getattr(first, 'edge_irreps', None)
+    if edge is None or actual is None:
+        return True  # no edge irreps anywhere: nothing the rebuild can drop
+    if getattr(raw, 'use_edge_irreps_first', False):
+        expected = o3.Irreps(f'{o3.Irreps(edge).count(o3.Irrep(0, 1))}x0e')
+    else:
+        expected = first.node_feats_irreps
+    return o3.Irreps(actual) == o3.Irreps(expected)
+
+
+def _cueq_or_fallback(raw, checkpoint) -> bool:
+    """Whether ``raw`` can be converted to cuEq, repairing it when possible.
+
+    A checkpoint that predates ``use_edge_irreps_first`` but was built with
+    scalar edge irreps on block 0 (mh-1) is repaired by setting the flag the
+    rebuild reads, so the converted model keeps block 0's real width and
+    every weight transfers (ACEsuit/mace#1298). Anything else that would
+    rebuild wrongly falls back to e3nn with a warning.
+    """
+    if _cueq_rebuild_matches(raw):
+        return True
+    if not hasattr(raw, 'use_edge_irreps_first'):
+        raw.use_edge_irreps_first = True
+        if _cueq_rebuild_matches(raw):
+            logger.info(
+                'cuEq: set use_edge_irreps_first=True on %s so the cuEq rebuild '
+                'keeps its first interaction block (ACEsuit/mace#1298).',
+                checkpoint)
+            return True
+        del raw.use_edge_irreps_first
+    logger.warning(
+        'cuEq disabled for %s: MACE cuEq conversion rebuilds its first '
+        'interaction block with the wrong edge irreps and leaves those '
+        'weights random, giving wrong, load-varying energies '
+        '(ACEsuit/mace#1298). Using the e3nn kernels instead; this is '
+        'correct but slower.', checkpoint)
+    return False
+
+
 def _load_model(
     checkpoint: Union[str, MACEWrapper],
     device: str,
@@ -95,7 +154,7 @@ def _load_model(
         idx = None if head is None else (
             head if isinstance(head, int) else list(raw.heads).index(head)
         )
-        if enable_cueq:
+        if enable_cueq and _cueq_or_fallback(raw, checkpoint):
             try:
                 import cuequivariance  # noqa: F401
                 from mace.cli.convert_e3nn_cueq import run as _to_cueq
@@ -109,7 +168,7 @@ def _load_model(
         if compile_model:
             # Mirror MACEWrapper.from_checkpoint step 3: the model is
             # inference-only after this. The e3nn patch is a private nvalchemi
-            # helper; benchmark/verify_compile_parity.py pins it so an upgrade
+            # helper; benchmark/internal/verify_compile_parity.py pins it so an upgrade
             # that renames it fails loudly.
             from nvalchemi.models.mace import _patch_e3nn_irrep_len_for_compile
             _patch_e3nn_irrep_len_for_compile()
@@ -121,15 +180,27 @@ def _load_model(
         # MACEWrapper.forward passes training=self.training down to MACE, where
         # it becomes create_graph/retain_graph on the force autograd. nn.Module
         # defaults to train mode, and from_checkpoint's wrapper.eval() (alias
-        # path below) never runs here — without this every force pass builds a
+        # path below) never runs here - without this every force pass builds a
         # retained second-order graph.
         wrapper.eval()
         return wrapper
     if head is not None:
         raise ValueError(
-            "head= is only supported when loading a local .model path; "
-            f"got alias checkpoint {checkpoint!r}"
+            'head= is only supported when loading a local .model path; '
+            f'got alias checkpoint {checkpoint!r}'
         )
+    if enable_cueq:
+        # from_checkpoint converts before we can look at the model, so check
+        # the cached file it will load (an extra CPU load, cuEq aliases only).
+        from mace.calculators.foundations_models import download_mace_mp_checkpoint
+        path = download_mace_mp_checkpoint(checkpoint)
+        raw = torch.load(path, map_location='cpu', weights_only=False)
+        matches = _cueq_rebuild_matches(raw)
+        del raw
+        if not matches:
+            # from_checkpoint would convert its own unrepaired copy; load the
+            # cached file through the local path, which repairs it first.
+            return _load_model(path, device, dtype, enable_cueq, compile_model)
     return MACEWrapper.from_checkpoint(
         checkpoint,
         device=torch.device(device),
@@ -155,8 +226,8 @@ def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
     if e.numel() == n_graphs:
         return e.view(-1).numpy()
     raise RuntimeError(
-        f"Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. "
-        "Batched eval expects one energy per graph."
+        f'Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. '
+        'Batched eval expects one energy per graph.'
     )
 
 
@@ -167,11 +238,21 @@ def _build_nl(batch: Batch, nl_hook: NeighborListHook) -> None:
 
 
 def _fixed_indices(atoms: Atoms) -> List[int]:
-    """Indices held by ASE ``FixAtoms`` constraints, sorted and de-duplicated."""
+    """Indices held by ASE ``FixAtoms`` constraints, sorted and de-duplicated.
+
+    Only ``FixAtoms`` maps onto nvalchemi's ``FreezeAtomsHook``. Any other
+    constraint (``FixCartesian``, ``FixBondLengths``, ...) would be ignored by
+    the GPU relaxation and MD, so it raises instead.
+    """
     idx: set[int] = set()
     for c in atoms.constraints:
-        if isinstance(c, FixAtoms):
-            idx.update(int(i) for i in c.index)
+        if not isinstance(c, FixAtoms):
+            raise NotImplementedError(
+                f'{type(c).__name__} is not supported by the Alchemi relaxation '
+                'and MD; only FixAtoms is honoured. Remove the constraint, or '
+                'use an ASE-based calculator (BaseCalculator, MACE_F_Calculator).'
+            )
+        idx.update(int(i) for i in c.index)
     return sorted(idx)
 
 
@@ -209,7 +290,7 @@ class _AlchemiBase:
 
     Holds the model and the device/dtype/chunking state, the batching and
     neighbour-list helpers, the chunked ``get_potential_energies`` template, and
-    Langevin MD. A subclass implements :meth:`_evaluate_chunk`, which is the
+    Langevin MD. A subclass implements ``_evaluate_chunk``, which is the
     only thing that differs between evaluating and relaxing.
 
     Parameters
@@ -222,7 +303,7 @@ class _AlchemiBase:
     dtype : torch.dtype
         Model and data dtype. float32 recommended for speed.
     enable_cueq : bool
-        cuEquivariance kernel fusion — significant speedup on GPU.
+        cuEquivariance kernel fusion - significant speedup on GPU.
     compile_model : bool
         torch.compile the model. Adds ~30s warmup, then faster.
     max_neighbors : int | None
@@ -302,7 +383,7 @@ class _AlchemiBase:
         """
         Per-graph energies over multiple (possibly differently sized) structures.
 
-        One CUDA kernel launch per layer instead of N — the win behind batched
+        One CUDA kernel launch per layer instead of N - the win behind batched
         replica exchange on a single GPU.
 
         ``chunk_size`` splits ``atoms_list`` into consecutive sub-batches of at
@@ -324,14 +405,19 @@ class _AlchemiBase:
         Returns
         -------
         np.ndarray
-            Potential energies in eV, shape (len(atoms_list),).
+            Potential energies in eV, shape (len(atoms_list),). An empty
+            structure (0 atoms) gets 0.0 and is never sent to the model.
         """
-        if not atoms_list:
-            return np.empty(0, dtype=np.float64)
+        energies = np.zeros(len(atoms_list), dtype=np.float64)
+        filled = [i for i, a in enumerate(atoms_list) if len(a)]
+        if not filled:
+            return energies
+        todo = [atoms_list[i] for i in filled]
         cs = self.chunk_size if chunk_size is None else chunk_size
-        out = [self._evaluate_chunk(atoms_list[start:stop])
-               for start, stop in chunk_ranges(len(atoms_list), cs)]
-        return np.concatenate(out)
+        energies[filled] = np.concatenate([
+            self._evaluate_chunk(todo[start:stop])
+            for start, stop in chunk_ranges(len(todo), cs)])
+        return energies
 
     def run_md(
         self,
@@ -391,14 +477,17 @@ class AlchemiCalculator(_AlchemiBase):
     Single-point MACE evaluation on the nvalchemi GPU-native stack. Use this
     when mcpy handles its own MC moves and only needs E(atoms).
 
-    Takes the shared parameters of :class:`_AlchemiBase`, plus:
+    Takes the shared parameters of :class:`~mcpy.calculators.alchemi._AlchemiBase`, plus:
 
     Parameters
     ----------
-    energy_only : bool
+    energy_only : bool | None
         Drop ``forces`` from the model's active outputs. MC energy evaluation
         never uses them, and without them the MACE forward builds no autograd
         graph: lower peak memory, energy unchanged up to fp32 rounding.
+        ``None`` (default) means True when this calculator loads its own
+        model and False for a pre-loaded, possibly shared, ``MACEWrapper``.
+        Pass ``energy_only=False`` to keep forces, e.g. for :meth:`run_md`.
     """
 
     def __init__(
@@ -410,9 +499,11 @@ class AlchemiCalculator(_AlchemiBase):
         compile_model: bool = True,
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
-        energy_only: bool = False,
+        energy_only: bool | None = None,
         head: Union[str, int, None] = None,
     ) -> None:
+        if energy_only is None:
+            energy_only = not isinstance(checkpoint, MACEWrapper)
         if energy_only and isinstance(checkpoint, MACEWrapper):
             # energy_only mutates the wrapper's own model_config (below), and a
             # pre-loaded wrapper is shared by every calculator built from it --
@@ -421,11 +512,11 @@ class AlchemiCalculator(_AlchemiBase):
             # to one calculator, so refuse instead of breaking the other one
             # silently and order-dependently.
             raise ValueError(
-                "energy_only=True cannot be combined with a pre-loaded "
+                'energy_only=True cannot be combined with a pre-loaded '
                 "MACEWrapper: dropping 'forces' from its active outputs would "
-                "also disable forces for every other calculator sharing that "
-                "wrapper. Pass the checkpoint path instead, so this "
-                "calculator loads its own model."
+                'also disable forces for every other calculator sharing that '
+                'wrapper. Pass the checkpoint path instead, so this '
+                'calculator loads its own model.'
             )
         super().__init__(checkpoint, device, dtype, enable_cueq, compile_model,
                          max_neighbors, chunk_size, head)
@@ -456,10 +547,10 @@ class AlchemiCalculator(_AlchemiBase):
             # The integrator would otherwise die steps deep inside nvalchemi
             # ("NVTLangevin requires forces...") without naming the cause.
             raise ValueError(
-                'run_md needs forces, but this calculator was built with '
-                'energy_only=True (forces are stripped from the model '
-                'outputs). Build a separate calculator without energy_only '
-                'for MD.'
+                'run_md needs forces, but this calculator is energy-only '
+                '(energy_only defaults to True when it loads its own model, '
+                'and forces are stripped from the model outputs). Build it '
+                'with energy_only=False, or use an AlchemiFCalculator, for MD.'
             )
         return super().run_md(atoms, **kwargs)
 
@@ -471,10 +562,10 @@ class AlchemiFCalculator(_AlchemiBase):
     Alchemi calculator with FIRE geometry relaxation.
 
     Mirrors MACE_F_Calculator: relax atoms with FIRE then return energy. Uses
-    the fully GPU-resident nvalchemi dynamics stack — significantly faster than
+    the fully GPU-resident nvalchemi dynamics stack - significantly faster than
     ASE FIRE above ~100 atoms.
 
-    Takes the shared parameters of :class:`_AlchemiBase`, plus:
+    Takes the shared parameters of :class:`~mcpy.calculators.alchemi._AlchemiBase`, plus:
 
     Parameters
     ----------
@@ -483,13 +574,15 @@ class AlchemiFCalculator(_AlchemiBase):
     fmax : float
         Force convergence threshold in eV/Å.
     dt : float
-        FIRE initial timestep in fs (default 1.0, the value of ASE FIRE's
-        dtmax; benchmarks show dt=1.0 converges in ~half the steps vs 0.1).
-        Note nvalchemi grows the adaptive timestep up to dt_max = 10*dt,
-        unlike ASE's 1 fs cap; per-step displacement stays clamped by
-        maxstep=0.2 A either way.
+        FIRE initial timestep in the internal unit A*sqrt(amu/eV) (about
+        10.18 fs), the same unit ASE's FIRE uses; nvalchemi's FIRE passes it
+        unconverted, unlike its MD integrators, which take fs. Default 1.0,
+        the value of ASE FIRE's dtmax; benchmarks show dt=1.0 converges in
+        ~half the steps vs 0.1. Note nvalchemi grows the adaptive timestep up
+        to dt_max = 10*dt, unlike ASE's dtmax=1.0 cap; per-step displacement
+        stays clamped by maxstep=0.2 A either way.
     optimizer : str
-        'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant —
+        'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant -
         typically converges in fewer steps).
     """
 
@@ -515,7 +608,7 @@ class AlchemiFCalculator(_AlchemiBase):
         self.total_relax_steps = 0
         if optimizer not in _ALCHEMI_OPTIMIZERS:
             raise ValueError(
-                f"optimizer must be one of {list(_ALCHEMI_OPTIMIZERS)}, got {optimizer!r}"
+                f'optimizer must be one of {list(_ALCHEMI_OPTIMIZERS)}, got {optimizer!r}'
             )
         self._optimizer_cls = _ALCHEMI_OPTIMIZERS[optimizer]
         self.optimizer_name = optimizer
@@ -547,8 +640,8 @@ class AlchemiFCalculator(_AlchemiBase):
             # last = deepest chunk relaxation; total accumulates across chunks.
             self.last_relax_steps = max(self._chunk_steps)
             self.total_relax_steps += sum(self._chunk_steps)
-            logger.debug("FIRE relaxation (batched, %d graphs, %d chunk(s)): "
-                         "max %d/%d steps (fmax=%.3g eV/A)",
+            logger.debug('FIRE relaxation (batched, %d graphs, %d chunk(s)): '
+                         'max %d/%d steps (fmax=%.3g eV/A)',
                          len(atoms_list), len(self._chunk_steps),
                          self.last_relax_steps, self.steps, self.fmax)
         return energies
@@ -592,13 +685,17 @@ class AlchemiFCalculator(_AlchemiBase):
 
         Batch rows are removed with ``Batch.index_select`` and the optimizer's
         per-graph FIRE state is shrunk in lockstep with
-        ``_sync_state_to_batch`` — the same primitives nvalchemi's inflight
+        ``_sync_state_to_batch`` - the same primitives nvalchemi's inflight
         refill machinery uses. Positions and energy are harvested per graph at
         retirement; returns ``(per_graph_energies, step_count)``.
         """
         alive = np.arange(len(atoms_list))  # batch row -> atoms_list index
         energies = np.zeros(len(atoms_list))
         n_steps = 0
+        if self.steps == 0:
+            # Pure single point: _bootstrap already computed the energy, and
+            # writing float32 positions back would move every atom ~1e-7 A.
+            return _per_graph_energies(batch.energy, len(atoms_list)), 0
         opt._open_hooks()
         try:
             while alive.size and n_steps < self.steps:

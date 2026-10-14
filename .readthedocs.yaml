@@ -20,11 +20,8 @@ build:
 sphinx:
   configuration: docs/conf.py
   builder: html
-  fail_on_warning: false
-  # You can configure Sphinx to use a different builder, for instance use the dirhtml builder for simpler URLs
-  # builder: "dirhtml"
-  # Fail on all warnings to avoid broken references
-  # fail_on_warning: true
+  # Fail on all warnings to avoid broken references (same as the docs CI job).
+  fail_on_warning: true
 
 # Optionally build your docs in additional formats such as PDF and ePub
 # formats:

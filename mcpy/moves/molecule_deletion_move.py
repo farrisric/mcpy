@@ -29,6 +29,7 @@ class MoleculeDeletionMove(BaseMove):
         self._template_symbols = sorted(molecule.get_chemical_symbols())
         self.min_molecules = min_molecules
         self.last_exchange_count = None
+        self._trial_volume = None
 
     def do_trial_move(self, atoms) -> Atoms:
         """Delete one molecule. Returns the same ``atoms`` (mutated), -1, name."""
@@ -40,4 +41,12 @@ class MoleculeDeletionMove(BaseMove):
         self.last_exchange_count = len(groups)
         members = self.rng.random.choice(groups)
         del atoms[members]
+        self._trial_volume = self.cell.free_volume(atoms)
         return atoms, -1, self.name
+
+    def get_volume(self) -> float:
+        """Free volume of the post-deletion state of the last trial: the
+        volume the reverse insertion would be proposed in. Exact detailed
+        balance needs this, not the volume of the state still holding the
+        deleted particle (docs/gcmc_acceptance_convention.rst)."""
+        return self._trial_volume

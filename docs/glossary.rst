@@ -1,8 +1,9 @@
 Glossary
 ========
 
-Single source of truth for the terms used across the documentation. Every
-page that mentions one of these terms links back here on first use.
+The terms used across the documentation.
+The same vocabulary, with the names to avoid, is kept for contributors in
+``CONTEXT.md`` at the repository root.
 
 .. glossary::
 
@@ -14,13 +15,15 @@ page that mentions one of these terms links back here on first use.
 
    Cell
        An object that defines the spatial region in which trial moves are
-       proposed and returns the accessible free volume to the ensemble. See
-       :doc:`cells` for the available geometries.
+       proposed and returns the accessible free volume to the ensemble
+       (the *sampling volume* of ``CONTEXT.md``; not the lattice
+       ``atoms.cell``). See :doc:`cells` for the available geometries.
 
    Chemical potential
        The thermodynamic driving force the reservoir applies to a species.
        In `mcpy` it is supplied per species through the ``mu`` argument of
-       :class:`GrandCanonicalEnsemble`.
+       :class:`~mcpy.ensembles.GrandCanonicalEnsemble`. For a molecular
+       species it is the full molecular chemical potential.
 
    de Broglie wavelength
        The thermal de Broglie wavelength
@@ -31,6 +34,12 @@ page that mentions one of these terms links back here on first use.
        The object that owns the Monte Carlo loop: it stores the atoms and
        calculator, evaluates acceptance, and writes outputs. See
        :doc:`ensembles`.
+
+   Exchangeable region
+       The part of a cell from which atoms and molecules may be deleted and
+       in which they are counted. It equals the insertion region for every
+       cell except ``CustomCell``, whose exchangeable region has no upper z
+       bound, so species that desorb above the window stay deletable.
 
    Exclusion radius
        The element-wise radius used by a cell to decide whether a random
@@ -56,7 +65,17 @@ page that mentions one of these terms links back here on first use.
    Move
        A proposed change to the configuration: insertion, deletion,
        displacement, permutation, shake, or Brownian. Moves are mixed by
-       a :class:`MoveSelector`. See :doc:`moves`.
+       a :class:`~mcpy.moves.MoveSelector`. See :doc:`moves`.
+
+   molecule_id
+       The per-atom integer array that records molecule membership: members
+       of one molecule share a value, free atoms carry ``-1``. It survives
+       rollback and is written to the trajectory.
+
+   Molecular species
+       An exchangeable species that is a rigid molecule, registered with the
+       ``molecules`` argument of the ensemble under a name that is also its
+       key in ``mu``. See :doc:`molecular_adsorbates`.
 
    MoveSelector
        The weighted sampler that draws a move from a list of registered
@@ -68,15 +87,16 @@ page that mentions one of these terms links back here on first use.
        criterion. Mandatory for the hybrid GCMC workflow.
 
    Replica
-       One independent GCMC trajectory in a Replica-Exchange run — one
+       One independent GCMC trajectory in a Replica-Exchange run - one
        MPI rank each in ``ReplicaExchange``, or one slot of a single
        process in ``BatchedReplicaExchange``. Replicas differ in
        temperature or chemical potential.
 
    Replica Exchange
        A wrapper around several GCMC replicas that periodically attempts
-       configuration swaps between neighbouring replicas with the
-       parallel-tempering acceptance criterion.
+       configuration swaps between neighbouring replicas. The ladder runs
+       along temperature or chemical potential, so the name "parallel
+       tempering" fits only the temperature ladder.
 
    Trajectory
        The extended-XYZ file written by the ensemble. Each frame stores
@@ -84,7 +104,7 @@ page that mentions one of these terms links back here on first use.
        its comment line.
 
    Units type
-       ``'metal'`` (eV/Å/amu/K) or ``'LJ'`` — selects the set of
+       ``'metal'`` (eV/Å/amu/K) or ``'LJ'`` - selects the set of
        thermodynamic constants used to compute :math:`\beta` and the
        de Broglie wavelengths. Configured through ``units_type`` on the
        ensemble.

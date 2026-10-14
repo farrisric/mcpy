@@ -1,3 +1,4 @@
+from .base_move import BaseMove
 from .move_selector import MoveSelector
 from .shake_move import ShakeMove
 from .brownian_move import BrownianMove
@@ -11,15 +12,16 @@ from .molecule_deletion_move import MoleculeDeletionMove
 from .molecule_displacement_move import MoleculeDisplacementMove
 
 __all__ = [
-    "MoveSelector",
-    "ShakeMove",
-    "BrownianMove",
-    "AlchemiBrownianMove",
-    "DeletionMove",
-    "DisplacementMove",
-    "InsertionMove",
-    "PermutationMove",
-    "MoleculeInsertionMove",
-    "MoleculeDeletionMove",
-    "MoleculeDisplacementMove",
+    'BaseMove',
+    'MoveSelector',
+    'ShakeMove',
+    'BrownianMove',
+    'AlchemiBrownianMove',
+    'DeletionMove',
+    'DisplacementMove',
+    'InsertionMove',
+    'PermutationMove',
+    'MoleculeInsertionMove',
+    'MoleculeDeletionMove',
+    'MoleculeDisplacementMove',
 ]

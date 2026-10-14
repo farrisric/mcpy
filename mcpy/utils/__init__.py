@@ -1,8 +1,10 @@
 from .random_number_generator import RandomNumberGenerator
 from .reference_mu import derive_mu_bulk, derive_mu_gas
+from .set_unit_constant import SetUnits
 
 __all__ = [
     'RandomNumberGenerator',
+    'SetUnits',
     'analyze_phase_diagram_results',
     'derive_mu_bulk',
     'derive_mu_gas',
@@ -16,4 +18,4 @@ def __getattr__(name):
     if name in ('analyze_phase_diagram_results', 'plot_phase_diagram'):
         from . import phase_diagram
         return getattr(phase_diagram, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

@@ -306,33 +306,16 @@ def test_canonical_honors_trajectory_write_interval(tmp_path):
 # volume ignored periodic images)
 # --------------------------------------------------------------------------
 
-class _FixedPointCell:
-    """Deterministic cell: always proposes the same insertion point."""
-
-    def __init__(self, point, species):
-        self.point = np.asarray(point, dtype=float)
-        self.species = species
-
-    def get_random_point(self):
-        return self.point.copy()
-
-    def get_atoms_specie_inside_cell(self, atoms, species):
-        return np.arange(len(atoms))
-
-    def get_species(self):
-        return self.species
-
-
-def test_min_insert_respects_minimum_image():
-    # Existing atom at x=0.5 in a 10 A periodic box; proposal at x=9.9 is
-    # 0.6 A away through the boundary -- closer than min_insert=1.0, so the
-    # move must fail rather than insert an overlapping atom.
+def test_insertion_exclusion_respects_minimum_image():
+    # Existing atom at x=0.5 in a 10 A periodic box with a 1.0 A exclusion
+    # radius: no insertion may land within 1.0 A of it through the boundary.
     atoms = Atoms('H', positions=[[0.5, 5, 5]], cell=[10, 10, 10], pbc=True)
-    cell = _FixedPointCell([9.9, 5.0, 5.0], species=['H'])
-    move = InsertionMove(cell, species=['H'], seed=1, min_insert=1.0)
-    result = move.do_trial_move(atoms)
-    assert result[0] is False
-    assert len(atoms) == 1
+    cell = Cell(atoms, species_radii={'H': 1.0}, seed=2)
+    move = InsertionMove(cell, species=['H'], seed=1)
+    for _ in range(300):
+        move.do_trial_move(atoms)
+        assert atoms.get_distance(0, 1, mic=True) >= 1.0
+        del atoms[1]
 
 
 def test_custom_cell_free_volume_counts_periodic_images():
@@ -365,10 +348,10 @@ def test_import_does_not_mutate_matplotlib_rcparams():
     mpl = pytest.importorskip('matplotlib')
     del mpl
     code = (
-        "import matplotlib\n"
+        'import matplotlib\n'
         "dpi = matplotlib.rcParams['figure.dpi']\n"
-        "import mcpy.moves\n"
-        "import mcpy.utils\n"
+        'import mcpy.moves\n'
+        'import mcpy.utils\n'
         "assert matplotlib.rcParams['figure.dpi'] == dpi, "
         "matplotlib.rcParams['figure.dpi']\n"
     )
@@ -451,7 +434,9 @@ def test_gcmc_set_state_swap_payload_keeps_local_counters():
     g.set_state(swap_payload)
 
     assert (g._step, g.exchange_attempts, g.exchange_successes) == (40, 8, 3)
-    assert g.atoms is partner.atoms  # the configuration still travels
+    # the configuration still travels (as a detached copy, B3)
+    np.testing.assert_allclose(g.atoms.positions, partner.atoms.positions)
+    assert g.atoms is not partner.atoms
 
 
 def test_gcmc_set_state_full_dict_round_trips_counters():
@@ -532,3 +517,15 @@ def test_missing_species_radius_raises_a_named_error():
                       species_radii={'Cu': 2.4}, mc_sample_points=64, seed=0)
     with pytest.raises(ValueError, match=r"no radius for \['O'\]"):
         cell.calculate_volume(atoms)
+
+
+def test_displacement_on_empty_box_is_a_failed_proposal():
+    """A GCMC box starts empty; drawing the displacement move first must not
+    crash the run (it raised ValueError before)."""
+    from ase import Atoms
+
+    from mcpy.moves import DisplacementMove
+
+    result = DisplacementMove(species=['H'], seed=1).do_trial_move(
+        Atoms(cell=[5.0] * 3, pbc=True))
+    assert result[0] is False and result[1] == 0

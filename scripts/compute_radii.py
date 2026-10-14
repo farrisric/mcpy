@@ -32,7 +32,6 @@ def create_insertion_move(atoms, insert_species, metal_species, cell_bottom, cel
     seed = np.random.randint(100_000_000, 1_000_000_000)
     insertion = InsertionMove(cell,
                               species=[insert_species],
-                              min_insert=0.5,
                               seed=seed)
     return insertion
 
@@ -72,18 +71,18 @@ def main():
         device=device,
     )
 
-    logger.info("### Insertion run ###")
-    logger.info("System: %s-%s", metal_species, gas_species)
-    logger.info("%s lattice parameter: %.4f", metal_species, lattice_param)
-    logger.info("MACE model: %s (device=%s)", model_path, device)
-    logger.info("Species to insert: %s", species_to_insert)
-    logger.info("Trials per species: %d", n_trials)
-    logger.info("Starting insertions")
+    logger.info('### Insertion run ###')
+    logger.info('System: %s-%s', metal_species, gas_species)
+    logger.info('%s lattice parameter: %.4f', metal_species, lattice_param)
+    logger.info('MACE model: %s (device=%s)', model_path, device)
+    logger.info('Species to insert: %s', species_to_insert)
+    logger.info('Trials per species: %d', n_trials)
+    logger.info('Starting insertions')
 
     for insert_species in species_to_insert:
         relaxed_distances = []
         insertion_distances = []
-        logger.info("Starting insertion of %s", insert_species)
+        logger.info('Starting insertion of %s', insert_species)
         for i in range(n_trials):
             if i % log_freq == 0:
                 logger.info('Insertion %d / %d', i, n_trials)
@@ -102,7 +101,7 @@ def main():
         np.save(f'{insert_species}_distances.npy',
                 np.vstack((insertion_distances, relaxed_distances)).T)
 
-    logger.info("Insertions completed")
+    logger.info('Insertions completed')
 
     # plot results
     plt.rcParams.update({

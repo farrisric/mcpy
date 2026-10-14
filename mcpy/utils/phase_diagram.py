@@ -8,25 +8,29 @@ from ase import Atoms
 from ase.io import read
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.gridspec import GridSpec
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 # Applied per-call via _with_mpl_style, never at import time: importing mcpy
 # must not rewrite the host application's global rcParams.
 _MPL_STYLE = {
-    "figure.dpi": 200,
-    "font.sans-serif": "Arial",
-    "font.size": 14,
-    "mathtext.default": "regular",
+    'figure.dpi': 200,
+    'font.sans-serif': 'Arial',
+    'font.size': 14,
+    'mathtext.default': 'regular',
 }
 
 
-def _with_mpl_style(func):
-    """Run ``func`` inside an rc_context so the style (and any rcParams the
-    function sets while plotting) is reverted on return."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        with mpl.rc_context(_MPL_STYLE):
-            return func(*args, **kwargs)
-    return wrapper
+def _with_mpl_style(style):
+    """Run the decorated function inside an rc_context so ``style`` (and any
+    rcParams the function sets while plotting) is reverted on return."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with mpl.rc_context(style):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def free_en(en_dft, n_host, n_oxygen, e_host, e_o2, delta_mu_o, delta_mu_host, area):
@@ -38,11 +42,11 @@ def from_mu_to_press(mu, T=500, mu_ref=-0.5, p_0=1, k_b=0.00008617, U_dft=-9.861
     return np.exp(((mu - mu_ref - U_dft) * 2) / (k_b * T)) * p_0
 
 
-@_with_mpl_style
+@_with_mpl_style(_MPL_STYLE)
 def analyze_phase_diagram_results(
-    trajectory_path="relaxed_structures.xyz",
-    host_symbol="Ag",
-    oxygen_symbol="O",
+    trajectory_path='relaxed_structures.xyz',
+    host_symbol='Ag',
+    oxygen_symbol='O',
     idx_ref=2400,
     e_host=-2.82894684,
     delta_mu_host=0.0,
@@ -56,19 +60,19 @@ def analyze_phase_diagram_results(
     xlim=(-1.0, -0.2),
     oxide_ratio_vmax=0.67,
     save_plot=True,
-    output_plot_path="lines_phases_mace.png",
+    output_plot_path='lines_phases_mace.png',
     show_plot=False,
 ):
     """Analyze relaxed structures and build a surface phase diagram.
 
     Returns a dictionary with arrays and metadata useful for post-processing.
     """
-    traj = read(trajectory_path, ":")
+    traj = read(trajectory_path, ':')
     if len(traj) == 0:
-        raise ValueError(f"No structures found in trajectory: {trajectory_path}")
+        raise ValueError(f'No structures found in trajectory: {trajectory_path}')
     if idx_ref >= len(traj):
         raise ValueError(
-            f"idx_ref={idx_ref} is out of range for trajectory with {len(traj)} frames."
+            f'idx_ref={idx_ref} is out of range for trajectory with {len(traj)} frames.'
         )
 
     e_o2 = (e_host_oxide - (2 * (e_host + delta_mu_host)) + h_f_host_oxide) * 2
@@ -113,7 +117,7 @@ def analyze_phase_diagram_results(
             transitions.append(float(delta_mu_o[i]))
             phase_order.append(stable_conf_idx[i])
 
-    cmap = LinearSegmentedColormap.from_list("silver_red", [(0.75, 0.75, 0.75), (1, 0, 0)])
+    cmap = LinearSegmentedColormap.from_list('silver_red', [(0.75, 0.75, 0.75), (1, 0, 0)])
     norm = Normalize(vmin=0, vmax=oxide_ratio_vmax)
     phase_colors = []
     phase_oxide_ratios = []
@@ -137,7 +141,7 @@ def analyze_phase_diagram_results(
 
     fig, ax = plt.subplots(figsize=(6, 4))
     for row in free_matrix:
-        ax.plot(delta_mu_o, row, c="slategray", zorder=9, lw=0.5, alpha=0.5)
+        ax.plot(delta_mu_o, row, c='slategray', zorder=9, lw=0.5, alpha=0.5)
 
     # Tint the plot background using stable-segment boundaries.
     region_bounds = [delta_mu_o_min] + transitions + [delta_mu_o_max]
@@ -168,7 +172,7 @@ def analyze_phase_diagram_results(
             )
             segment_start = i
             phase_segment_idx += 1
-    color = phase_colors[min(phase_segment_idx, len(phase_colors) - 1)] if phase_colors else "black"
+    color = phase_colors[min(phase_segment_idx, len(phase_colors) - 1)] if phase_colors else 'black'
     ax.plot(
         delta_mu_o[segment_start:],
         min_energy[segment_start:],
@@ -180,29 +184,29 @@ def analyze_phase_diagram_results(
     # Draw transition lines below bulk-oxide limit.
     for x in transitions:
         if x <= -h_f_host_oxide:
-            ax.axvline(x, c="black", lw=1, zorder=10)
+            ax.axvline(x, c='black', lw=1, zorder=10)
 
     linew = 0.8
-    mpl.rcParams["hatch.linewidth"] = linew
+    mpl.rcParams['hatch.linewidth'] = linew
     ax.axvspan(
         -h_f_host_oxide,
         0,
-        facecolor="darkred",
-        hatch="//",
-        linestyle="dashed",
+        facecolor='darkred',
+        hatch='//',
+        linestyle='dashed',
         lw=linew,
-        edgecolor="black",
+        edgecolor='black',
         zorder=8,
     )
 
     ax2 = ax.twiny()
     ax2.plot(np.log10(from_mu_to_press(delta_mu_o + (e_o2 / 2), T=T)), min_energy, lw=0)
-    ax2.set_xlabel(f"log$_{{10}}$ $(p_{{O_2}}/p_0)$, T = {T} K", fontsize=18, labelpad=10)
-    ax2.tick_params(direction="in", labelsize=15)
+    ax2.set_xlabel(f'log$_{{10}}$ $(p_{{O_2}}/p_0)$, T = {T} K', fontsize=18, labelpad=10)
+    ax2.tick_params(direction='in', labelsize=15)
 
-    ax.set_xlabel("$\\Delta \\mu_{O}(T,p)$ [eV]", fontsize=18)
-    ax.set_ylabel("$\\gamma$ [meV/$\\AA^2$]", fontsize=18)
-    ax.tick_params(direction="in", labelsize=15)
+    ax.set_xlabel('$\\Delta \\mu_{O}(T,p)$ [eV]', fontsize=18)
+    ax.set_ylabel('$\\gamma$ [meV/$\\AA^2$]', fontsize=18)
+    ax.tick_params(direction='in', labelsize=15)
     ax.set_xlim(*xlim)
     ax2.set_xlim(
         np.log10(from_mu_to_press(xlim[0] + (e_o2 / 2), T=T)),
@@ -212,28 +216,28 @@ def analyze_phase_diagram_results(
 
     plt.tight_layout()
     if save_plot:
-        fig.savefig(output_plot_path, dpi=300, bbox_inches="tight")
+        fig.savefig(output_plot_path, dpi=300, bbox_inches='tight')
     if show_plot:
         plt.show()
     else:
         plt.close(fig)
 
     return {
-        "delta_mu_o": delta_mu_o,
-        "stable_conf_idx": stable_conf_idx,
-        "min_energy_mev_per_a2": min_energy,
-        "transitions_delta_mu_o": np.array(transitions),
-        "phase_order_conf_idx": np.array(phase_order),
-        "phase_oxide_ratios": np.array(phase_oxide_ratios),
-        "plot_path": output_plot_path if save_plot else None,
+        'delta_mu_o': delta_mu_o,
+        'stable_conf_idx': stable_conf_idx,
+        'min_energy_mev_per_a2': min_energy,
+        'transitions_delta_mu_o': np.array(transitions),
+        'phase_order_conf_idx': np.array(phase_order),
+        'phase_oxide_ratios': np.array(phase_oxide_ratios),
+        'plot_path': output_plot_path if save_plot else None,
     }
 
 
 def _frame_energy(atoms):
     """Best-effort potential-energy lookup for a frame (info, calc, or getter)."""
-    energy = atoms.info.get("energy")
+    energy = atoms.info.get('energy')
     if energy is None and atoms.calc is not None:
-        energy = atoms.calc.results.get("energy")
+        energy = atoms.calc.results.get('energy')
     if energy is None:
         try:
             energy = atoms.get_potential_energy()
@@ -253,18 +257,70 @@ def _flatten_frames(frames):
     return flat
 
 
-@_with_mpl_style
+def _lower_envelope(intercepts, slopes, x0, x1):
+    """Exact lower envelope of the lines ``a + b * x`` on ``[x0, x1]``.
+
+    Returns the winning line indices from left to right and the x of each
+    switch (the analytic crossing of two neighbouring lines). Slopes must be
+    pairwise different, which holds here: the slope is set by the adsorbate
+    count and each count has one line.
+    """
+    a = np.asarray(intercepts, float)
+    b = np.asarray(slopes, float)
+    # At x0 the winner is the lowest line; on a tie, the steepest one, since it
+    # is the lowest just right of x0.
+    y0 = a + b * x0
+    tied = np.flatnonzero(np.isclose(y0, y0.min(), rtol=0.0, atol=1e-12))
+    cur = int(tied[np.argmin(b[tied])])
+    order, crossings = [cur], []
+    x = x0
+    while True:
+        steeper = np.flatnonzero(b < b[cur])
+        if steeper.size == 0:
+            break
+        xs = (a[steeper] - a[cur]) / (b[cur] - b[steeper])
+        keep = xs >= x - 1e-12
+        if not keep.any():
+            break
+        x_next = xs[keep].min()
+        if x_next >= x1:
+            break
+        cand = steeper[keep][np.isclose(xs[keep], x_next, rtol=0.0, atol=1e-12)]
+        cur = int(cand[np.argmin(b[cand])])
+        x = max(float(x_next), x)
+        order.append(cur)
+        crossings.append(x)
+    return order, crossings
+
+
+# Paul Tol's "light" scheme: colourblind-safe and light enough to sit behind
+# black lines. Phases cycle through it, so neighbouring phases always differ.
+PHASE_COLORS = ('#77AADD', '#EE8866', '#44BB99', '#EEDD88', '#99DDFF',
+                '#FFAABB', '#BBCC33', '#AAAA00', '#DDDDDD')
+
+_PD_STYLE = {
+    'font.family': 'DejaVu Sans',
+    'font.size': 11,
+    'axes.labelsize': 12,
+    'mathtext.default': 'regular',
+    'hatch.linewidth': 0.7,
+}
+
+_THUMBS_PER_ROW = 6
+
+
+@_with_mpl_style(_PD_STYLE)
 def plot_phase_diagram(
     frames,
-    adsorbate="H",
-    metal_symbols=("Pd", "Ag"),
+    adsorbate='H',
+    metal_symbols=('Pd', 'Ag'),
     mu_ref=-3.05,
-    kind="surface",
+    kind='surface',
     T=300.0,
     dmu_range=(-1.0, 0.0),
     n_bins=400,
     min_phase_width=0.03,
-    rotation="0x,0y,0z",
+    rotation='0x,0y,0z',
     show_structures=True,
     system_label=None,
     outfile=None,
@@ -274,12 +330,21 @@ def plot_phase_diagram(
     adsorbate_count_fn=None,
     adsorbate_label=None,
     atoms_per_reservoir_molecule=2,
+    hatch_from=None,
+    hatch_label=None,
+    dpi=250,
 ):
     """Build a grand-canonical adsorbate phase diagram for one configuration.
 
     All ``frames`` are assumed to belong to a single system configuration (e.g.
     one surface facet or one nanoparticle size); they typically sweep a range of
     chemical potentials. The lowest-energy adsorbate-free frame is the reference.
+
+    Every phase on the stable envelope is kept. The phase boundaries are the
+    exact crossings of the linear free-energy lines, so the dashed transition
+    lines sit on the kinks of the envelope. The phases are numbered from left
+    to right; the same number is on the plot and on the thumbnail title, and
+    neighbouring phases never share a colour.
 
     Parameters
     ----------
@@ -291,7 +356,7 @@ def plot_phase_diagram(
         Host species, used for per-atom normalization and structure labels.
     mu_ref : float
         Reference chemical potential of the adsorbate (e.g. ½E(H2)) [eV].
-    kind : {"surface", "nano"}
+    kind : str
         ``"surface"`` normalizes gamma by the in-plane cell area (meV/Å²);
         ``"nano"`` normalizes by the number of metal atoms (meV/atom).
     T : float
@@ -299,9 +364,12 @@ def plot_phase_diagram(
     dmu_range : tuple[float, float]
         (min, max) of Δμ_adsorbate [eV].
     n_bins : int
-        Number of Δμ grid points.
+        Number of Δμ grid points of the returned ``dmu_grid``/``free`` arrays.
+        The phases and transitions do not depend on it.
     min_phase_width : float
-        Minimum Δμ width [eV] for a phase to be kept; narrower phases merge.
+        Phases narrower than this [eV] are still drawn, numbered and shown as a
+        thumbnail; only their number moves to a second row on the plot, so it
+        does not collide with the numbers of its neighbours.
     rotation : str
         ASE ``plot_atoms`` rotation string for thumbnails.
     show_structures : bool
@@ -318,7 +386,7 @@ def plot_phase_diagram(
         Report the unnormalized formation energy in eV instead of the default
         per-atom (nano) or per-area (surface) value in meV.
     adsorbate_label : str | None
-        Species name used in the axis labels. Defaults to ``adsorbate`` —
+        Species name used in the axis labels. Defaults to ``adsorbate`` -
         pass e.g. ``"CO"`` when the adsorbate is counted via a proxy atom.
     atoms_per_reservoir_molecule : int
         Adsorbed units per reservoir gas molecule, used in the pressure
@@ -333,13 +401,20 @@ def plot_phase_diagram(
         defines the stoichiometry while the full frame is still rendered. When
         ``None`` (default) the count is the number of atoms whose symbol equals
         ``adsorbate``.
+    hatch_from : float | None
+        Hatch the range Δμ > ``hatch_from`` [eV], for example where the bulk
+        oxide is more stable than any surface phase.
+    hatch_label : str | None
+        Legend text of the hatched range.
+    dpi : int
+        Resolution of the saved figure.
 
     Returns
     -------
     dict
         Arrays and metadata describing the diagram.
     """
-    if kind not in ("surface", "nano"):
+    if kind not in ('surface', 'nano'):
         raise ValueError(f"kind must be 'surface' or 'nano', got {kind!r}")
 
     flat = _flatten_frames(frames)
@@ -354,25 +429,27 @@ def plot_phase_diagram(
             n_ads = sum(1 for a in at if a.symbol == adsorbate)
         data.append((at, float(energy), n_ads))
     if not data:
-        raise ValueError("No frames with a retrievable energy were provided.")
+        raise ValueError('No frames with a retrievable energy were provided.')
 
     clean = sorted((d for d in data if d[2] == 0), key=lambda d: d[1])
     if not clean:
-        raise ValueError(f"No adsorbate-free ({adsorbate} count == 0) reference frame found.")
+        raise ValueError(f'No adsorbate-free ({adsorbate} count == 0) reference frame found.')
     ref_atoms, ref_E = clean[0][0], clean[0][1]
 
     n_metal = sum(1 for a in ref_atoms if a.symbol in metal_symbols)
     gamma_scale = 1.0 if gamma_in_ev else 1000.0
-    if kind == "surface":
+    if kind == 'surface':
         c = ref_atoms.get_cell()
         area = float(np.linalg.norm(np.cross(c[0], c[1])))
         norm_factor = 1.0 if gamma_in_ev else area
-        unit = r"eV" if gamma_in_ev else r"meV/Å²"
-        symbol = r"\gamma"
+        unit = r'eV' if gamma_in_ev else r'meV/Å²'
+        unit_tex = r'eV' if gamma_in_ev else r'meV/Å$^2$'
+        symbol = r'\gamma'
     else:
         norm_factor = 1.0 if gamma_in_ev else n_metal
-        unit = r"eV" if gamma_in_ev else r"meV/atom"
-        symbol = r"\Delta G"
+        unit = r'eV' if gamma_in_ev else r'meV/atom'
+        unit_tex = unit
+        symbol = r'\Delta G'
 
     best = {}
     for at, energy, n_ads in data:
@@ -380,172 +457,156 @@ def plot_phase_diagram(
             best[n_ads] = (at, energy)
     stoich = sorted(best)
 
-    dmu_grid = np.linspace(dmu_range[0], dmu_range[1], n_bins)
-    free = np.array(
-        [
-            ((best[n][1] - n * (mu_ref + dmu_grid)) - ref_E) / norm_factor * gamma_scale
-            for n in stoich
-        ]
-    )
+    # Each stoichiometry is a straight line in dmu: free = icpt + slope * dmu.
+    icpt = np.array([(best[n][1] - n * mu_ref - ref_E) / norm_factor * gamma_scale
+                     for n in stoich])
+    slope = np.array([-n / norm_factor * gamma_scale for n in stoich])
+    x0, x1 = float(dmu_range[0]), float(dmu_range[1])
+    phase_order, transitions = _lower_envelope(icpt, slope, x0, x1)
+
+    dmu_grid = np.linspace(x0, x1, n_bins)
+    free = icpt[:, None] + slope[:, None] * dmu_grid[None, :]
     s_idx = np.argmin(free, axis=0)
     min_g = free[s_idx, np.arange(n_bins)]
 
-    raw_order = [int(s_idx[0])]
-    raw_trans = []
-    for i in range(1, n_bins):
-        if s_idx[i] != s_idx[i - 1]:
-            raw_trans.append(float(dmu_grid[i]))
-            raw_order.append(int(s_idx[i]))
-
-    bounds = [dmu_grid[0]] + raw_trans + [dmu_grid[-1]]
-    widths = [bounds[i + 1] - bounds[i] for i in range(len(bounds) - 1)]
-    phase_order = []
-    transitions = []
-    for i, p in enumerate(raw_order):
-        if widths[i] >= min_phase_width:
-            phase_order.append(p)
-            if i + 1 < len(bounds) - 1:
-                transitions.append(bounds[i + 1])
-    if not phase_order:
-        phase_order = raw_order
-        transitions = raw_trans
-    transitions = transitions[: max(0, len(phase_order) - 1)]
-
     ratios = [stoich[i] / n_metal for i in phase_order] if n_metal else [0.0] * len(phase_order)
-    cmap = LinearSegmentedColormap.from_list(
-        "navy_red",
-        [
-            (0.10, 0.15, 0.50),
-            (0.95, 0.78, 0.85),
-            (0.85, 0.30, 0.25),
-            (0.45, 0.05, 0.05),
-        ],
-    )
-    cnorm = Normalize(vmin=0.0, vmax=max(max(ratios), 0.5))
-    colors = [cmap(cnorm(r)) for r in ratios]
+    n_p = len(phase_order)
+    colors = [PHASE_COLORS[i % len(PHASE_COLORS)] for i in range(n_p)]
+    bounds = [x0] + transitions + [x1]
+    env_y = [icpt[phase_order[0]] + slope[phase_order[0]] * x0] + [
+        icpt[p] + slope[p] * x for p, x in zip(phase_order, bounds[1:])]
 
     label = adsorbate_label if adsorbate_label is not None else adsorbate
     n_res = float(atoms_per_reservoir_molecule)
     gas_label = (label if atoms_per_reservoir_molecule == 1
                  else f'{label}_{atoms_per_reservoir_molecule}')
 
-    def _press(dmu):
-        return 10.0 ** (n_res * dmu / (k_b * T * np.log(10.0)))
-
-    n_p = len(phase_order)
-    if show_structures:
-        fig = plt.figure(figsize=(max(10, 2.2 * n_p), 8.5))
-        gs = GridSpec(
-            2, n_p, figure=fig, height_ratios=[2.6, 1.0],
-            hspace=0.45, wspace=0.10, top=0.86, bottom=0.06, left=0.10, right=0.97,
-        )
-        ax = fig.add_subplot(gs[0, :])
-    else:
-        fig, ax = plt.subplots(figsize=(7, 5))
+    rows = -(-n_p // _THUMBS_PER_ROW) if show_structures else 0
+    cols = min(n_p, _THUMBS_PER_ROW)
+    fig = plt.figure(figsize=(8.0, 5.2 + 1.75 * rows))
+    gs = GridSpec(
+        1 + rows, max(cols, 1), figure=fig, height_ratios=[3.4] + [1.25] * rows,
+        hspace=0.55, wspace=0.08, top=0.88, bottom=0.03 if rows else 0.2,
+        left=0.11, right=0.97,
+    )
+    ax = fig.add_subplot(gs[0, :])
 
     for row in free:
-        ax.plot(dmu_grid, row, c="slategray", lw=0.5, alpha=0.55, zorder=9)
+        ax.plot(dmu_grid, row, c='0.55', lw=0.6, alpha=0.7, zorder=3)
 
-    region_bounds = [dmu_grid[0]] + transitions + [dmu_grid[-1]]
-    for i in range(len(region_bounds) - 1):
-        ax.axvspan(
-            region_bounds[i], region_bounds[i + 1],
-            facecolor=colors[min(i, len(colors) - 1)], alpha=1.0, zorder=0,
-        )
-
+    span = float(np.ptp(env_y)) or 50.0 * gamma_scale / 1000.0
+    lo, hi = min(env_y) - 0.12 * span, max(env_y) + 0.45 * span
+    x_pad = 0.015 * (x1 - x0)
+    for i in range(n_p):
+        ax.axvspan(bounds[i], bounds[i + 1], facecolor=colors[i], alpha=0.75, lw=0, zorder=0)
+        narrow = bounds[i + 1] - bounds[i] < min_phase_width
+        x_txt = min(max(0.5 * (bounds[i] + bounds[i + 1]), x0 + x_pad), x1 - x_pad)
+        ax.text(x_txt, 0.955 - (0.09 if narrow else 0.0), str(i + 1),
+                transform=ax.get_xaxis_transform(), ha='center', va='top',
+                fontsize=10, fontweight='bold', zorder=7,
+                bbox=dict(facecolor='white', edgecolor='none', alpha=0.85,
+                          boxstyle='round,pad=0.15'))
     for x in transitions:
-        ax.axvline(x, c="black", lw=1.0, zorder=10)
+        ax.axvline(x, c='k', lw=0.8, ls='--', zorder=4)
+    ax.plot(bounds, env_y, c='k', lw=2.2, zorder=5)
 
-    seg = 0
-    for i in range(1, n_bins):
-        if s_idx[i] != s_idx[i - 1]:
-            ax.plot(dmu_grid[seg:i], min_g[seg:i], color="black", lw=2.0, zorder=12)
-            seg = i
-    ax.plot(dmu_grid[seg:], min_g[seg:], color="black", lw=2.0, zorder=12)
+    handles = [Line2D([], [], c='k', lw=2.2, label='stable envelope'),
+               Line2D([], [], c='0.55', lw=0.8, label='other stoichiometries'),
+               Line2D([], [], c='k', lw=0.8, ls='--', label='phase transition')]
+    if hatch_from is not None and hatch_from < x1:
+        ax.axvspan(max(hatch_from, x0), x1, facecolor='none', edgecolor='0.2',
+                   hatch='///', lw=0, zorder=1)
+        if hatch_from > x0:
+            ax.axvline(hatch_from, c='0.2', lw=1.2, zorder=4)
+        handles.append(Patch(facecolor='none', edgecolor='0.2', hatch='///',
+                             label=hatch_label or 'hatched range'))
 
-    span = min_g.max() - min_g.min()
-    y_floor = 50.0 * gamma_scale / 1000.0
-    ax.set_xlim(dmu_grid[0], dmu_grid[-1])
-    ax.set_ylim(min_g.min() - 0.25 * max(span, y_floor), min_g.max() + 1.2 * max(span, y_floor))
-    ax.set_xlabel(r"$\Delta\mu_{%s}(T,p)$ [eV]" % label, fontsize=18)
-    ax.set_ylabel(rf"${symbol}$ [{unit}]", fontsize=18)
-    ax.tick_params(direction="in", labelsize=14)
+    ax.set_xlim(x0, x1)
+    ax.set_ylim(lo, hi)
+    ax.set_xlabel(rf'$\Delta\mu_{{{label}}}$ (eV)')
+    ax.set_ylabel(rf'${symbol}$ ({unit_tex})')
+    ax.tick_params(direction='in')
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.13),
+              ncol=2 if len(handles) == 4 else 3, frameon=False, fontsize=9.5,
+              handlelength=2.2, columnspacing=1.2)
 
+    # p = p0 at dmu = 0: dmu is referenced to the reservoir energy alone.
     ax2 = ax.twiny()
-    ax2.plot(np.log10(_press(dmu_grid)), min_g, lw=0)
-    ax2.set_xlabel(
-        rf"log$_{{10}}$ $(p_{{{gas_label}}}/p_0)$, T = {int(T)} K", fontsize=16, labelpad=10
-    )
-    ax2.set_xlim(np.log10(_press(dmu_grid[0])), np.log10(_press(dmu_grid[-1])))
-    ax2.tick_params(direction="in", labelsize=13)
+    ax2.set_xlim(*(n_res * np.array([x0, x1]) / (k_b * T * np.log(10.0))))
+    ax2.set_xlabel(rf'$\log_{{10}}(p_{{{gas_label}}}/p^0)$ at T = {T:g} K')
+    ax2.tick_params(direction='in')
 
     if show_structures:
         from ase.visualize.plot import plot_atoms
 
         for i, pidx in enumerate(phase_order):
-            axs = fig.add_subplot(gs[1, i])
+            r, col = divmod(i, _THUMBS_PER_ROW)
+            axs = fig.add_subplot(gs[1 + r, col])
             n_ads = stoich[pidx]
             atoms = best[n_ads][0]
-            plot_atoms(
-                atoms, ax=axs, rotation=rotation, radii=1.0,
-                show_unit_cell=2 if kind == "surface" else 0,
-            )
+            plot_atoms(atoms, ax=axs, rotation=rotation, radii=0.9,
+                       show_unit_cell=2 if kind == 'surface' else 0)
+            # Pad the data limits to the grid cell's shape, so every thumbnail
+            # fills an equal box and the titles line up.
+            box = axs.get_position(original=True)
+            cell_ratio = (box.height * fig.get_figheight()) / (box.width * fig.get_figwidth())
+            (xa, xb), (ya, yb) = axs.get_xlim(), axs.get_ylim()
+            if (yb - ya) < cell_ratio * (xb - xa):
+                pad = 0.5 * (cell_ratio * (xb - xa) - (yb - ya))
+                axs.set_ylim(ya - pad, yb + pad)
+            else:
+                pad = 0.5 * ((yb - ya) / cell_ratio - (xb - xa))
+                axs.set_xlim(xa - pad, xb + pad)
             axs.set_xticks([])
             axs.set_yticks([])
             for sp in axs.spines.values():
                 sp.set_edgecolor(colors[i])
-                sp.set_linewidth(3.5)
-            title = "".join(
-                f"{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$" for sym in metal_symbols
+                sp.set_linewidth(3.0)
+            title = ''.join(
+                f'{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$' for sym in metal_symbols
             )
             if n_ads > 0:
                 # Molecule-aware: with a proxy-counted adsorbate (e.g. CO via
                 # its C atom) the label names the molecule, parenthesized so
                 # (CO)_3 reads as three molecules rather than C-O3.
-                unit = label if len(label) == 1 else f"({label})"
-                title += f"{unit}$_{{{n_ads}}}$"
-            axs.set_title(
-                title, fontsize=11, fontweight="bold",
-                bbox=dict(facecolor="white", edgecolor=colors[i],
-                          linewidth=2.0, boxstyle="round,pad=0.3"),
-            )
+                ads = label if len(label) == 1 else f'({label})'
+                title += f'{ads}$_{{{n_ads}}}$'
+            axs.set_title(f'{i + 1}: {title}', fontsize=9, pad=3)
 
     if system_label:
-        ax.text(
-            0.012, 0.97, system_label, transform=ax.transAxes,
-            fontsize=14, fontweight="bold", va="top",
-            bbox=dict(facecolor="white", alpha=0.85, edgecolor="none"),
-        )
+        ax.text(0.012, 0.03, system_label, transform=ax.transAxes,
+                fontsize=11, fontweight='bold', va='bottom', zorder=7,
+                bbox=dict(facecolor='white', alpha=0.85, edgecolor='none'))
 
     if outfile:
-        fig.savefig(outfile, dpi=200, bbox_inches="tight")
+        fig.savefig(outfile, dpi=dpi, facecolor='white', bbox_inches='tight', pad_inches=0.05)
     if show_plot:
         plt.show()
     else:
         plt.close(fig)
 
     return {
-        "dmu_grid": dmu_grid,
-        "free": free,
-        "stoich": stoich,
-        "stable_idx": s_idx,
-        "min_gamma": min_g,
-        "transitions": np.array(transitions),
-        "phase_order": np.array(phase_order),
-        "phase_ratios": np.array(ratios),
-        "unit": unit,
-        "plot_path": outfile,
+        'dmu_grid': dmu_grid,
+        'free': free,
+        'stoich': stoich,
+        'stable_idx': s_idx,
+        'min_gamma': min_g,
+        'transitions': np.array(transitions),
+        'phase_order': np.array(phase_order),
+        'phase_ratios': np.array(ratios),
+        'unit': unit,
+        'plot_path': outfile,
     }
 
 
 def _build_arg_parser():
     parser = argparse.ArgumentParser(
-        description="Analyze relaxed structures and plot a phase diagram."
+        description='Analyze relaxed structures and plot a phase diagram.'
     )
-    parser.add_argument("trajectory_path", nargs="?", default="relaxed_structures.xyz")
-    parser.add_argument("--output", dest="output_plot_path", default="lines_phases_mace.png")
-    parser.add_argument("--idx-ref", type=int, default=2400)
-    parser.add_argument("--show", action="store_true")
+    parser.add_argument('trajectory_path', nargs='?', default='relaxed_structures.xyz')
+    parser.add_argument('--output', dest='output_plot_path', default='lines_phases_mace.png')
+    parser.add_argument('--idx-ref', type=int, default=2400)
+    parser.add_argument('--show', action='store_true')
     return parser
 
 
@@ -559,5 +620,5 @@ def main():
     )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

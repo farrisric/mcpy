@@ -29,9 +29,8 @@ def test_exchange_prob_T_subtracts_mu_N_for_grand_canonical():
     # delta = (beta2 - beta1)(Phi2 - Phi1) = (0.5 - 1.0)(2 - 5) = 1.5 -> p = 1
     s1 = _state(beta=1.0, energy=10.0, mu={'Ag': 1.0}, formula='Ag5')
     s2 = _state(beta=0.5, energy=20.0, mu={'Ag': 1.0}, formula='Ag18')
-    assert re._exchange_prob_T(s1, s2) == 1.0
     # bare-E would give delta = (0.5-1.0)(20-10) = -5 -> p << 1
-    assert re._exchange_prob_T(s1, s2) > 0.9
+    assert re._exchange_prob_T(s1, s2) == 1.0
 
 
 def test_exchange_prob_T_without_mu_is_bare_energy():

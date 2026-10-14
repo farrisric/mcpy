@@ -3,6 +3,8 @@ import re
 import numpy as np
 from mcpy.utils import RandomNumberGenerator
 
+from .base_move import PROPOSAL_REJECTED
+
 
 def _abbreviate(class_name):
     """Short but still distinct label for a move class.
@@ -25,14 +27,16 @@ class MoveSelector:
 
     Tracks two sets of counters:
       * per-interval counters (``move_counter`` / ``move_acceptance``) cleared
-        by :meth:`reset_counters` — used for live "recent" acceptance ratios.
+        by ``reset_counters()`` - used for live "recent" acceptance ratios.
       * cumulative counters (``move_counter_total`` /
-        ``move_acceptance_total``) — never reset; used by ``finalize_run``.
+        ``move_acceptance_total``) - never reset; used by ``finalize_run``.
 
     Failed trial moves (``do_trial_move`` returning ``False`` in place of the
     atoms) are recorded in ``move_failed_counter`` /
     ``move_failed_counter_total`` and excluded from the acceptance-ratio
-    denominator so ratios reflect viable attempts only.
+    denominator so ratios reflect viable attempts only. A move that returns
+    ``PROPOSAL_REJECTED`` proposed a configuration with zero acceptance: it
+    counts as a rejected attempt, and the ensembles receive ``False``.
 
     Parameters
     ----------
@@ -55,7 +59,7 @@ class MoveSelector:
         if n_moves is None:
             n_moves = max(1, round(sum(probabilities)))
         if n_moves < 1:
-            raise ValueError(f"n_moves must be >= 1, got {n_moves}")
+            raise ValueError(f'n_moves must be >= 1, got {n_moves}')
         self.n_moves = int(n_moves)
         # Cumulative weights for random.choices; it bisects them against one
         # random() draw, which is exactly what the previous cumsum +
@@ -89,6 +93,10 @@ class MoveSelector:
         # species). An identity check, not truthiness: a legitimately empty
         # Atoms object (last atom deleted) is falsy but IS a valid proposal.
         atoms_new = result[0] if isinstance(result, tuple) else result
+        if atoms_new is PROPOSAL_REJECTED:
+            # Proposed but rejected by construction: an attempt, not a
+            # failure. The ensembles get the usual False so nothing is scored.
+            return (False,) + tuple(result[1:]) if isinstance(result, tuple) else False
         if atoms_new is False or atoms_new is None:
             self.move_failed_counter[self.to_use] += 1
             self.move_failed_counter_total[self.to_use] += 1
@@ -103,7 +111,7 @@ class MoveSelector:
         Molecule moves set ``last_exchange_count`` (in-cell molecule count of
         their species); atomic moves don't have the attribute, so this returns
         ``None`` and the ensemble falls back to its total-atom convention
-        (docs/gcmc_acceptance_convention.rst). Stateful like :meth:`get_volume`:
+        (docs/gcmc_acceptance_convention.rst). Stateful like the cell's ``get_volume()``:
         valid for the move chosen by the last :meth:`do_trial_move`.
         """
         return getattr(self.move_list[self.to_use], 'last_exchange_count', None)
@@ -126,7 +134,7 @@ class MoveSelector:
         return out
 
     def interval_ratios(self):
-        """Acceptance ratios since the last :meth:`reset_counters`."""
+        """Acceptance ratios since the last ``reset_counters()``."""
         return self._ratios(self.move_acceptance, self.move_counter,
                             self.move_failed_counter)
 

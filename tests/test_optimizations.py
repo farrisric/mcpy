@@ -3,13 +3,12 @@ Tests for SphericalCell free-volume sampler, in-place InsertionMove,
 SphericalCell.get_random_point, and write_xyz.
 Run with: python -m pytest tests/test_optimizations.py -v
 """
-import time
 import numpy as np
 import pytest  # noqa: F401
 from ase import Atoms
 
 from mcpy.cell.spherical_cell import SphericalCell
-from mcpy.moves.insertion_move import InsertionMove, _MAX_INSERT_ATTEMPTS
+from mcpy.moves.insertion_move import InsertionMove
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +62,7 @@ class TestSphericalCellVolume:
         self.cell.calculate_volume(atoms2)
         v2 = self.cell.volume
 
-        assert v2 > v1, "Moving atoms outside the sphere should free volume"
+        assert v2 > v1, 'Moving atoms outside the sphere should free volume'
 
     def test_empty_atoms_full_sphere(self):
         empty = Atoms()
@@ -90,11 +89,6 @@ class TestInsertionMove:
         self.cell = Cell(self.atoms, species_radii={'Cu': 1.28, 'H': 0.53})
         self.cell.calculate_volume(self.atoms)
 
-    def test_no_sklearn_import(self):
-        import mcpy.moves.insertion_move as im
-        src = open(im.__file__).read()
-        assert 'sklearn' not in src, "sklearn should not be imported in insertion_move.py"
-
     def test_basic_insertion_inplace(self):
         n0 = len(self.atoms)
         move = InsertionMove(self.cell, species=['H'], seed=0, min_insert=None)
@@ -105,18 +99,16 @@ class TestInsertionMove:
         assert atoms_new is self.atoms
         assert len(self.atoms) == n0 + 1
 
-    def test_min_insert_respected(self):
-        """Inserted atom must be at least min_insert away from prior atoms."""
-        min_dist = 1.0
-        move = InsertionMove(self.cell, species=['H'], seed=1, min_insert=min_dist)
+    def test_species_radii_exclusion_respected(self):
+        """Inserted atom stays outside every prior atom's exclusion sphere."""
+        radii = self.cell.species_radii
+        move = InsertionMove(self.cell, species=['H'], seed=1)
         for _ in range(20):
-            prior = self.atoms.positions.copy()
-            atoms_new, delta, species = move.do_trial_move(self.atoms)
-            inserted_pos = self.atoms.positions[-1]
-            dists = np.linalg.norm(prior - inserted_pos, axis=1)
-            assert dists.min() >= min_dist - 1e-10, (
-                f"Inserted atom too close: min dist={dists.min():.4f} < {min_dist}"
-            )
+            prior = self.atoms.copy()
+            move.do_trial_move(self.atoms)
+            dists = self.atoms.get_distances(len(prior), range(len(prior)), mic=True)
+            limits = np.array([radii[s] for s in prior.get_chemical_symbols()])
+            assert np.all(dists >= limits)
 
     def test_insertion_without_min_insert(self):
         n0 = len(self.atoms)
@@ -124,18 +116,13 @@ class TestInsertionMove:
         move.do_trial_move(self.atoms)
         assert len(self.atoms) == n0 + 1
 
-    def test_max_attempts_constant_exists(self):
-        assert _MAX_INSERT_ATTEMPTS == 1000
-
-    def test_impossible_min_insert_does_not_loop_forever(self):
+    def test_full_cell_insertion_fails_cleanly(self):
         n0 = len(self.atoms)
-        move = InsertionMove(self.cell, species=['H'], seed=3, min_insert=1e9)
-        t0 = time.perf_counter()
+        self.cell.species_radii = {'Cu': 1e9, 'H': 1e9}
+        move = InsertionMove(self.cell, species=['H'], seed=3)
         result, delta_n, _ = move.do_trial_move(self.atoms)
-        elapsed = time.perf_counter() - t0
-        assert elapsed < 5.0, f"Insertion took too long: {elapsed:.2f}s"
-        # min_insert cannot be honoured: the move reports failure and leaves
-        # atoms untouched rather than inserting a guaranteed overlap.
+        # No free point: the move reports failure and leaves atoms untouched
+        # rather than inserting a guaranteed overlap.
         assert result is False
         assert len(self.atoms) == n0
 
@@ -169,12 +156,7 @@ class TestSphericalCellGetRandomPoint:
                     )
                     fraction = mask.sum() / n
                     assert abs(fraction - 0.125) < 0.03, \
-                        f"Octant ({sx},{sy},{sz}) fraction={fraction:.3f}, expected ~0.125"
-
-    def test_no_rejection_loop(self):
-        import inspect
-        src = inspect.getsource(self.cell.get_random_point)
-        assert 'while' not in src, "get_random_point should not use rejection sampling"
+                        f'Octant ({sx},{sy},{sz}) fraction={fraction:.3f}, expected ~0.125'
 
 
 # ---------------------------------------------------------------------------

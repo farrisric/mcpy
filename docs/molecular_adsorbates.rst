@@ -74,7 +74,7 @@ convergence.
 The capped proposal stays symmetric, so no acceptance correction is needed.
 
 **BatchedReplicaExchange is the replica-exchange path.**
-The MPI :class:`ReplicaExchange` counts species by chemical symbol, which is
+The MPI :class:`~mcpy.ensembles.ReplicaExchange` counts species by chemical symbol, which is
 always zero for a molecular name, so its constructor raises
 ``NotImplementedError`` rather than silently accepting every swap.
 The batched variant counts molecules in its grand-potential bookkeeping and
@@ -104,14 +104,14 @@ Registering a molecular species
 Exchanging molecules with the reservoir
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``MoleculeInsertionMove(cell, molecule, name, seed, min_insert=None, max_molecules=None)``
+``MoleculeInsertionMove(cell, molecule, name, seed, max_molecules=None)``
    Inserts the template rigidly at a random position and orientation drawn
    from the cell.
    The template is centered on its center of mass at construction, and the
    whole molecule is appended in one step with a fresh ``molecule_id``.
-   ``min_insert`` retries the draw until every new atom clears that distance
-   from the existing structure, which spares the calculator from evaluating
-   hopeless overlaps.
+   The center of mass is drawn uniformly from the cell free volume: points
+   inside an exclusion sphere of the cell ``species_radii`` are redrawn.
+   ``min_insert`` is deprecated and ignored.
    ``max_molecules`` skips the trial once the population reaches a cap.
 
 ``MoleculeDeletionMove(cell, molecule, name, seed, min_molecules=None)``
@@ -156,23 +156,37 @@ Worked examples
 ---------------
 
 .. figure:: _static/fig_co_coverage.png
-   :alt: CO count per replica against GCMC step across a chemical-potential ladder.
-   :width: 75%
+   :alt: CO count per rung against GCMC step, and the mean CO count against the CO chemical potential.
+   :width: 100%
    :align: center
 
-   Molecular GCMC in motion: :math:`N_{\mathrm{CO}}` on a CuPd nanoparticle
-   against GCMC step, one trace per :math:`\Delta\mu` rung of a batched
-   replica-exchange ladder (from the executed CO/CuPd notebook). More
-   CO-rich conditions settle at higher coverage.
+   CO on a Cu\ :sub:`33`\ Pd\ :sub:`5` particle at 400 K, from a batched
+   replica-exchange run with MACE-MPA-0 (``co_on_cupd_replica_exchange``
+   notebook): 15 :math:`\Delta\mu_{\mathrm{CO}}` rungs from -2.10 to -1.30 eV,
+   spaced by the rule in :doc:`replica_exchange_ladder_spacing`, 800 steps.
+   Left: the CO count :math:`N_{\mathrm{CO}}` of each rung against GCMC
+   step, coloured by the rung's :math:`\Delta\mu_{\mathrm{CO}}`; the dotted
+   line marks the start of the averaging window.
+   Right: the isotherm, the mean :math:`N_{\mathrm{CO}}` over the second half
+   of the run, with the standard deviation as error bars.
+   The rungs up to -1.48 eV have plateaued; the four rungs from -1.42 eV
+   upward still drift, so the top of the isotherm is not converged.
 
 .. figure:: _static/fig_phase_diagram_co_cupd.png
    :alt: Phase diagram of CO on a CuPd nanoparticle with structure thumbnails.
    :width: 100%
    :align: center
 
-   The resulting phase diagram: stable (CO)\ :sub:`n` phases of the
-   Cu\ :sub:`33`\ Pd\ :sub:`5` particle against the CO chemical potential
-   (see :doc:`phase_diagrams`).
+   The phase diagram of the same run: the free energy
+   :math:`\Delta G` per metal atom (meV/atom, ``kind='nano'``) of the
+   lowest-energy frame of each CO count against
+   :math:`\Delta\mu_{\mathrm{CO}}`, with the stable envelope in black.
+   The numbered regions are the stable (CO)\ :sub:`n` phases,
+   n = 0, 1, 2, 3, 5 and 6, shown in the thumbnails.
+   The top axis gives the CO pressure, with :math:`p = p^0` at
+   :math:`\Delta\mu_{\mathrm{CO}} = 0` (see :doc:`phase_diagrams`).
+   Phase 6 starts at -1.45 eV, where the coverage is not converged, so it
+   is a lower bound on the coverage there.
 
 - The molecular GCMC notebook walks the machinery step by step with executed
   output (see :doc:`notebooks`).

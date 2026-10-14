@@ -14,12 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 def derive_mu_gas(calculator, species: str = 'O2', box: float = 20.0) -> float:
-    """Half the molecular gas energy, e.g. mu_O = E(O2)/2.
+    """Per-atom molecular gas energy, e.g. mu_O = E(O2)/2.
+
+    Only defined for homonuclear molecules (O2, H2, N2, ...): for a
+    heteronuclear one such as CO, E/len(mol) is no single element's
+    chemical potential, so a ``ValueError`` is raised instead.
 
     The molecule is placed in a ``box`` A cubic cell; a relaxing calculator
     (BaseCalculator, AlchemiFCalculator, ...) also relaxes its geometry.
     """
     mol = molecule(species)
+    if len(set(mol.get_chemical_symbols())) > 1:
+        raise ValueError(
+            f'derive_mu_gas needs a homonuclear molecule, got {species!r}: '
+            'E/len(mol) of a heteronuclear molecule is not the chemical '
+            'potential of any one element. Derive it from a reference '
+            'reaction instead.')
     mol.set_cell([box, box, box])
     mol.center()
     mol.set_pbc(True)

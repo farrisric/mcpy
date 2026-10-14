@@ -20,10 +20,10 @@ class CustomCell(Cell):
         :param mc_sample_points: Number of random points used to estimate the free volume.
         :param seed: Optional seed for the cell-local numpy RNG.
         """
-        super().__init__(atoms, species_radii=species_radii, seed=seed)
+        super().__init__(atoms, species_radii=species_radii, seed=seed,
+                         mc_sample_points=mc_sample_points)
         self.dimensions, self.offset = self.get_custom_height_cell(custom_height, bottom_z)
         self.cell_volume = float(abs(np.linalg.det(self.dimensions)))
-        self.mc_sample_points = int(mc_sample_points)
         self._dim_inv = np.linalg.inv(self.dimensions)
         self.volume = self.cell_volume
 
@@ -33,13 +33,13 @@ class CustomCell(Cell):
         """
         if custom_height is None or bottom_z is None:
             raise ValueError(
-                "CustomCell requires explicit custom_height and bottom_z "
-                f"(got custom_height={custom_height}, bottom_z={bottom_z})"
+                'CustomCell requires explicit custom_height and bottom_z '
+                f'(got custom_height={custom_height}, bottom_z={bottom_z})'
             )
         if custom_height > self.original_dimensions[2][2]:
-            raise ValueError("Custom height cannot be greater than the original cell height.")
+            raise ValueError('Custom height cannot be greater than the original cell height.')
         if bottom_z < 0 or bottom_z + custom_height > self.original_dimensions[2][2]:
-            raise ValueError("Custom cell exceeds the bounds of the original cell.")
+            raise ValueError('Custom cell exceeds the bounds of the original cell.')
 
         new_dimensions = np.copy(self.original_dimensions)
         new_dimensions[2][2] = custom_height
@@ -48,52 +48,6 @@ class CustomCell(Cell):
         offset[2] = bottom_z
 
         return new_dimensions, offset
-
-    def get_random_point(self):
-        """
-        Get a random point inside the custom cell.
-        """
-        frac_coords = self._rng.random(3)
-        return frac_coords @ self.dimensions + self.offset
-
-    def calculate_volume(self, atoms) -> float:
-        """
-        Estimate the free volume of the custom cell using kdtree nearest-atom
-        queries per unique radius. Avoids the O(N_points * N_atoms) broadcast.
-        Atoms are replicated into neighboring periodic images along the
-        system's periodic directions so exclusion spheres straddling a box
-        face are counted in full.
-        """
-        n_atoms = len(atoms)
-        if n_atoms == 0:
-            self.volume = self.cell_volume
-            return
-
-        frac_coords = self._rng.random((self.mc_sample_points, 3))
-        cart_coords = frac_coords @ self.dimensions  # in cell frame
-
-        positions = self._periodic_images(atoms)
-        radii = np.tile(self._radii_for(atoms), len(positions) // n_atoms)
-        covered = self._covered_mask(cart_coords, atoms, positions, radii)
-        occupied_fraction = float(np.count_nonzero(covered)) / self.mc_sample_points
-        self.volume = self._clamp_free_volume(
-            self.cell_volume * (1.0 - occupied_fraction), self.cell_volume)
-
-    def _periodic_images(self, atoms):
-        """Positions (cell frame) of the atoms plus their -1/0/+1 periodic
-        images along each periodic direction of the *original* box."""
-        positions = atoms.positions - self.offset
-        pbc = np.asarray(atoms.pbc, dtype=bool)
-        if not pbc.any():
-            return positions
-        shift_ranges = [(-1, 0, 1) if p else (0,) for p in pbc]
-        images = [
-            positions + np.array([i, j, k], dtype=float) @ self.original_dimensions
-            for i in shift_ranges[0]
-            for j in shift_ranges[1]
-            for k in shift_ranges[2]
-        ]
-        return np.concatenate(images)
 
     def _inside_mask(self, atoms):
         """Exchangeable with the reservoir.
@@ -118,7 +72,7 @@ class CustomCell(Cell):
         return bool(np.all((frac >= 0.0) & (frac < 1.0)))
 
     def is_point_exchangeable(self, point):
-        """Same asymmetry as :meth:`get_atoms_specie_inside_cell`: inside the
+        """Same asymmetry as ``get_atoms_specie_inside_cell``: inside the
         xy footprint and at or above the cell floor, with the z upper bound
         dropped.
 

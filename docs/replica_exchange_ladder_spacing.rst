@@ -38,10 +38,13 @@ changed and there were no successes at all in the second half:
 Slots ``0`` and ``n-1`` each belong to exactly one pair, so their columns read
 those two pairs directly; interior slots average the pair on either side.
 
-``BatchedReplicaExchange`` warns at the end of a run when the whole-run tally is
-all-accept or all-reject, which catches a catastrophically mis-spaced ladder.
-It cannot catch the case above, where a ladder starts healthy and dies as the
-replicas differentiate. For that, run the halving test.
+``BatchedReplicaExchange`` runs two checks at the end of a run.
+When the whole-run tally is all-accept or all-reject, it warns that the ladder is degenerate.
+This catches a catastrophically mis-spaced ladder.
+Otherwise, it applies the second-half test to each neighbour pair :math:`(k, k+1)`.
+It tallies attempts and successes per pair, not per slot, so a dead interior pair is not hidden by the live pairs on either side.
+It warns for each pair that accepted no swaps after the midpoint.
+The MPI ``ReplicaExchange`` has neither check, so for MPI runs, apply the halving test above to its outfile.
 
 
 Why uniform spacing cannot work
@@ -199,5 +202,5 @@ Two practical consequences of going wide:
   ``chunk_size=8`` reached 94-98 % and 15.6 GB of 32.6 GB.
 
 Once the ladder is healthy, convergence becomes the binding constraint rather
-than the sampler. Chain runs with ``--init-dir`` pointing at the previous
-output and watch the tail-half drift per rung, not just the acceptance.
+than the sampler. Start each new run from the final configurations of the
+previous run, and watch the tail-half drift per rung, not just the acceptance.

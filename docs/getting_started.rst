@@ -29,7 +29,9 @@ install from source (details in :doc:`installation`).
 
 The ``mace`` extra installs the MLIP backend.
 This tutorial evaluates energies with a MACE foundation model, and the extra
-pulls in ``mace-torch`` together with the packages the bundled examples use.
+pulls in ``mace-torch``.
+The CPU examples ``examples/00`` to ``examples/02`` need only the base install
+(see :doc:`examples`).
 
 An import check confirms the install.
 
@@ -69,10 +71,21 @@ The cell measures how much of its window is not already occupied by atoms,
 counting a point as occupied when it falls within the given radius of an atom
 of that element, and that free volume enters the GCMC acceptance rule
 directly.
+Insertions are drawn from the same free volume.
 
-These radii deserve calibration before production runs.
-The values below are sane for O on Ag, and :doc:`species_radii` shows how to
-derive them for your own potential and system.
+The radii come from a calibration.
+The Ag radius, 2.14 Å, is the relaxed O-Ag bond of O in the fcc hollow of
+Ag(111) with MACE-MPA-0, the potential of section 4.
+:doc:`species_radii` shows how to measure it for your own potential.
+The O radius, 0.5 Å, only stops an insertion on top of an existing O atom.
+A radius is the clearance that an incoming atom needs from an atom of that
+species, so it depends on the incoming species too: an incoming Ag needs
+2.75 Å from Ag (``examples/03_gcmc_surface_mace.py``).
+
+One integer seeds the whole run.
+The cell, each move, the move selector and the ensemble each own a random
+stream, and all five seeds below derive from one ``SeedSequence``.
+Leave any of them unset and the run cannot be repeated.
 
 .. figure:: _static/fig_free_volume.png
    :alt: The insertion window above the slab with sample points classified as free or occupied.
@@ -80,19 +93,27 @@ derive them for your own potential and system.
    :align: center
 
    The ``CustomCell`` built above, sampled by its own machinery
-   (``docs/make_figures.py``): the dots are draws from
-   ``cell.get_random_point()``, classified by the cell's estimator, and the
-   :math:`V_{\mathrm{free}}` in the title is what ``cell.get_volume()``
-   reports and the acceptance rule uses.
+   (``docs/make_figures.py``), seen from above.
+   The points are draws from ``cell.get_random_point()`` in a thin slice
+   1.5-1.8 Å above the top Ag layer, classified with the cell's exclusion
+   rule: points over an Ag atom are occupied, points over the hollows are
+   free.
+   The :math:`V_{\mathrm{free}}` in the title is what ``cell.get_volume()``
+   reports for the whole window and the acceptance rule uses.
 
 .. code-block:: python
 
+   import numpy as np
    from ase.build import fcc111
    from ase.constraints import FixAtoms
 
    from mcpy.cell import CustomCell
 
-   atoms = fcc111('Ag', a=4.085, size=(4, 4, 3), vacuum=8.0, periodic=True)
+   seed_cell, seed_ins, seed_del, seed_sel, seed_ens = (
+       int(x) for x in np.random.SeedSequence(42).generate_state(5, dtype=np.uint32))
+
+   # 4.165 A is the MACE-MPA-0 lattice constant of Ag
+   atoms = fcc111('Ag', a=4.165, size=(4, 4, 3), vacuum=8.0, periodic=True)
    bottom = [a.index for a in atoms if a.tag == 3]
    atoms.set_constraint(FixAtoms(indices=bottom))
 
@@ -100,8 +121,9 @@ derive them for your own potential and system.
        atoms,
        custom_height=5.0,
        bottom_z=atoms.positions[:, 2].max() + 0.5,
-       species_radii={'Ag': 2.75, 'O': 0.0},
+       species_radii={'Ag': 2.14, 'O': 0.5},
        mc_sample_points=100_000,
+       seed=seed_cell,
    )
 
 
@@ -110,7 +132,8 @@ derive them for your own potential and system.
 
 Composition changes need an insertion move and a deletion move.
 ``InsertionMove`` places a new O atom at a random point in the cell,
-rejecting draws that land within ``min_insert`` of an existing atom, and
+redrawing points that land inside an atom's exclusion sphere (the cell's
+``species_radii``), and
 ``DeletionMove`` removes a random O atom from inside the cell.
 Together they let the oxygen count fluctuate, which is the defining feature
 of the grand-canonical ensemble.
@@ -120,24 +143,17 @@ The weights are relative frequencies, so ``[1, 1]`` attempts insertions and
 deletions equally often, and the selector reports a separate acceptance ratio
 for each move in the log.
 
-Explicit seeds make runs reproducible.
-Each move owns its random-number generator, and deriving both seeds from one
-``SeedSequence`` means a single integer reproduces the entire run.
+Each move and the selector take their seed from section 2.
 
 .. code-block:: python
 
-   import numpy as np
-
-   from mcpy.moves import InsertionMove, DeletionMove
-   from mcpy.moves.move_selector import MoveSelector
-
-   ss = np.random.SeedSequence(42)
-   s1, s2 = (int(x) for x in ss.generate_state(2, dtype=np.uint32))
+   from mcpy.moves import DeletionMove, InsertionMove, MoveSelector
 
    moves = MoveSelector(
        [1, 1],
-       [InsertionMove(cell, species=['O'], min_insert=0.5, seed=s1),
-        DeletionMove(cell, species=['O'], seed=s2)],
+       [InsertionMove(cell, species=['O'], seed=seed_ins),
+        DeletionMove(cell, species=['O'], seed=seed_del)],
+       seed=seed_sel,
    )
 
 
@@ -147,6 +163,8 @@ Each move owns its random-number generator, and deriving both seeds from one
 ``MACE_F_Calculator`` relaxes each trial structure.
 It wraps a MACE model in a short LBFGS geometry optimization, and the energy
 handed to the acceptance rule is the relaxed one.
+Here the model is the MACE-MPA-0 foundation model, which ``mace_mp``
+downloads on first use.
 
 Raw insertions land far from real bonding sites.
 A random point in the free volume typically sits a fraction of an angstrom
@@ -163,13 +181,15 @@ trials than on converging each one to machine precision.
 
 .. code-block:: python
 
+   from mace.calculators import mace_mp
+
    from mcpy.calculators import MACE_F_Calculator
 
    calculator = MACE_F_Calculator(
-       model_paths='mace_mp_medium.model',   # your local MACE checkpoint
+       model_paths=mace_mp(model='medium-mpa-0', device='cuda',
+                           default_dtype='float64'),
        steps=40,
        fmax=0.1,
-       device='cuda',
    )
 
 
@@ -183,6 +203,13 @@ The oxygen chemical potential references the O\ :sub:`2` molecule.
 The reservoir in an oxidation experiment is O\ :sub:`2` gas, so the natural
 zero for one adsorbed O atom is half the energy of an O\ :sub:`2` molecule
 computed with the same calculator.
+``derive_mu_gas`` computes it with the running calculator, so the reference
+stays correct when you change the potential.
+A hardcoded number from another model silently shifts every
+:math:`\Delta\mu`.
+For a metal reservoir, ``derive_mu_bulk`` gives the bulk energy per atom at
+the potential's own lattice constant (``examples/03_gcmc_surface_mace.py``
+uses both).
 
 :math:`\Delta\mu` expresses the environmental conditions.
 Values below zero correspond to oxygen-poor conditions such as high
@@ -199,29 +226,31 @@ energy, applies the grand-canonical acceptance rule at the given ``mu`` and
 ``temperature``, and commits or rolls back the configuration.
 
 The write intervals control the two output files.
-Every accepted configuration goes to the trajectory, while the log gets one
-line every ten steps to stay readable.
+The trajectory gets the current configuration every
+``trajectory_write_interval`` steps, here every step, whether or not the
+step was accepted.
+The log gets one line every ``outfile_write_interval`` steps, here every ten
+steps.
 Expect the first step to be slower than the rest, since the model loads and
 the cell samples its free volume once up front.
 
 .. code-block:: python
 
-   from ase.build import molecule
+   from mcpy.ensembles import GrandCanonicalEnsemble
+   from mcpy.utils import derive_mu_gas
 
-   from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-
-   o2 = molecule('O2', cell=[12.0] * 3)
-   e_o2 = calculator.get_potential_energy(o2)
+   mu_o_ref = derive_mu_gas(calculator, 'O2')   # E(O2)/2 with this calculator
 
    gcmc = GrandCanonicalEnsemble(
        atoms=atoms,
        cells=[cell],
        calculator=calculator,
-       mu={'O': e_o2 / 2 - 0.3},     # half the O2 energy plus Delta mu = -0.3 eV
+       mu={'O': mu_o_ref - 0.3},     # Delta mu = -0.3 eV
        units_type='metal',
        species=['O'],
        temperature=500.0,
        move_selector=moves,
+       random_seed=seed_ens,
        outfile='gcmc.out',
        traj_file='gcmc.xyz',
        outfile_write_interval=10,
@@ -236,6 +265,7 @@ The log tracks particle count, energy, and acceptance ratios.
 Each line carries the step index, the current atom count, the current
 energy, and the acceptance ratio of every move since the previous line, in
 the move order spelled out in the header.
+The lines below show the layout; the numbers are illustrative.
 
 .. code-block:: text
 
@@ -273,22 +303,23 @@ mis-calibrated exclusion radii instead.
    :width: 90%
    :align: center
 
-   What a healthy run looks like: a 1000-step EMT demo of this setup
-   (generated by ``docs/make_figures.py``). The oxygen count climbs from
-   the clean slab and fluctuates around one monolayer, and the grand
-   potential :math:`\Omega = E - \mu_{\mathrm{O}} N_{\mathrm{O}}`, the
-   quantity GCMC drives downhill, decreases and then levels off. EMT's toy
-   O-Ag energetics need two demo-specific settings, documented in the
-   script: :math:`\mu_{\mathrm{O}} = -0.2` eV on EMT's energy scale, and a
-   one-monolayer ``max_atoms`` cap on the insertion move.
+   What a healthy run looks like.
+   The O/Ag run above needs a GPU, so the figure shows the same diagnostics
+   for the CPU example ``examples/00_hello_gcmc.py``, a Lennard-Jones fluid,
+   run exactly as shipped (``docs/make_figures.py``).
+   The particle count climbs from the empty box, then fluctuates around the
+   LAMMPS ``fix gcmc`` average for the same conditions (orange line, from
+   ``benchmark/README.md``).
+   The grey band is the equilibration that the example drops before it
+   averages.
 
 .. figure:: _static/fig_run_snapshots.png
-   :alt: Top-view snapshots of the slab at the start, middle, and end of the run.
+   :alt: Top views of the Lennard-Jones box at three steps of the run.
    :width: 100%
    :align: center
 
-   Trajectory snapshots from the same run (top view, O in orange): the
-   clean starting slab, the climb, and the equilibrated monolayer.
+   Top views of the periodic box from the same run, at steps 200, 1000
+   and 6000.
 
 
 6. Sweeping the chemical potential
@@ -324,7 +355,7 @@ and the analysis will drop those frames.
        ...
        gcmc = GrandCanonicalEnsemble(
            ...,
-           mu={'O': e_o2 / 2 + delta_mu},
+           mu={'O': mu_o_ref + delta_mu},
            outfile=str(outdir / 'gcmc.out'),
            traj_file=str(outdir / 'gcmc.xyz'),
        )
@@ -341,7 +372,7 @@ Collect the frames
 ~~~~~~~~~~~~~~~~~~
 
 The sweep trajectories are the input.
-:func:`mcpy.utils.phase_diagram.plot_phase_diagram` accepts a list of
+:func:`mcpy.utils.plot_phase_diagram` accepts a list of
 trajectories and flattens them, so passing one production slice per
 condition is enough.
 
@@ -349,6 +380,7 @@ The clean slab serves as the reference.
 Formation energies are measured against the lowest-energy oxygen-free frame
 in the input, and since the production slices start after equilibration,
 frame 0 of one run is kept to guarantee a clean reference exists.
+Frame 0 is the starting configuration, the clean slab.
 
 Draw the diagram
 ~~~~~~~~~~~~~~~~
@@ -377,7 +409,7 @@ normalisation and molecular adsorbates.
 
    from ase.io import read
 
-   from mcpy.utils.phase_diagram import plot_phase_diagram
+   from mcpy.utils import plot_phase_diagram
 
    # The lowest-energy O-free frame is the reference, so keep frame 0
    # (the clean slab) even though the equilibration frames are dropped.
@@ -392,7 +424,7 @@ normalisation and molecular adsorbates.
        frames,
        adsorbate='O',
        metal_symbols=('Ag',),
-       mu_ref=e_o2 / 2,
+       mu_ref=mu_o_ref,
        kind='surface',
        T=500.0,
        dmu_range=(-1.0, 0.0),
@@ -405,14 +437,23 @@ normalisation and molecular adsorbates.
    :width: 85%
    :align: center
 
-   The diagram this exact call produces on the EMT demo sweep
-   (``docs/make_figures.py``). Grey lines are individual frames, the thick
-   line is the stable envelope, and the shading marks the stable phases,
-   labelled by their structure thumbnails: the clean slab below
-   :math:`\Delta\mu_{\mathrm{O}} \approx -0.47` eV and the one-monolayer
-   phase above it. The top axis converts :math:`\Delta\mu_{\mathrm{O}}`
-   into O\ :sub:`2` pressure at 500 K. For a production-quality MACE
-   example see :doc:`phase_diagrams`.
+   The diagram that this call produces on the EMT edition of the sweep
+   (``docs/make_figures.py``, which runs the code above verbatim).
+   The sweep itself differs from sections 2 to 6 in three ways: EMT
+   replaces MACE, the slab is 3x3x3, and the O insertion is capped at one O
+   per surface Ag (``max_atoms=9``).
+   EMT has no real O-Ag chemistry, and without the cap its O coverage grows
+   without limit.
+   The figure therefore shows how to read the diagram, not the physics of O
+   on Ag.
+   Grey lines are individual frames, the thick line is the stable envelope,
+   and the shading marks the stable phases, numbered like their structure
+   thumbnails: the clean slab below
+   :math:`\Delta\mu_{\mathrm{O}} \approx -0.47` eV, the capped
+   monolayer above -0.455 eV, and between them a narrow O\ :sub:`8` phase.
+   The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
+   pressure at 500 K.
+   For a MACE diagram see :doc:`phase_diagrams`.
 
 
 8. Where to go next

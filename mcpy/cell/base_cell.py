@@ -17,13 +17,12 @@ class BaseCell(ABC):
         pass
 
     @abstractmethod
-    def calculate_volume(self):
+    def calculate_volume(self, atoms):
         """
-        Calculate the volume of the cell.
-
-        :return: Volume of the cell.
+        Recompute the (free) volume of the cell for ``atoms`` and store it,
+        so :meth:`get_volume` returns it.
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     @abstractmethod
     def get_random_point(self):
@@ -32,7 +31,7 @@ class BaseCell(ABC):
 
         :return: A numpy array representing the random point (x, y, z).
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
 
     @abstractmethod
     def get_volume(self):
@@ -41,7 +40,22 @@ class BaseCell(ABC):
 
         :return: Volume of the cell.
         """
-        raise NotImplementedError("This method should be implemented in subclasses.")
+        raise NotImplementedError('This method should be implemented in subclasses.')
+
+    @abstractmethod
+    def is_point_inside(self, point):
+        """Whether ``point`` lies in the region insertions are proposed in."""
+        raise NotImplementedError('This method should be implemented in subclasses.')
+
+    def free_volume(self, atoms):
+        """Free volume for ``atoms`` without storing it. Cells that exclude
+        no volume around atoms return their constant region volume."""
+        return self.get_volume()
+
+    def get_random_free_point(self, atoms):
+        """A point uniform over the free volume of ``atoms``, or ``None``.
+        Cells that exclude no volume return :meth:`get_random_point`."""
+        return self.get_random_point()
 
     def _clamp_free_volume(self, free_volume, region_volume):
         """Floor an MC free-volume estimate at one sample point's worth of

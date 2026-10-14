@@ -13,7 +13,7 @@ Every cell also exposes two point-membership predicates.
 ``is_point_inside(point)`` bounds the *proposal* region -- the one
 ``get_random_point`` samples. ``is_point_exchangeable(point)`` bounds the region
 the reservoir may take molecules back from, and is what the molecule moves use
-to pick candidates. They coincide for every cell except :class:`CustomCell`;
+to pick candidates. They coincide for every cell except :class:`~mcpy.cell.CustomCell`;
 see :doc:`../gcmc_acceptance_convention`.
 
 Every ``species_radii`` mapping must cover every species the system can hold,
@@ -21,7 +21,7 @@ including species inserted during the run; a missing entry raises
 ``ValueError`` from ``calculate_volume``.
 
 
-.. autoclass:: mcpy.cell.base_cell.BaseCell
+.. autoclass:: mcpy.cell.BaseCell
    :members:
 
 .. autoclass:: mcpy.cell.Cell

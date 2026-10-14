@@ -1,11 +1,20 @@
+import warnings
+
 from ase import Atoms
-from ase.geometry import find_mic
-import numpy as np
 
 from .base_move import BaseMove
 from ..cell import Cell
 
-_MAX_INSERT_ATTEMPTS = 1000
+_MIN_INSERT_DEPRECATION = (
+    'min_insert is deprecated and ignored. Insertions now avoid the exclusion '
+    'spheres set by the cell species_radii, the same rule the cell free volume '
+    'uses, so the acceptance stays exact. Set a species_radii entry of at least '
+    'min_insert for every species instead.')
+
+
+def _warn_min_insert(min_insert):
+    if min_insert is not None:
+        warnings.warn(_MIN_INSERT_DEPRECATION, FutureWarning, stacklevel=3)
 
 
 class InsertionMove(BaseMove):
@@ -14,6 +23,11 @@ class InsertionMove(BaseMove):
     Mutates ``atoms`` in place by appending one atom. The ensemble is
     responsible for rolling back the mutation on rejection (it snapshots the
     arrays dict before the move).
+
+    The position is uniform over the cell free volume
+    (:meth:`mcpy.cell.Cell.get_random_free_point`), so the proposal density
+    is ``1 / V`` for the free volume ``V`` the acceptance uses.
+    ``min_insert`` is deprecated and ignored: use the cell ``species_radii``.
     """
     def __init__(self,
                  cell: Cell,
@@ -22,15 +36,14 @@ class InsertionMove(BaseMove):
                  min_insert: float = None,
                  max_atoms: int | None = None) -> None:
         super().__init__(cell, species, seed)
-        self.min_insert = min_insert
+        _warn_min_insert(min_insert)
         self.max_atoms = max_atoms
-        # Squared threshold so the per-attempt loop can skip the sqrt.
-        self._min_insert_sq = min_insert ** 2 if min_insert is not None else None
 
     def do_trial_move(self, atoms) -> Atoms:
         """
-        Insert a random atom of a random species at a random position.
-        Returns the same ``atoms`` object (mutated) with delta_N=+1.
+        Insert a random atom of a random species at a random free position.
+        Returns the same ``atoms`` object (mutated) with delta_N=+1, or
+        ``(False, 1, species)`` when the cell has no free point left.
         """
         selected_species = self.rng.random.choice(self.species)
 
@@ -39,31 +52,9 @@ class InsertionMove(BaseMove):
             if n_species >= self.max_atoms:
                 return False, 1, selected_species
 
-        insert_position = self.cell.get_random_point()
-        if self._min_insert_sq is not None:
-            indices = self.cell.get_atoms_specie_inside_cell(
-                atoms, self.cell.get_species()
-            )
-            if len(indices) > 0:
-                positions_bias = atoms.positions[indices]
-                min_sq = self._min_insert_sq
-                # Periodic systems need minimum-image distances: a point near
-                # a box face can overlap an atom's periodic image.
-                use_mic = bool(np.any(np.asarray(atoms.pbc)))
-                placed = False
-                for _ in range(_MAX_INSERT_ATTEMPTS):
-                    diff = positions_bias - insert_position
-                    if use_mic:
-                        diff = find_mic(diff, atoms.cell, pbc=atoms.pbc)[0]
-                    d2 = np.einsum('ij,ij->i', diff, diff)
-                    if d2.min() >= min_sq:
-                        placed = True
-                        break
-                    insert_position = self.cell.get_random_point()
-                # Cell too packed to honour min_insert: report a failed move
-                # rather than insert a guaranteed overlap (wasted energy eval).
-                if not placed:
-                    return False, 1, selected_species
+        insert_position = self.cell.get_random_free_point(atoms)
+        if insert_position is None:
+            return False, 1, selected_species
 
         atoms += Atoms(selected_species, positions=[insert_position])
         # Coexistence with molecule moves: ASE ``extend`` zero-pads arrays

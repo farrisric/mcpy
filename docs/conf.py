@@ -6,16 +6,14 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'mcpy'
-copyright = '2025, Riccardo Farris, Emanuele Telari'
-author = 'Riccardo Farris, Emanuele Telari'
-import importlib.metadata  # noqa: E402
+import importlib.metadata
 
-try:
-    release = importlib.metadata.version('mcpy')
-except importlib.metadata.PackageNotFoundError:
-    # docs built without the package installed
-    release = '1.3.0'
+project = 'mcpy'
+author = 'Riccardo Farris, Emanuele Telari, Konstantin M. Neyman, Albert Bruix'
+copyright = f'2023-2026, {author}'
+# Every docs builder installs mcpy (autodoc imports it), so the installed
+# metadata is the single source of the version.
+release = importlib.metadata.version('mcpy-gcmc')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -32,9 +30,16 @@ autodoc_member_order = 'bysource'
 autoclass_content = 'both'
 autodoc_typehints = 'description'
 
-templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# Every cross-reference must resolve, so -W catches a broken one. Types from
+# ASE, NumPy, torch and the standard library are not documented here and are
+# ignored by name.
+nitpicky = True
+nitpick_ignore_regex = [
+    (r'py:.*', r'(ase|numpy|np|torch|mace|nvalchemi|mpi4py|logging)(\..*)?'),
+    (r'py:class', r'(optional|callable|MACEWrapper)'),
+]
 
 
 # -- Options for HTML output -------------------------------------------------

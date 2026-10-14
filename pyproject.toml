@@ -1,13 +1,39 @@
 [project]
-name = "mcpy"
+name = "mcpy-gcmc"
 version = "1.4.0"
 description = "A python package to run atomistic Monte Carlo simulations"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Riccardo Farris" },
+    { name = "Emanuele Telari" },
+    { name = "Konstantin M. Neyman" },
+    { name = "Albert Bruix" },
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = [
     "ase>=3.23.0",
-#    "mpi4py>=4.0.3",
+    "numpy>=1.22",
+    "scipy>=1.8",
 ]
+
+[project.urls]
+Homepage = "https://github.com/farrisric/mcpy"
+Documentation = "https://mc-py.readthedocs.io"
+Issues = "https://github.com/farrisric/mcpy/issues"
 
 [project.optional-dependencies]
 # MACE-torch backend for MACE_F_Calculator:
@@ -15,19 +41,30 @@ dependencies = [
 mace = [
     "mace-torch>=0.3.9",
 ]
-# NVIDIA Alchemi (nvalchemi-toolkit) — GPU-native MACE evaluation + dynamics.
-# Recommended for systems >= ~500 atoms on CUDA (see NVALCHEMI_NOTES.md).
+# NVIDIA Alchemi (nvalchemi-toolkit): GPU-native MACE evaluation + dynamics.
+# Recommended for systems >= ~500 atoms on CUDA (see docs/reference/calculators.rst).
 # Requires CUDA toolkit and a compatible PyTorch build; install with:
 #   pip install -e .[alchemi]
 alchemi = [
-    "nvalchemi-toolkit[mace]>=0.1.0",
+    "nvalchemi-toolkit[mace]>=0.2.0,<0.3",
+]
+# MPI ReplicaExchange. A conda-installed mpi4py is often preferable, because it
+# links the system MPI library.
+mpi = [
+    "mpi4py>=4.0",
+]
+# mcpy.utils.phase_diagram (imported lazily).
+plot = [
+    "matplotlib>=3.5",
 ]
 test = [
     "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mcpy-gcmc[plot]",
 ]
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

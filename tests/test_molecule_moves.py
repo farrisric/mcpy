@@ -18,6 +18,7 @@ from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove,
                         MoleculeDisplacementMove, MoleculeInsertionMove,
                         MoveSelector)
+from mcpy.moves.base_move import PROPOSAL_REJECTED
 from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
                                        random_rotation_matrix)
 from mcpy.utils import RandomNumberGenerator
@@ -210,13 +211,11 @@ def test_molecule_insertion_next_id_after_existing():
     assert move.last_exchange_count == 1  # one H2O before the move
 
 
-def test_molecule_insertion_min_insert_unplaceable():
-    # Cell whose species list covers the existing atom; min_insert larger
-    # than any possible separation in the box makes placement impossible.
+def test_molecule_insertion_unplaceable():
+    # An exclusion radius larger than the box leaves no free point.
     atoms = Atoms('H', positions=[[5, 5, 5]], cell=[4, 4, 4], pbc=True)
-    cell = Cell(atoms, species_radii={'H': 1.0})
-    move = MoleculeInsertionMove(cell, _water_template(), 'H2O',
-                                 seed=1, min_insert=50.0)
+    cell = Cell(atoms, species_radii={'H': 50.0})
+    move = MoleculeInsertionMove(cell, _water_template(), 'H2O', seed=1)
     result, delta, name = move.do_trial_move(atoms)
     assert result is False
     assert len(atoms) == 1
@@ -398,14 +397,12 @@ def test_gcmc_molecule_smoke_lj():
     stays consistent (every molecule id maps to exactly one O2)."""
     o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
     atoms = Atoms(cell=[8, 8, 8], pbc=True)
-    # species_radii non-empty so cell.get_species() is non-empty and the
-    # min_insert retry path below actually runs against real neighbors
-    # (an empty species_radii makes get_atoms_specie_inside_cell always
-    # return no indices, silently skipping the overlap filter).
-    cell = Cell(atoms, species_radii={'O': 0.0})
+    # A non-zero O radius makes the free-volume redraw path run against
+    # real neighbors.
+    cell = Cell(atoms, species_radii={'O': 0.8}, mc_sample_points=5_000, seed=10)
     ms = MoveSelector(
         [1, 1],
-        [MoleculeInsertionMove(cell, o2, 'O2', seed=11, min_insert=0.8),
+        [MoleculeInsertionMove(cell, o2, 'O2', seed=11),
          MoleculeDeletionMove(cell, o2, 'O2', seed=12)],
         seed=13,
     )
@@ -600,7 +597,7 @@ def test_molecule_displacement_cannot_escape_region():
                                         seed=seed, max_displacement=3.0)
         result, delta, name = move.do_trial_move(atoms)
         com = molecule_com(atoms, np.array([0, 1, 2]))
-        if result is False:
+        if result is PROPOSAL_REJECTED:
             # rejected proposal must not have mutated anything
             np.testing.assert_allclose(atoms.positions,
                                        _water_box().positions)

@@ -1,17 +1,20 @@
 from mace.calculators import MACECalculator
-from ase import Atoms
 from ase.optimize import LBFGS, FIRE
-from typing import Union
+from typing import Optional, Union
+
+from .base_calculator import BaseCalculator
 
 
 _OPTIMIZERS = {'lbfgs': LBFGS, 'fire': FIRE}
 
 
-class MACE_F_Calculator:
+class MACE_F_Calculator(BaseCalculator):
     def __init__(self, model_paths: Union[str, MACECalculator],
                  steps: int, fmax: float,
                  device: str = 'cpu', cueq: bool = False,
-                 optimizer: str = 'lbfgs') -> None:
+                 optimizer: str = 'lbfgs',
+                 head: Optional[str] = None,
+                 default_dtype: str = '') -> None:
         """
         Initialize the Calculator with the given model path and device.
 
@@ -21,36 +24,36 @@ class MACE_F_Calculator:
         :param optimizer: ASE optimizer to use: 'lbfgs' (default) or 'fire'.
                           Use 'fire' for apples-to-apples comparison with
                           AlchemiFCalculator (which also uses FIRE).
-        """
-        self.fmax = fmax
-        self.steps = steps
-        self.last_relax_steps = 0
-        self.total_relax_steps = 0
+        :param head: Head of a multihead model, by name. ``None`` keeps
+                     MACECalculator's default (the last head).
+        :param default_dtype: 'float32' or 'float64'; '' keeps the
+                              MACECalculator default.
 
+        Relaxation, step counters and the step-cap warning come from
+        :class:`BaseCalculator`.
+        """
         if optimizer not in _OPTIMIZERS:
-            raise ValueError(f"optimizer must be one of {list(_OPTIMIZERS)}, got {optimizer!r}")
-        self._optimizer_cls = _OPTIMIZERS[optimizer]
-        self.optimizer_name = optimizer
+            raise ValueError(f'optimizer must be one of {list(_OPTIMIZERS)}, got {optimizer!r}')
 
         if isinstance(model_paths, MACECalculator):
-            self.calculator = model_paths
+            if head is not None or default_dtype:
+                raise ValueError(
+                    'head= and default_dtype= cannot be applied to a '
+                    'pre-built MACECalculator; pass them when you build it, '
+                    'or pass the model path here.'
+                )
+            calculator = model_paths
         else:
-            self.calculator = MACECalculator(
+            # head goes through MACECalculator's **kwargs; only pass it when
+            # set, so ASE does not record a head=None parameter.
+            extra = {} if head is None else {'head': head}
+            calculator = MACECalculator(
                 model_paths=model_paths,
                 device=device,
                 enable_cueq=cueq,
+                default_dtype=default_dtype,
+                **extra,
             )
-
-    def get_potential_energy(self, atoms: Atoms) -> float:
-        """
-        Calculate the potential energy of the given atoms.
-
-        :param atoms: ASE Atoms object.
-        :return: Potential energy as a float.
-        """
-        atoms.calc = self.calculator
-        opt = self._optimizer_cls(atoms, logfile=None)
-        opt.run(steps=self.steps, fmax=self.fmax)
-        self.last_relax_steps = int(opt.nsteps)
-        self.total_relax_steps += self.last_relax_steps
-        return atoms.get_potential_energy()
+        super().__init__(calculator, steps, fmax)
+        self._optimizer_cls = _OPTIMIZERS[optimizer]
+        self.optimizer_name = optimizer

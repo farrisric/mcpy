@@ -47,9 +47,9 @@ class SetUnits:
                 )
             compositions[key] = name
 
-        if unit_type == "LJ":
+        if unit_type == 'LJ':
             self._set_lj_units()
-        elif unit_type == "metal":
+        elif unit_type == 'metal':
             self._set_metal_units()
         else:
             raise ValueError("Invalid unit type. Choose 'LJ' or 'metal'.")
@@ -95,7 +95,7 @@ class SetUnits:
         if n_atoms < 0:
             raise ValueError(
                 f"n_atoms={n_atoms} < 0 for insertion of '{specie}'; the "
-                "pre-move species count cannot be negative"
+                'pre-move species count cannot be negative'
             )
         return (volume / ((n_atoms+1)*self.lambda_dbs[specie]**3))
 

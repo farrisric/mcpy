@@ -1,10 +1,10 @@
 Building phase diagrams from GCMC output
 ========================================
 
-:func:`mcpy.utils.phase_diagram.plot_phase_diagram` turns the trajectories of a
+:func:`mcpy.utils.plot_phase_diagram` turns the trajectories of a
 chemical-potential sweep into a phase diagram: it computes the formation energy
-of every frame, takes the lower envelope over a :math:`\Delta\mu` grid, and
-renders the figure with a structure thumbnail per stable phase.
+of every frame, takes the exact lower envelope of the free-energy lines, and
+renders the figure with a numbered structure thumbnail per stable phase.
 
 
 Build the diagram from a sweep
@@ -18,7 +18,7 @@ function:
 
    from ase.io import read
 
-   from mcpy.utils.phase_diagram import plot_phase_diagram
+   from mcpy.utils import plot_phase_diagram
 
    # keep frame 0 (the clean starting slab) as the reference
    clean = read('sweep/dmu_-0.80/gcmc.xyz', index='0')
@@ -32,7 +32,7 @@ function:
        frames,
        adsorbate='O',
        metal_symbols=('Ag',),
-       mu_ref=e_o2 / 2,          # adsorbate reference on your calculator's scale
+       mu_ref=mu_o_ref,          # E(O2)/2 on your calculator's scale (derive_mu_gas)
        kind='surface',           # or 'nano' for nanoparticles
        T=500.0,
        dmu_range=(-1.0, 0.0),
@@ -53,10 +53,24 @@ The returned dict carries the grid (``dmu_grid``), the per-frame lines
    :width: 75%
    :align: center
 
-   A surface diagram (O on Ag(111), MACE). Grey lines are individual frames,
-   the thick line is the stable envelope, the shading marks the stable
-   phases, and the top axis converts :math:`\Delta\mu_{\mathrm{O}}` into
-   O\ :sub:`2` pressure.
+   A surface diagram: O on a 3x3 Ag(111) slab at 500 K, MACE-MH-1
+   (``phase_diagram`` notebook).
+   The y axis is the surface free energy :math:`\gamma` in meV/Å².
+   Grey lines are the lowest-energy frames of the other O counts, the thick
+   black line is the stable envelope, and the numbered regions are the
+   stable phases (0 to 5 O atoms, shown in the thumbnails).
+   Only rungs with :math:`\Delta\mu_{\mathrm{O}} \le -0.30` eV, which
+   reached a coverage plateau, enter the diagram.
+   Above that the slab keeps oxidising, so those frames are not
+   equilibrium surface phases.
+   Above -0.30 eV the envelope extrapolates the lines of those frames.
+   The hatched range (``hatch_from``) marks
+   :math:`\Delta\mu_{\mathrm{O}} > -0.365` eV, where bulk
+   Ag\ :sub:`2`\ O is more stable than any surface phase.
+   The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
+   pressure with :math:`p = p^0` at :math:`\Delta\mu_{\mathrm{O}} = 0`,
+   the convention of ``plot_phase_diagram``.
+   The notebook writes this figure with one ``plot_phase_diagram`` call.
 
 
 Key parameters
@@ -74,8 +88,22 @@ Key parameters
    The twin pressure axis converts :math:`\Delta\mu` at the given ``T``.
 
 ``n_bins`` / ``min_phase_width``
-   Resolution of the :math:`\Delta\mu` grid, and the width below which
-   near-degenerate phases merge into their neighbours.
+   Resolution of the returned :math:`\Delta\mu` grid (``dmu_grid``,
+   ``free``, ``min_gamma``), and the width below which a phase gets its
+   number on a second row of the plot.
+   Neither changes the phases: every phase on the envelope is kept, and the
+   transitions are the exact crossings of the free-energy lines, so the
+   dashed lines sit on the kinks of the envelope.
+
+``hatch_from`` / ``hatch_label``
+   Hatch the range :math:`\Delta\mu >` ``hatch_from``, with a legend
+   entry, for example where the bulk oxide is more stable than any surface
+   phase.
+
+``dpi``
+   Resolution of the saved figure (default 250).
+   Neighbouring phases always get different colours from a colourblind-safe
+   palette, and the number on each region is also on its thumbnail.
 
 ``adsorbate_count_fn`` / ``adsorbate_label``
    A custom ``atoms -> int`` counter for adsorbates whose element also sits
@@ -94,8 +122,13 @@ Key parameters
    :width: 100%
    :align: center
 
-   A molecular nanoparticle diagram (CO on Cu\ :sub:`33`\ Pd\ :sub:`5`,
-   ``kind='nano'``, ``atoms_per_reservoir_molecule=1``).
+   A molecular nanoparticle diagram: CO on Cu\ :sub:`33`\ Pd\ :sub:`5` at
+   400 K, ``kind='nano'`` (:math:`\Delta G` in meV per metal atom) and
+   ``atoms_per_reservoir_molecule=1`` (CO pressure on the top axis).
+   The numbered regions are the stable (CO)\ :sub:`n` phases,
+   n = 0, 1, 2, 3, 5 and 6; phases 2 and 4 are narrow (0.009 and 0.02 eV),
+   so their numbers sit on a second row.
+   The run is not converged above -1.45 eV (phase 6).
 
 ``analyze_phase_diagram_results(trajectory_path, host_symbol, oxygen_symbol, idx_ref, ...)``
    The older oxidation-specific entry point: reads one concatenated

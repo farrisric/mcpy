@@ -1,4 +1,5 @@
 import numpy as np
+from ase.constraints import FixAtoms
 
 from .base_move import BaseMove
 from ..cell import NullCell
@@ -7,15 +8,21 @@ from ..cell import NullCell
 class DisplacementMove(BaseMove):
     """Class for performing a displacement move.
 
-    Mutates one atom's position in place. The ensemble rolls back via the
+    Mutates atom positions in place. The ensemble rolls back via the
     pre-trial arrays snapshot if the move is rejected.
+
+    Candidates are the atoms whose symbol is in ``species``, minus the atoms
+    fixed by a ``FixAtoms`` in ``atoms.constraints``, minus the indices in
+    ``constraints``. The new positions go through ``atoms.set_positions``, so
+    any other ASE constraint is applied too.
 
     ``constraints`` is a static list of atom *indices* excluded from
     displacement. GCMC insertions append at the end and deletions renumber
     everything after the removed index, so the convention is: constrained
     atoms (e.g. the support) must come FIRST in the Atoms object, before any
     GCMC-exchangeable species. Then deletions only ever touch higher indices
-    and the constrained indices stay valid for the whole run.
+    and the constrained indices stay valid for the whole run. A ``FixAtoms``
+    on the atoms does not have this limit: ASE remaps it on deletion.
     """
 
     def __init__(self,
@@ -26,27 +33,23 @@ class DisplacementMove(BaseMove):
                  n_steps: int = 1,
                  ) -> None:
         if n_steps < 1:
-            raise ValueError(f"n_steps must be >= 1, got {n_steps}")
+            raise ValueError(f'n_steps must be >= 1, got {n_steps}')
         cell = NullCell()
         super().__init__(cell, species, seed)
         self.max_displacement = max_displacement
         self.constraints = np.asarray(constraints, dtype=int) if constraints else np.empty(0, int)
         self.n_steps = int(n_steps)
-        self._cached_to_move = None
-        self._cached_natoms = -1
 
-    def _movable_indices(self, n):
-        """Indices that are not constrained, cached on N."""
-        if self._cached_natoms != n:
-            if self.constraints.size:
-                mask = np.ones(n, dtype=bool)
-                in_range = self.constraints[(self.constraints >= 0) & (self.constraints < n)]
-                mask[in_range] = False
-                self._cached_to_move = np.where(mask)[0]
-            else:
-                self._cached_to_move = np.arange(n)
-            self._cached_natoms = n
-        return self._cached_to_move
+    def _movable_indices(self, atoms):
+        """Indices of ``species`` atoms that no constraint holds fixed."""
+        n = len(atoms)
+        mask = np.isin(atoms.get_chemical_symbols(), self.species)
+        in_range = self.constraints[(self.constraints >= 0) & (self.constraints < n)]
+        mask[in_range] = False
+        for constraint in atoms.constraints:
+            if isinstance(constraint, FixAtoms):
+                mask[constraint.get_indices()] = False
+        return np.flatnonzero(mask)
 
     def do_trial_move(self, atoms):
         """
@@ -55,13 +58,14 @@ class DisplacementMove(BaseMove):
         classic single-atom displacement; larger values bundle several
         displacements into a single trial for basin-hopping-style sampling.
         """
-        n = len(atoms)
-        if n == 0:
-            raise ValueError("No atoms to displace.")
-        to_move = self._movable_indices(n)
+        to_move = self._movable_indices(atoms)
+        if to_move.size == 0:
+            # An empty GCMC box, or no atom of ``species`` present yet: a
+            # failed proposal, like a deletion with nothing to delete.
+            return False, 0, 'X'
         if self.n_steps > to_move.size:
             raise ValueError(
-                f"n_steps={self.n_steps} exceeds movable atom count {to_move.size}"
+                f'n_steps={self.n_steps} exceeds movable atom count {to_move.size}'
             )
         if self.n_steps == 1:
             selected = (int(self.rng.random.choice(to_move)),)
@@ -70,6 +74,7 @@ class DisplacementMove(BaseMove):
                 list(to_move), self.n_steps,
             ))
 
+        positions = atoms.get_positions()
         for atom_index in selected:
             rsq = 1.1
             while rsq > 1.0:
@@ -77,8 +82,6 @@ class DisplacementMove(BaseMove):
                 ry = 2.0 * self.rng.get_uniform() - 1.0
                 rz = 2.0 * self.rng.get_uniform() - 1.0
                 rsq = rx * rx + ry * ry + rz * rz
-
-            atoms.positions[atom_index, 0] += rx * self.max_displacement
-            atoms.positions[atom_index, 1] += ry * self.max_displacement
-            atoms.positions[atom_index, 2] += rz * self.max_displacement
+            positions[atom_index] += np.array([rx, ry, rz]) * self.max_displacement
+        atoms.set_positions(positions)
         return atoms, 0, 'X'

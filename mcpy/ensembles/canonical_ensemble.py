@@ -15,7 +15,10 @@ class CanonicalEnsemble(BaseEnsemble):
 
     Each step copies the current configuration, applies one move from an mcpy
     ``MoveSelector`` (e.g. ``PermutationMove``), relaxes it with ``optimizer``,
-    and accepts via the Metropolis rule at ``temperature``. Exposes
+    and accepts via the Metropolis rule at ``temperature``. ``temperature=0``
+    is a greedy descent: only moves that do not raise the energy are kept.
+    Each relaxation runs at most ``steps`` optimizer steps (a warning is
+    logged when the cap is hit before ``fmax``). Exposes
     ``get_state``/``set_state`` so it can be driven by ``ReplicaExchange`` as a
     temperature ladder.
     """
@@ -28,6 +31,7 @@ class CanonicalEnsemble(BaseEnsemble):
                  cells=None,
                  random_seed=None,
                  fmax=0.1,
+                 steps=1000,
                  temperature=300,
                  constraints=None,
                  traj_file: str = 'trajectory.xyz',
@@ -62,8 +66,11 @@ class CanonicalEnsemble(BaseEnsemble):
         self._temperature = temperature
         self._optimizer = optimizer
         self._fmax = fmax
+        self._relax_steps = steps
         self.move_selector = move_selector
-        self._beta = 1.0 / (boltzmann_constant * temperature)
+        # T = 0 is the greedy limit: beta = inf rejects every uphill move.
+        self._beta = (1.0 / (boltzmann_constant * temperature)
+                      if temperature > 0 else np.inf)
         self.exchange_attempts = 0
         self.exchange_successes = 0
 
@@ -72,46 +79,48 @@ class CanonicalEnsemble(BaseEnsemble):
 
     def get_state(self):
         return {
-            "atoms": self.atoms,
-            "energy": self._current_energy,
-            "temperature": self._temperature,
-            "beta": self._beta,
-            "step": self._step,
-            "exchange_attempts": self.exchange_attempts,
-            "exchange_successes": self.exchange_successes,
+            'atoms': self.atoms.copy(),  # detached: no calculator, no aliasing
+            'energy': self._current_energy,
+            'temperature': self._temperature,
+            'beta': self._beta,
+            'step': self._step,
+            'exchange_attempts': self.exchange_attempts,
+            'exchange_successes': self.exchange_successes,
         }
 
     def set_state(self, state):
         # Swap the configuration only. Each replica keeps its own temperature
         # (and thus _beta) across an exchange; restoring them would collapse
         # the temperature ladder.
-        self.atoms = state["atoms"]
+        self.atoms = state['atoms']
+        self._last_traj_step = None  # new configuration, same step: new frame
         # The energy baseline the next trial_step compares against. It travels
         # in the state dict rather than in atoms.info, which would have to
         # survive being pickled across MPI.
-        self._current_energy = state["energy"]
+        self._current_energy = state['energy']
         # Restored only when present, so the restart round-trip is lossless;
         # ReplicaExchange strips these slot-bound keys before a swap -- see
         # GrandCanonicalEnsemble.set_state.
-        self._step = state.get("step", self._step)
+        self._step = state.get('step', self._step)
         self.exchange_attempts = state.get(
-            "exchange_attempts", self.exchange_attempts)
+            'exchange_attempts', self.exchange_attempts)
         self.exchange_successes = state.get(
-            "exchange_successes", self.exchange_successes)
+            'exchange_successes', self.exchange_successes)
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:
             return True
-        if self._temperature <= 1e-16:
-            return False
-        p = np.exp(-potential_diff / (boltzmann_constant * self._temperature))
+        p = np.exp(-potential_diff * self._beta)  # 0 at T = 0 (beta = inf)
         return p > self._rng_acceptance.get_uniform()
 
     def relax(self, atoms) -> float:
         """Relax ``atoms`` in place and return its relaxed potential energy."""
         atoms.calc = self._calculator
         opt = self._optimizer(atoms, logfile=None)
-        opt.run(fmax=self._fmax)
+        if not opt.run(fmax=self._fmax, steps=self._relax_steps):
+            self.logger.warning(
+                'relaxation did not converge to fmax=%s within %d steps; '
+                'using the unconverged energy', self._fmax, self._relax_steps)
         return atoms.get_potential_energy()
 
     def do_mutation(self):
@@ -145,8 +154,8 @@ class CanonicalEnsemble(BaseEnsemble):
             return
         super().initialize_run()
         self.initialize_outfile()
-        self.logger.info("Canonical Ensemble Monte Carlo starting "
-                         "(T=%s K, outfile=%s)", self._temperature, self._outfile)
+        self.logger.info('Canonical Ensemble Monte Carlo starting '
+                         '(T=%s K, outfile=%s)', self._temperature, self._outfile)
 
         self._current_energy = self.relax(self.atoms)
         self.write_coordinates(self.atoms, self._current_energy)
@@ -162,7 +171,7 @@ class CanonicalEnsemble(BaseEnsemble):
 
         if self._step % self._outfile_write_interval == 0:
             self.write_outfile(self._step, self._current_energy)
-            self.logger.debug("step=%d E=%s best_E=%s accepted=%d t=%.2fs",
+            self.logger.debug('step=%d E=%s best_E=%s accepted=%d t=%.2fs',
                               self._step, self._current_energy,
                               self._best_energy, self._accepted_trials,
                               self._last_step_seconds)

@@ -9,7 +9,8 @@ class SphericalCell(Cell):
 
     .. warning::
        Construction TRANSLATES the passed atoms in place so their center of
-       mass sits at the origin (the cell center). Use :class:`DomeCell` for
+       mass sits at the cell center: the center of the periodic box, or the
+       origin when the atoms have no box. Use :class:`DomeCell` for
        supported systems where the atoms must not be moved.
     """
 
@@ -24,16 +25,48 @@ class SphericalCell(Cell):
                                  the free volume.
         :param seed: Optional seed for the cell-local numpy RNG used by
                      ``get_random_point`` and the volume sampler.
+        :raises ValueError: if the sphere does not fit inside the periodic box.
         """
-        super().__init__(atoms, species_radii=species_radii, seed=seed)
-        self.center = np.zeros(3)
+        super().__init__(atoms, species_radii=species_radii, seed=seed,
+                         mc_sample_points=mc_sample_points)
+        # Box center, not the origin: with pbc the ensemble wraps the atoms
+        # into the box after every accepted move, which would scatter a
+        # particle centered on a box corner across the box.
+        self.center = 0.5 * np.array(atoms.cell).sum(axis=0)
         self.move_atoms_to_center(atoms)
         self.radius = float(
             np.linalg.norm(atoms.positions - self.center, axis=1).max() + vacuum
         )
-        self.mc_sample_points = int(mc_sample_points)
+        self._check_fits_box(atoms)
         self.sphere_volume = (4.0 / 3.0) * np.pi * (self.radius ** 3)
         self.volume = self.sphere_volume
+
+    def _check_fits_box(self, atoms, lower_z=None):
+        """Raise if the region crosses a face of the periodic box.
+
+        Along each periodic direction the distance from ``center`` to both
+        faces must be at least ``radius``; otherwise the region overlaps its
+        own periodic image. ``lower_z`` replaces the bottom of the sphere
+        along the third axis when the region is clipped there (dome).
+        """
+        cell = np.array(atoms.cell)
+        for axis in np.flatnonzero(atoms.pbc):
+            normal = np.cross(cell[(axis + 1) % 3], cell[(axis + 2) % 3])
+            normal /= np.linalg.norm(normal)
+            if normal @ cell[axis] < 0:
+                normal = -normal
+            height = float(normal @ cell[axis])
+            pos = float(normal @ self.center)
+            below = self.radius
+            if lower_z is not None and axis == 2 and np.allclose(normal, [0, 0, 1]):
+                below = self.center[2] - lower_z
+            if pos - below < -1e-9 or pos + self.radius > height + 1e-9:
+                raise ValueError(
+                    f'{type(self).__name__} of radius {self.radius:.3f} A does '
+                    f'not fit the periodic box along axis {axis} (box height '
+                    f'{height:.3f} A, center at {pos:.3f} A). The region would '
+                    f'overlap its periodic image: enlarge the box or reduce '
+                    f'vacuum.')
 
     def move_atoms_to_center(self, atoms):
         """
@@ -73,9 +106,10 @@ class SphericalCell(Cell):
         out = np.empty((n, 3), dtype=float)
         filled = 0
         radius_sq = self.radius ** 2
-        # 2 * (6/pi) ≈ ~3.82; 1.5x is enough most of the time, but loop to
-        # cover the tail.
-        oversample = int(1.5 * n) + 1
+        # The ball fills pi/6 ~ 0.524 of its bounding cube, so 2n cube draws
+        # keep ~1.05n points: one batch almost always; the loop covers the
+        # rare short batch.
+        oversample = 2 * n + 1
         while filled < n:
             pts = (self._rng.random((oversample, 3)) - 0.5) * 2.0 * self.radius
             d2 = np.einsum('ij,ij->i', pts, pts)
@@ -85,23 +119,11 @@ class SphericalCell(Cell):
             filled += take
         return out + self.center
 
-    def calculate_volume(self, atoms):
-        """
-        Estimate the free volume of the spherical cell.
+    def _region_volume(self):
+        return self.sphere_volume
 
-        Approach: sample ``mc_sample_points`` points uniformly inside the
-        sphere, then for each unique atomic radius query the nearest atom of
-        that radius via a cKDTree. A point is "free" iff no nearest atom is
-        within that atom's radius. Avoids the O(N_points * N_atoms) broadcast.
-        """
-        n_atoms = len(atoms)
-        if n_atoms == 0:
-            self.volume = self.sphere_volume
-            return
+    def _volume_samples(self):
+        return self._sample_sphere_points(self.mc_sample_points), self.sphere_volume
 
-        pts = self._sample_sphere_points(self.mc_sample_points)
-
-        covered = self._covered_mask(pts, atoms)
-        free_fraction = float(np.count_nonzero(~covered)) / self.mc_sample_points
-        self.volume = self._clamp_free_volume(
-            free_fraction * self.sphere_volume, self.sphere_volume)
+    def _bounds(self):
+        return self.center - self.radius, self.center + self.radius

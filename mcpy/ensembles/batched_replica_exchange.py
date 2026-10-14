@@ -57,9 +57,9 @@ class BatchedReplicaExchange:
         consolidate_logging: bool = True,
     ) -> None:
         if temperatures is None and mus is None:
-            raise ValueError("Provide either temperatures or mus (one per replica).")
+            raise ValueError('Provide either temperatures or mus (one per replica).')
         if temperatures is not None and mus is not None:
-            raise ValueError("Pass temperatures OR mus, not both.")
+            raise ValueError('Pass temperatures OR mus, not both.')
 
         if temperatures is not None:
             self.temperatures = list(temperatures)
@@ -93,13 +93,13 @@ class BatchedReplicaExchange:
                 f"replicas share {', '.join(shared)}; gcmc_factory must build "
                 'a fresh ensemble with its own atoms, cells and move_selector '
                 'per replica (see the module docstring). Shared objects mix '
-                'the replicas\' volumes, counters and RNG streams silently.'
+                "the replicas' volumes, counters and RNG streams silently."
             )
 
         if not hasattr(calculator, 'get_potential_energies'):
             raise TypeError(
-                "calculator must implement get_potential_energies(atoms_list). "
-                "Use AlchemiCalculator or wrap your calculator."
+                'calculator must implement get_potential_energies(atoms_list). '
+                'Use AlchemiCalculator or wrap your calculator.'
             )
         self.calculator = calculator
 
@@ -111,9 +111,14 @@ class BatchedReplicaExchange:
         self.rng = RandomNumberGenerator(seed=seed)
         self.logger = logger
 
+        # Per-slot tallies feed the outfile's "Accepted Exchange (%)" column.
         self.exchange_attempts = [0] * self.n_replicas
         self.exchange_successes = [0] * self.n_replicas
-        # Midpoint snapshot of the tallies, for the second-half per-rung
+        # Per-pair tallies (k = pair (k, k+1)): an interior slot averages two
+        # pairs, so only these can show one dead pair between live ones.
+        self.pair_attempts = [0] * (self.n_replicas - 1)
+        self.pair_successes = [0] * (self.n_replicas - 1)
+        # Midpoint snapshot of the pair tallies, for the second-half per-pair
         # degeneracy check (early free swaps inflate the cumulative rate
         # forever -- docs/replica_exchange_ladder_spacing.rst).
         self._mid_attempts = None
@@ -137,20 +142,22 @@ class BatchedReplicaExchange:
         # which a file move would silently break.
         quiet = logging.getLogger(BaseEnsemble.__module__)
         prior_level = quiet.level
-        if self._consolidate_logging:
-            quiet.setLevel(logging.WARNING)
-
-        for r in self.replicas:
-            r.initialize_run()
-        self._initialize_outfile()
-        self._rebatch_initial_energies()
-        self._log_status(0)
 
         try:
+            if self._consolidate_logging:
+                quiet.setLevel(logging.WARNING)
+            # Batched energies first, so each replica's step-0 row, frame and
+            # minimum carry the shared calculator's energy.
+            self._rebatch_initial_energies()
+            for r in self.replicas:
+                r.initialize_run()
+            self._initialize_outfile()
+            self._log_status(0)
+
             for step in range(self.gcmc_steps):
                 if step == self.gcmc_steps // 2:
-                    self._mid_attempts = list(self.exchange_attempts)
-                    self._mid_successes = list(self.exchange_successes)
+                    self._mid_attempts = list(self.pair_attempts)
+                    self._mid_successes = list(self.pair_successes)
                 self._batched_gcmc_step()
 
                 if step > 0 and step % self.exchange_interval == 0:
@@ -172,22 +179,22 @@ class BatchedReplicaExchange:
                 try:
                     self._outfile_handle.close()
                 except OSError:
-                    self.logger.exception("Error closing %s", self._outfile)
+                    self.logger.exception('Error closing %s', self._outfile)
                 self._outfile_handle = None
             self._write_global_minimum()
 
     def _write_global_minimum(self) -> None:
-        """Pick the lowest-score minimum across all replicas and write it as a
-        single XYZ frame. No-op if disabled or no replica saw any minimum."""
+        """Write the replicas' running bests: the lowest-score one on a
+        temperature ladder, one frame per rung on a mu ladder, where the
+        rungs' grand potentials are not comparable (see
+        ``write_global_minimum``). No-op if disabled or no replica saw any
+        minimum."""
         if self._global_minimum_file is None:
             return
-        candidates = [r for r in self.replicas if r._best_atoms is not None]
-        if not candidates:
-            return
-        best = min(candidates, key=lambda r: r._best_score)
-        write_global_minimum(self._global_minimum_file, best._best_atoms,
-                             best._best_energy, best._best_score,
-                             self.replicas.index(best), self.logger)
+        bests = [(r._best_score, r._best_energy, r._best_atoms)
+                 if r._best_atoms is not None else None for r in self.replicas]
+        write_global_minimum(self._global_minimum_file, bests,
+                             self.mus is not None, self.logger)
 
     def _rebatch_initial_energies(self) -> None:
         """Re-evaluate replica energies as one batch so all replicas start
@@ -271,10 +278,12 @@ class BatchedReplicaExchange:
         for i, j in self._exchange_pairs(offset):
             self.exchange_attempts[i] += 1
             self.exchange_attempts[j] += 1
+            self.pair_attempts[i] += 1
             if self._accept_swap(i, j):
                 self._swap_states(i, j)
                 self.exchange_successes[i] += 1
                 self.exchange_successes[j] += 1
+                self.pair_successes[i] += 1
 
     def _accept_swap(self, i: int, j: int) -> bool:
         """Replica-exchange Metropolis for a temperature *or* a μ ladder.
@@ -322,8 +331,8 @@ class BatchedReplicaExchange:
         # exp() overflows to inf for a large positive delta; short-circuit.
         p = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
-            "swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f "
-            "Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f",
+            'swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f '
+            'Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f',
             i, j, beta_i, beta_j, phi_ii, phi_jj, phi_ji, phi_ij, delta, p,
         )
         return self.rng.get_uniform() < p
@@ -365,6 +374,8 @@ class BatchedReplicaExchange:
         ri.atoms, rj.atoms = rj_atoms, ri_atoms
         ri.E_old, rj.E_old = rj.E_old, ri.E_old
         ri.n_atoms, rj.n_atoms = rj.n_atoms, ri.n_atoms
+        # New configuration at an already-written step: let it get a frame.
+        ri._last_traj_step = rj._last_traj_step = None
         ri.calculate_cells_volume(ri.atoms)
         rj.calculate_cells_volume(rj.atoms)
 
@@ -375,22 +386,22 @@ class BatchedReplicaExchange:
             return
         try:
             with open(self._outfile, 'w') as fh:
-                fh.write("+-------------------------------------------------+\n")
-                fh.write("| Batched Replica Exchange (single-GPU) GCMC      |\n")
-                fh.write("+-------------------------------------------------+\n")
-                fh.write(f"Total GCMC steps: {self.gcmc_steps}\n")
-                fh.write(f"Exchange interval (steps): {self.exchange_interval}\n")
-                fh.write(f"Number of replicas: {self.n_replicas}\n")
+                fh.write('+-------------------------------------------------+\n')
+                fh.write('| Batched Replica Exchange (single-GPU) GCMC      |\n')
+                fh.write('+-------------------------------------------------+\n')
+                fh.write(f'Total GCMC steps: {self.gcmc_steps}\n')
+                fh.write(f'Exchange interval (steps): {self.exchange_interval}\n')
+                fh.write(f'Number of replicas: {self.n_replicas}\n')
                 if self.temperatures is not None:
-                    fh.write(f"Temperatures (K): {self.temperatures}\n")
+                    fh.write(f'Temperatures (K): {self.temperatures}\n')
                 if self.mus is not None:
                     for k, mu in enumerate(self.mus):
-                        fh.write(f"Chemical potentials replica {k}: {mu}\n")
-                fh.write(re_header("Replica", 8) + "\n")
-                fh.write(RE_RULE + "\n")
+                        fh.write(f'Chemical potentials replica {k}: {mu}\n')
+                fh.write(re_header('Replica', 8) + '\n')
+                fh.write(RE_RULE + '\n')
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
-            self.logger.exception("Error opening output file %s", self._outfile)
+            self.logger.exception('Error opening output file %s', self._outfile)
             raise
 
     def _log_status(self, step: int) -> None:
@@ -420,9 +431,8 @@ class BatchedReplicaExchange:
 
         A ladder can also die at individual rungs while the others stay
         alive, which the whole-run tally cannot show (those early free swaps
-        inflate it forever); ``_warn_dead_rungs`` covers that with the
-        second-half per-rung test from
-        docs/replica_exchange_ladder_spacing.rst.
+        inflate it forever); ``_warn_dead_rungs`` covers that with a
+        second-half per-pair test (docs/replica_exchange_ladder_spacing.rst).
         """
         # Both slots of a pair are tallied per attempt, so the slot sums are
         # exactly twice the number of swap attempts; report attempts.
@@ -447,23 +457,25 @@ class BatchedReplicaExchange:
             'mu' if self.mus is not None else 'temperature', reason)
 
     def _warn_dead_rungs(self) -> None:
-        """Per-rung second-half check: a rung whose swaps all fail after the
-        midpoint is dead even when the cumulative tally looks mixed (early
-        equilibration swaps accept freely and inflate it permanently)."""
+        """Per-pair second-half check: a neighbour pair (k, k+1) whose swaps
+        all fail after the midpoint is dead even when the cumulative tally
+        looks mixed (early equilibration swaps accept freely and inflate it
+        permanently). Tallied per pair, not per slot: an interior slot also
+        swaps with its other neighbour, which hides a dead pair."""
         if self._mid_attempts is None:
             return
         for k, (att0, suc0) in enumerate(
                 zip(self._mid_attempts, self._mid_successes)):
-            att = self.exchange_attempts[k] - att0
-            suc = self.exchange_successes[k] - suc0
-            # Half the whole-run floor: a rung sees roughly half the rounds.
+            att = self.pair_attempts[k] - att0
+            suc = self.pair_successes[k] - suc0
+            # Half the whole-run floor: a pair sees roughly half the rounds.
             if att >= _SWAP_DEGENERACY_MIN_ATTEMPTS // 2 and suc == 0:
                 self.logger.warning(
-                    'replica-exchange rung %d accepted no swaps in the second '
-                    'half of the run (0/%d): the ladder is dead there; '
-                    'respace the %s ladder around that rung '
+                    'replica-exchange pair %d-%d accepted no swaps in the '
+                    'second half of the run (0/%d): the ladder is dead there; '
+                    'respace the %s ladder between those rungs '
                     '(docs/replica_exchange_ladder_spacing.rst).',
-                    k, att, 'mu' if self.mus is not None else 'temperature')
+                    k, k + 1, att, 'mu' if self.mus is not None else 'temperature')
 
     def _log_summary(self) -> None:
         """Final consolidated summary: per-replica move acceptances."""
@@ -483,13 +495,13 @@ class BatchedReplicaExchange:
         try:
             for i, r in enumerate(self.replicas):
                 symbols = r.atoms.get_chemical_symbols()
-                count_str = ', '.join(f"{s}: {c}" for s, c in Counter(symbols).items())
-                mu_str = ', '.join(f"{s}: {v:.3f}" for s, v in r._mu.items())
+                count_str = ', '.join(f'{s}: {c}' for s, c in Counter(symbols).items())
+                mu_str = ', '.join(f'{s}: {v:.3f}' for s, v in r._mu.items())
                 attempts = self.exchange_attempts[i]
                 pct = (self.exchange_successes[i] / attempts * 100) if attempts else 0.0
                 self._outfile_handle.write(re_row(
                     i, r._step, count_str, r.E_old, mu_str, r._temperature,
-                    pct, width=8) + "\n")
+                    pct, width=8) + '\n')
             self._outfile_handle.flush()
         except (OSError, AttributeError):
-            self.logger.exception("Error writing to %s", self._outfile)
+            self.logger.exception('Error writing to %s', self._outfile)
