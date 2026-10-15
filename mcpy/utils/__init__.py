@@ -1,5 +1,5 @@
 from .random_number_generator import RandomNumberGenerator
-from .reference_mu import derive_mu_bulk, derive_mu_gas
+from .reference_mu import derive_mu_bulk, derive_mu_gas, mu_h_che, mu_o_che
 from .set_unit_constant import SetUnits
 
 __all__ = [
@@ -8,6 +8,8 @@ __all__ = [
     'analyze_phase_diagram_results',
     'derive_mu_bulk',
     'derive_mu_gas',
+    'mu_h_che',
+    'mu_o_che',
     'plot_phase_diagram',
 ]
 

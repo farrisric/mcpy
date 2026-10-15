@@ -210,6 +210,13 @@ A hardcoded number from another model silently shifts every
 For a metal reservoir, ``derive_mu_bulk`` gives the bulk energy per atom at
 the potential's own lattice constant (``examples/03_gcmc_surface_mace.py``
 uses both).
+For an electrochemical reservoir (water at a given pH and electrode
+potential), ``mu_h_che`` and ``mu_o_che`` apply the computational hydrogen
+electrode: :math:`\mu_\mathrm{H} = E(\mathrm{H_2})/2 - eU_\mathrm{SHE} - k_BT\ln 10\,\mathrm{pH}`
+and :math:`\mu_\mathrm{O} = E(\mathrm{H_2O}) - 2\mu_\mathrm{H}`.
+pH and potential only enter together as :math:`U_\mathrm{RHE}`, so at fixed
+:math:`U_\mathrm{RHE}` the pH has no effect.
+Both use bare energies, without zero-point or entropy corrections.
 
 :math:`\Delta\mu` expresses the environmental conditions.
 Values below zero correspond to oxygen-poor conditions such as high

@@ -9,6 +9,7 @@ import logging
 
 import numpy as np
 from ase.build import bulk, molecule
+from ase.units import kB
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,43 @@ def derive_mu_gas(calculator, species: str = 'O2', box: float = 20.0) -> float:
             'E/len(mol) of a heteronuclear molecule is not the chemical '
             'potential of any one element. Derive it from a reference '
             'reaction instead.')
+    mu = _molecule_energy(calculator, mol, box) / len(mol)
+    logger.info('Derived mu(%s/%d) = %.4f eV from the potential',
+                species, len(mol), mu)
+    return mu
+
+
+def _molecule_energy(calculator, mol, box):
     mol.set_cell([box, box, box])
     mol.center()
     mol.set_pbc(True)
-    mu = float(calculator.get_potential_energy(mol)) / len(mol)
-    logger.info('Derived mu(%s/%d) = %.4f eV from the potential',
-                species, len(mol), mu)
+    return float(calculator.get_potential_energy(mol))
+
+
+def mu_h_che(calculator, ph: float, u_she: float = 0.0,
+             temperature: float = 298.15, box: float = 20.0) -> float:
+    """mu of (H+ + e-) from the computational hydrogen electrode (CHE).
+
+    mu_H = E(H2)/2 - e*U_SHE - kT*ln(10)*pH
+
+    pH and potential only enter as U_RHE = U_SHE + kT*ln(10)*pH / e, so a
+    fixed U_RHE makes pH drop out. Bare energies: no ZPE or entropy terms.
+    """
+    return (derive_mu_gas(calculator, 'H2', box)
+            - u_she - kB * temperature * np.log(10) * ph)
+
+
+def mu_o_che(calculator, ph: float, u_she: float = 0.0,
+             temperature: float = 298.15, box: float = 20.0) -> float:
+    """mu of O exchanged with liquid water, via the CHE.
+
+    H2O -> O* + 2(H+ + e-), so mu_O = E(H2O) - 2*mu_H. Insert O with this
+    and H with :func:`mu_h_che` at the same pH and U_SHE to get O/OH/H2O
+    coverages. Bare energies: no ZPE or entropy terms.
+    """
+    e_h2o = _molecule_energy(calculator, molecule('H2O'), box)
+    mu = e_h2o - 2.0 * mu_h_che(calculator, ph, u_she, temperature, box)
+    logger.info('CHE mu(O) = %.4f eV at pH %.2f, U_SHE %.3f V', mu, ph, u_she)
     return mu
 
 
