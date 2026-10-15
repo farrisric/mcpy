@@ -66,15 +66,19 @@ class Cell(BaseCell):
         return self._clamp_free_volume(
             domain_volume * n_free / self.mc_sample_points, domain_volume)
 
-    def get_random_free_point(self, atoms):
+    def get_random_free_point(self, atoms, clearance=None):
         """A point uniform over the free volume of ``atoms``.
 
         Redraws :meth:`get_random_point` until the point is outside every
         exclusion sphere, the same test :meth:`free_volume` counts with.
         Returns ``None`` when ``_MAX_INSERT_ATTEMPTS`` draws all land in
         excluded volume (region effectively full).
+
+        With ``clearance`` the point only keeps ``clearance`` from every
+        atom instead, a seed for a relaxed trial whose acceptance still uses
+        the ``species_radii`` free volume (ADR 0004).
         """
-        trees = self._exclusion_trees(atoms)
+        trees = self._exclusion_trees(atoms, clearance)
         for _ in range(_MAX_INSERT_ATTEMPTS):
             point = self.get_random_point()
             if not trees or not self._covered(point[None, :], trees)[0]:
@@ -178,15 +182,19 @@ class Cell(BaseCell):
         images = (atoms.positions[None, :, :] + vectors[:, None, :]).reshape(-1, 3)
         return images, len(vectors)
 
-    def _exclusion_trees(self, atoms):
+    def _exclusion_trees(self, atoms, clearance=None):
         """One cKDTree per distinct positive radius over every atom and
         periodic image whose sphere can reach the region. Empty when nothing
         is excluded. Shared by the free-volume estimate and the insertion
-        proposal so both apply the same rule."""
-        if not self.species_radii or len(atoms) == 0:
+        proposal so both apply the same rule. ``clearance`` replaces the
+        ``species_radii`` with one radius for every atom."""
+        if len(atoms) == 0 or (clearance is None and not self.species_radii):
             return []
         positions, n_copies = self._periodic_images(atoms)
-        radii = np.tile(self._radii_for(atoms), n_copies)
+        if clearance is None:
+            radii = np.tile(self._radii_for(atoms), n_copies)
+        else:
+            radii = np.full(len(positions), float(clearance))
         lo, hi = self._bounds()
         reach = radii[:, None]
         near = np.all((positions > lo - reach) & (positions < hi + reach), axis=1)

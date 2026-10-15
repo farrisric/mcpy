@@ -1,20 +1,7 @@
-import warnings
-
 from ase import Atoms
 
 from .base_move import BaseMove
 from ..cell import Cell
-
-_MIN_INSERT_DEPRECATION = (
-    'min_insert is deprecated and ignored. Insertions now avoid the exclusion '
-    'spheres set by the cell species_radii, the same rule the cell free volume '
-    'uses, so the acceptance stays exact. Set a species_radii entry of at least '
-    'min_insert for every species instead.')
-
-
-def _warn_min_insert(min_insert):
-    if min_insert is not None:
-        warnings.warn(_MIN_INSERT_DEPRECATION, FutureWarning, stacklevel=3)
 
 
 class InsertionMove(BaseMove):
@@ -24,10 +11,12 @@ class InsertionMove(BaseMove):
     responsible for rolling back the mutation on rejection (it snapshots the
     arrays dict before the move).
 
-    The position is uniform over the cell free volume
+    Without ``min_insert`` the position is uniform over the cell free volume
     (:meth:`mcpy.cell.Cell.get_random_free_point`), so the proposal density
-    is ``1 / V`` for the free volume ``V`` the acceptance uses.
-    ``min_insert`` is deprecated and ignored: use the cell ``species_radii``.
+    is ``1 / V`` for the free volume ``V`` the acceptance uses. With
+    ``min_insert`` the position only keeps ``min_insert`` from every atom:
+    a seed that the relaxation moves into the ``species_radii`` free volume
+    the acceptance uses (ADR 0004).
     """
     def __init__(self,
                  cell: Cell,
@@ -36,7 +25,7 @@ class InsertionMove(BaseMove):
                  min_insert: float = None,
                  max_atoms: int | None = None) -> None:
         super().__init__(cell, species, seed)
-        _warn_min_insert(min_insert)
+        self.min_insert = min_insert
         self.max_atoms = max_atoms
 
     def do_trial_move(self, atoms) -> Atoms:
@@ -52,7 +41,7 @@ class InsertionMove(BaseMove):
             if n_species >= self.max_atoms:
                 return False, 1, selected_species
 
-        insert_position = self.cell.get_random_free_point(atoms)
+        insert_position = self.cell.get_random_free_point(atoms, self.min_insert)
         if insert_position is None:
             return False, 1, selected_species
 

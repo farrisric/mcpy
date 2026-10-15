@@ -52,7 +52,7 @@ class BaseCell(ABC):
         no volume around atoms return their constant region volume."""
         return self.get_volume()
 
-    def get_random_free_point(self, atoms):
+    def get_random_free_point(self, atoms, clearance=None):
         """A point uniform over the free volume of ``atoms``, or ``None``.
         Cells that exclude no volume return :meth:`get_random_point`."""
         return self.get_random_point()

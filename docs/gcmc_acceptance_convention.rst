@@ -106,13 +106,13 @@ mcpy meets this condition as follows:
   The periodic box ``Cell`` therefore keeps its previous behaviour and its
   previous random streams (the LAMMPS-parity runs do not change).
 
-``min_insert`` is deprecated and ignored.
-It was a per-move redraw distance that the cell volume did not know about,
-so the proposal and acceptance volumes differed.
-Set a ``species_radii`` entry of at least the old ``min_insert`` for every
-species to keep the old clearance.
-The constructors of ``InsertionMove`` and ``MoleculeInsertionMove`` emit a
-``FutureWarning`` when ``min_insert`` is set.
+``min_insert`` sets a seed clearance for relaxed insertions (ADR 0004).
+With it, the proposal keeps ``min_insert`` from every atom, inside the
+``species_radii`` spheres too, and the acceptance still uses the
+``species_radii`` free volume.
+The relaxation moves the seed into that free volume.
+Under unrelaxed trials this mismatch is a bias, so leave ``min_insert``
+unset when the calculator does not relax.
 
 Remaining limits:
 
@@ -129,7 +129,8 @@ Remaining limits:
 - Periodic images are taken one box length in each direction, so every
   radius must be shorter than the box.
 
-Decision record: ``docs/adr/0003-insertion-proposal-matches-free-volume.md``.
+Decision records: ``docs/adr/0003-insertion-proposal-matches-free-volume.md``
+and ``docs/adr/0004-min-insert-is-a-relaxation-seed-clearance.md``.
 
 
 Why mcpy keeps the total atom count
@@ -183,6 +184,8 @@ Change history
   and recorded the discussion here (``8eabe76``).
 - ADR 0003 - the free volume ``V`` became one rule for insertion proposals,
   insertion acceptance and deletion acceptance (section `The volume V`_).
+- ADR 0004 - ``min_insert`` came back as a seed clearance for relaxed
+  insertions; the acceptance keeps the ``species_radii`` free volume.
 
 
 Where this lives in the code and tests

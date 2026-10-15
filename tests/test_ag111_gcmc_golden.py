@@ -41,7 +41,7 @@ from mcpy.moves.move_selector import MoveSelector
 AG_LATTICE = 4.165
 R_O_AG = 2.068          # O-Ag exclusion radius, and the region depth below z_top
 CELL_HEIGHT = 7.0
-R_O_O = 0.5             # O-O clearance; replaces the deprecated min_insert=0.5
+R_O_O = 0.5             # O-O clearance
 SEED = 777
 STEPS = 60
 

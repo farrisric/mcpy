@@ -2,7 +2,6 @@ import numpy as np
 from ase import Atoms
 
 from .base_move import BaseMove
-from .insertion_move import _warn_min_insert
 from .molecule_utils import find_molecules, random_rotation_matrix
 from ..cell import Cell
 
@@ -19,8 +18,8 @@ class MoleculeInsertionMove(BaseMove):
     (:meth:`mcpy.cell.Cell.get_random_free_point`): the exclusion rule tests
     the COM only, exactly like the free-volume estimate, so the proposal
     density is ``1 / V`` for the ``V`` the acceptance uses. Overlaps of the
-    other member atoms are left to the energy. ``min_insert`` is deprecated
-    and ignored: use the cell ``species_radii``.
+    other member atoms are left to the energy. With ``min_insert`` the COM
+    only keeps ``min_insert`` from every atom (a relaxation seed, ADR 0004).
 
     Sets ``last_exchange_count`` to the pre-move count of molecules of this
     species with COM inside the cell: the N of the textbook rigid-molecule
@@ -39,7 +38,7 @@ class MoleculeInsertionMove(BaseMove):
         self.molecule = molecule.copy()
         self.molecule.positions -= self.molecule.get_center_of_mass()
         self._template_symbols = sorted(self.molecule.get_chemical_symbols())
-        _warn_min_insert(min_insert)
+        self.min_insert = min_insert
         self.max_molecules = max_molecules
         self.last_exchange_count = None
 
@@ -50,7 +49,7 @@ class MoleculeInsertionMove(BaseMove):
             return False, 1, self.name
         self.last_exchange_count = n_mol
 
-        insert_position = self.cell.get_random_free_point(atoms)
+        insert_position = self.cell.get_random_free_point(atoms, self.min_insert)
         if insert_position is None:
             return False, 1, self.name
         rotation = random_rotation_matrix(self.rng)

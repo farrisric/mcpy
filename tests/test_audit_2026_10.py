@@ -77,15 +77,30 @@ def test_p1_insertion_volume_is_pre_insertion_free_volume():
     assert selector.get_volume() == v_before
 
 
-def test_p1_min_insert_is_deprecated():
-    cell = Cell(Atoms(cell=[10, 10, 10], pbc=True))
-    with pytest.warns(FutureWarning, match='species_radii'):
-        InsertionMove(cell, species=['H'], seed=1, min_insert=0.5)
-    with pytest.warns(FutureWarning, match='species_radii'):
-        MoleculeInsertionMove(cell, _o2(), 'O2', seed=1, min_insert=0.5)
+def test_min_insert_is_a_seed_clearance_adr_0004():
+    """min_insert seeds insertions anywhere outside its own clearance, inside
+    the species_radii spheres too, while the acceptance volume stays the
+    species_radii free volume."""
+    atoms = Atoms('Cu', positions=[[5, 5, 5]], cell=[10, 10, 10], pbc=True)
+    cell = Cell(atoms, species_radii={'Cu': 2.0, 'H': 0.5},
+                mc_sample_points=50_000, seed=1)
+    cell.calculate_volume(atoms)
+    v_free = cell.get_volume()
+    assert v_free == pytest.approx(1000.0 - 4.0 / 3.0 * math.pi * 8.0, rel=0.02)
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        InsertionMove(cell, species=['H'], seed=1)
+        move = InsertionMove(cell, species=['H'], seed=2, min_insert=0.5)
+        MoleculeInsertionMove(cell, _o2(), 'O2', seed=1, min_insert=0.5)
+    selector = MoveSelector([1], [move], seed=3)
+    dists = []
+    for _ in range(3000):
+        selector.do_trial_move(atoms)
+        dists.append(atoms.get_distance(0, 1, mic=True))
+        del atoms[1]
+    dists = np.array(dists)
+    assert dists.min() >= 0.5
+    assert np.any(dists < 2.0)
+    assert selector.get_volume() == v_free
 
 
 class _ZeroCalc:

@@ -1,5 +1,7 @@
 # Insertion proposal and acceptance use one free volume
 
+The `min_insert` part of this decision is replaced by ADR 0004.
+
 The GCMC acceptance divides by the cell free volume `V`.
 For exact detailed balance the insertion proposal density must be exactly `1/V`, and the reverse deletion must use the same `V`, both for the state without the exchanged particle.
 Before this decision three things broke that condition: insertions redrew against a per-move scalar `min_insert` that the volume estimate did not know, that redraw saw only atoms inside the region (no slab below the floor), and deletions used the volume of the state that still held the deleted particle.
