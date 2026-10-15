@@ -87,10 +87,12 @@ def test_min_insert_is_a_seed_clearance_adr_0004():
     cell.calculate_volume(atoms)
     v_free = cell.get_volume()
     assert v_free == pytest.approx(1000.0 - 4.0 / 3.0 * math.pi * 8.0, rel=0.02)
-    with warnings.catch_warnings():
-        warnings.simplefilter('error')
+    # Only mcpy's own warnings matter: NumPy 2.5 warns from inside ASE.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
         move = InsertionMove(cell, species=['H'], seed=2, min_insert=0.5)
         MoleculeInsertionMove(cell, _o2(), 'O2', seed=1, min_insert=0.5)
+    assert not [w for w in caught if 'min_insert' in str(w.message)]
     selector = MoveSelector([1], [move], seed=3)
     dists = []
     for _ in range(3000):
