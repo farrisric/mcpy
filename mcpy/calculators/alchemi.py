@@ -37,6 +37,11 @@ from ..utils.chunking import chunk_ranges
 logger = logging.getLogger(__name__)
 
 _ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
+try:  # nvalchemi > 0.2.0
+    from nvalchemi.dynamics import LBFGS as AlchemiLBFGS
+    _ALCHEMI_OPTIMIZERS['lbfgs'] = AlchemiLBFGS
+except ImportError:
+    pass
 
 
 # --------------------------------------------------------------- model loading
@@ -582,8 +587,9 @@ class AlchemiFCalculator(_AlchemiBase):
         to dt_max = 10*dt, unlike ASE's dtmax=1.0 cap; per-step displacement
         stays clamped by maxstep=0.2 A either way.
     optimizer : str
-        'fire' (default, classic FIRE) or 'fire2' (Guénolé et al variant -
-        typically converges in fewer steps).
+        'fire' (default, classic FIRE), 'fire2' (Guénolé et al variant -
+        typically converges in fewer steps) or 'lbfgs' (needs nvalchemi
+        newer than 0.2.0; ignores ``dt``).
     """
 
     def __init__(
@@ -660,9 +666,11 @@ class AlchemiFCalculator(_AlchemiBase):
         freeze_hooks = _freeze_hook_for(batch, fixed)
 
         nl_hook = self._nl_hook()
+        # L-BFGS has no timestep; its step length is capped by maxstep=0.2 A.
+        dt_kw = {} if self.optimizer_name == 'lbfgs' else {'dt': self.dt}
         opt = self._optimizer_cls(
             model=self.model,
-            dt=self.dt,
+            **dt_kw,
             convergence_hook=ConvergenceHook.from_fmax(self.fmax),
             n_steps=self.steps,
             # NaN forces/energy would otherwise flow silently into the GCMC
