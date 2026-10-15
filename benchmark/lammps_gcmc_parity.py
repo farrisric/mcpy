@@ -7,8 +7,18 @@ Three gated stages (see docs/superpowers/specs/2026-07-04-lammps-gcmc-parity-des
   1  atomic LJ isotherm (insert/delete/translate both sides)
   2  rigid LJ dimer, exchange-only both sides (mcpy MoleculeInsertion/DeletionMove)
 
-Pass criteria per mu point: |d<N>| < 2 sigma_combined, |d<PE>| < 3 sigma_combined
-(block averages, 40% burn-in, 15 blocks).
+Each mu point is the mean and standard error over REPLICAS independently
+seeded runs (40% burn-in each). Per-point lines flag |d<N>| > 2 sigma and
+|d<PE>| > 3 sigma for inspection, but a stage passes on a chi-square test of
+d/sigma over all its points (p > CHI2_P_MIN for both <N> and <PE>): with 13
+points, a per-point 2-sigma gate fails about half the time by chance alone.
+Stage 0 uses block averages.
+
+Both codes get the same trial budget and move mix per run: mcpy draws its
+moves with equal weight, and LAMMPS runs ``fix gcmc`` with one trial per
+move type per step (``1 1 0`` for exchange-only stages, ``1 2 1`` with a
+third as many steps for stage 1). Dense states relax slowly under GCMC, so
+unequal budgets show up as a spurious gap between the codes.
 
 Usage:
     python benchmark/lammps_gcmc_parity.py --stage all
@@ -16,11 +26,14 @@ Usage:
 import argparse
 import math
 import os
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from ase import Atoms
 from ase.calculators.lj import LennardJones
+from scipy.stats import chi2 as chi2_dist
 
+from _parity_common import LJCalc as _LJCalc
 from _parity_common import ZeroCalc, block_stats, compare, run_lammps
 from mcpy.cell import Cell
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
@@ -33,6 +46,8 @@ V = L ** 3
 T = 2.0
 BETA = 1.0 / T
 RC = 3.0
+REPLICAS = 4  # independent seeds per mu point
+CHI2_P_MIN = 0.01
 LMP_DEFAULT = os.path.expanduser('~/miniconda3/envs/mcpy/bin/lmp')
 
 
@@ -65,31 +80,55 @@ def write_csv(outdir, stage, results):
     return path
 
 
-def plot_isotherms(outdir, s1_results, s2_results):
+def read_csv(outdir, stage):
+    """Inverse of ``write_csv`` for the <N> rows: ``[(mu, row), ...]``."""
+    path = os.path.join(outdir, f'stage{stage}_results.csv')
+    if not os.path.exists(path):
+        return []
+    data = np.genfromtxt(path, delimiter=',', names=True, dtype=None,
+                         encoding=None)
+    data = data[data['observable'] == 'N']
+    return [(r['mu'], (r['mcpy_mean'], r['mcpy_err'], r['lammps_mean'],
+                       r['lammps_err'])) for r in data]
+
+
+def plot_isotherms(outdir):
+    """Isotherms on top, mcpy - LAMMPS below with the 2-sigma band, one
+    column per stage that has a results CSV in ``outdir``."""
+    panels = [(results, title, ylabel) for results, title, ylabel in (
+        (read_csv(outdir, 1), 'LJ atoms', r'$\langle N \rangle$'),
+        (read_csv(outdir, 2), 'rigid LJ dimer',
+         r'$\langle N_\mathrm{mol} \rangle$')) if results]
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 2, figsize=(9, 3.6), constrained_layout=True)
-    for ax, results, title, ylabel in (
-            (axes[0], s1_results, 'Stage 1: LJ atoms', r'$\langle N \rangle$'),
-            (axes[1], s2_results, 'Stage 2: rigid LJ dimer',
-             r'$\langle N_\mathrm{mol} \rangle$')):
-        if not results:
-            ax.set_visible(False)
-            continue
-        mus = [r[0] for r in results]
-        ax.errorbar(mus, [r[1][0] for r in results],
-                    yerr=[r[1][1] for r in results], fmt='o-', capsize=4,
-                    label='mcpy')
-        ax.errorbar(mus, [r[1][2] for r in results],
-                    yerr=[r[1][3] for r in results], fmt='s--', capsize=4,
-                    label='LAMMPS fix gcmc')
-        ax.set_xlabel(r'$\mu$ (LJ units)')
-        ax.set_ylabel(ylabel)
-        ax.set_title(title + r' ($T^*=2$, $L=9$)')
-        ax.legend()
+    fig, axes = plt.subplots(2, len(panels), figsize=(4.5 * len(panels), 5.4),
+                             sharex='col', height_ratios=[2, 1],
+                             constrained_layout=True, squeeze=False)
+    for col, (results, title, ylabel) in enumerate(panels):
+        if len(panels) > 1:
+            title = f'({"ab"[col]}) {title}'
+        top, bottom = axes[0, col], axes[1, col]
+        mus = np.array([r[0] for r in results])
+        m, sm, ml, sl = (np.array([r[1][i] for r in results]) for i in range(4))
+        top.errorbar(mus, ml, yerr=sl, fmt='o-', color='navy', lw=3, ms=8,
+                     capsize=3, label='LAMMPS fix gcmc')
+        top.errorbar(mus, m, yerr=sm, fmt='o-', color='crimson', lw=1.5, ms=4,
+                     capsize=3, label='mcpy')
+        top.set_ylabel(ylabel)
+        top.set_title(title + r' ($T^*=2$, $L=9\sigma$)')
+        top.legend()
+        scomb = np.sqrt(sm ** 2 + sl ** 2)
+        bottom.fill_between(mus, -2 * scomb, 2 * scomb, color='0.85',
+                            label=r'$\pm 2\sigma$')
+        bottom.axhline(0.0, color='0.4', lw=0.8)
+        bottom.errorbar(mus, m - ml, yerr=scomb, fmt='o', color='crimson',
+                        ms=4, capsize=3)
+        bottom.set_xlabel(r'$\mu$ ($\epsilon$)')
+        bottom.set_ylabel(r'mcpy $-$ LAMMPS')
+        bottom.legend(loc='upper left')
     path = os.path.join(outdir, 'lammps_gcmc_parity_isotherms.png')
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=300)
     print(f'  isotherm plot: {path}')
     return path
 
@@ -98,26 +137,10 @@ def plot_isotherms(outdir, s1_results, s2_results):
 # mcpy side
 # --------------------------------------------------------------------------
 
-class LJCalc:
-    """Vectorized truncated-and-shifted LJ (sigma=eps=1), minimum image in a
-    cubic box of side L. Verified against ASE LennardJones by
-    ``check_fastlj_matches_ase`` at startup (machine precision)."""
-
-    E_SHIFT = 4.0 * (RC ** -12 - RC ** -6)
-
-    def get_potential_energy(self, atoms):
-        pos = atoms.positions
-        n = len(pos)
-        if n < 2:
-            return 0.0
-        d = pos[:, None, :] - pos[None, :, :]
-        d -= L * np.round(d / L)
-        r2 = np.einsum('ijk,ijk->ij', d, d)
-        iu = np.triu_indices(n, k=1)
-        r2 = r2[iu]
-        r2 = r2[r2 < RC * RC]
-        inv6 = 1.0 / r2 ** 3
-        return float(np.sum(4.0 * (inv6 * inv6 - inv6) - self.E_SHIFT))
+def LJCalc():
+    """Truncated-and-shifted LJ (sigma=eps=1) for this benchmark's box.
+    Verified against ASE LennardJones by ``check_fastlj_matches_ase``."""
+    return _LJCalc(L, RC, shift=True)
 
 
 def check_fastlj_matches_ase(ntrials=5, natoms=40, seed=99):
@@ -142,7 +165,7 @@ def run_mcpy(calc, moves, probs, mu, species, molecules, steps, seed,
         Atoms(cell=[L, L, L], pbc=True)
     ms = MoveSelector(probs, moves, seed=seed + 1, n_moves=1)
     g = GrandCanonicalEnsemble(
-        atoms=atoms, cells=[Cell(atoms)], units_type='LJ', calculator=calc,
+        atoms=atoms, cells=[Cell(atoms, seed=seed + 2)], units_type='LJ', calculator=calc,
         mu=mu, species=species, temperature=T, move_selector=ms,
         molecules=molecules, random_seed=seed, traj_file=None, outfile=None)
     n_series = np.empty(steps)
@@ -164,13 +187,13 @@ def seeded_atoms(n, seed):
 # stage 0: ideal-gas calibration
 # --------------------------------------------------------------------------
 
-def stage0(outdir, lmp, steps_mcpy, lmp_steps):
+def stage0(outdir, lmp, steps_mcpy):
     print('== Stage 0: ideal-gas calibration ==')
     mu0 = -4.0
     n_exact = V * math.exp(BETA * mu0)  # mcpy: lambda = 1
     print(f'  analytic <N>_mcpy = {n_exact:.3f}')
 
-    cell = Cell(Atoms(cell=[L, L, L], pbc=True))
+    cell = Cell(Atoms(cell=[L, L, L], pbc=True), seed=10)
     moves = [InsertionMove(cell, species=['H'], seed=11),
              DeletionMove(cell, species=['H'], seed=12)]
     n_ser, _ = run_mcpy(ZeroCalc(), moves, [1, 1], {'H': mu0}, ['H'], None,
@@ -191,10 +214,10 @@ mass 1 1.0
 pair_style zero {RC}
 pair_coeff * *
 neighbor 0.3 bin
-fix g all gcmc 1 100 0 1 4242 {T} {mu_l} 0.0
+fix g all gcmc 1 1 0 1 4242 {T} {mu_l} 0.0
 thermo 5
 thermo_style custom step atoms pe
-run {lmp_steps}
+run {steps_mcpy}
 """
     th = run_lammps(deck, outdir, 'stage0', lmp)
     ml, sl = block_stats(th['atoms'])
@@ -261,24 +284,18 @@ run 0
 # stage 1: atomic LJ isotherm
 # --------------------------------------------------------------------------
 
-def stage1(outdir, lmp, lam, shift, steps_mcpy, lmp_steps, mus):
-    print('== Stage 1: atomic LJ isotherm ==')
-    results = []
-    all_ok = True
-    for mu in mus:
-        mu_l = mu_map(mu, lam)
-        print(f'  mu_mcpy={mu}  (mu_lammps={mu_l:.4f})')
-        cell = Cell(Atoms(cell=[L, L, L], pbc=True))
-        moves = [InsertionMove(cell, species=['H'], seed=21),
-                 DeletionMove(cell, species=['H'], seed=22, min_atoms=1),
-                 DisplacementMove(species=['H'], seed=23, max_displacement=0.3)]
-        n_ser, e_ser = run_mcpy(
-            LJCalc(), moves, [1, 1, 1], {'H': mu}, ['H'], None, steps_mcpy,
-            seed=24, initial_atoms=seeded_atoms(20, 25))
-        mn, sn = block_stats(n_ser)
-        me, se = block_stats(e_ser)
+def _stage1_point(outdir, lmp, lam, shift, steps_mcpy, mu, rep):
+    mu_l = mu_map(mu, lam)
+    k = 100 * rep
+    cell = Cell(Atoms(cell=[L, L, L], pbc=True), seed=20 + k)
+    moves = [InsertionMove(cell, species=['H'], seed=21 + k),
+             DeletionMove(cell, species=['H'], seed=22 + k, min_atoms=1),
+             DisplacementMove(species=['H'], seed=23 + k, max_displacement=0.3)]
+    n_ser, e_ser = run_mcpy(
+        LJCalc(), moves, [1, 1, 1], {'H': mu}, ['H'], None, steps_mcpy,
+        seed=24 + k, initial_atoms=seeded_atoms(20, 25 + k))
 
-        deck = f"""units lj
+    deck = f"""units lj
 atom_style atomic
 boundary p p p
 region box block 0 {L} 0 {L} 0 {L}
@@ -288,23 +305,56 @@ pair_style lj/cut {RC}
 pair_coeff 1 1 1.0 1.0
 pair_modify shift {shift}
 neighbor 0.3 bin
-fix g all gcmc 1 10 10 1 777 {T} {mu_l} 0.3
+fix g all gcmc 1 2 1 1 {777 + k} {T} {mu_l} 0.3
 thermo 5
 thermo_style custom step atoms pe
-run {lmp_steps}
+run {steps_mcpy // 3}
 """
-        th = run_lammps(deck, outdir, f'stage1_mu{mu}', lmp)
-        mln, sln = block_stats(th['atoms'])
-        # thermo pe in lj units is per-atom (thermo_modify norm yes default):
-        # convert to extensive using the atom count series.
-        pe_ext = th['pe'] * th['atoms']
-        mle, sle = block_stats(pe_ext)
+    th = run_lammps(deck, outdir, f'stage1_mu{mu}_r{rep}', lmp)
+    # thermo pe in lj units is per-atom (thermo_modify norm yes default):
+    # convert to extensive using the atom count series.
+    return (_burned_mean(n_ser), _burned_mean(e_ser),
+            _burned_mean(th['atoms']), _burned_mean(th['pe'] * th['atoms']))
 
-        okn, rown = compare('<N>', mn, sn, mln, sln, 2)
-        oke, rowe = compare('<PE>', me, se, mle, sle, 3)
-        all_ok &= okn and oke
+
+def stage1(outdir, lmp, lam, shift, steps_mcpy, mus):
+    print('== Stage 1: atomic LJ isotherm ==')
+    return _run_points(_stage1_point, '<N>',
+                       (outdir, lmp, lam, shift, steps_mcpy), mus,
+                       'Stage 1')
+
+
+def _burned_mean(series, burn_frac=0.4):
+    x = np.asarray(series, dtype=float)
+    return x[int(len(x) * burn_frac):].mean()
+
+
+def _run_points(point_fn, nlabel, fixed, mus, name, nrep=REPLICAS):
+    """Run ``nrep`` independently seeded replicas of every mu point in
+    parallel. The error bar is the standard error across replicas: a single
+    run's block average underestimates it in the dense fluid, where N
+    decorrelates slowly."""
+    jobs = [(mu, rep) for mu in mus for rep in range(nrep)]
+    with ProcessPoolExecutor(max_workers=min(len(jobs), os.cpu_count())) as ex:
+        futures = [ex.submit(point_fn, *fixed, mu, rep) for mu, rep in jobs]
+        runs = np.array([f.result() for f in futures]).reshape(len(mus), nrep, 4)
+    means = runs.mean(axis=1)
+    errs = runs.std(axis=1, ddof=1) / math.sqrt(nrep)
+    results = []
+    for mu, m, e in zip(mus, means, errs):
+        print(f'  mu={mu}')
+        okn, rown = compare(nlabel, m[0], e[0], m[2], e[2], 2)
+        oke, rowe = compare('<PE>', m[1], e[1], m[3], e[3], 3)
         results.append((mu, rown, rowe, okn and oke))
-    print(f'  Stage 1: {"PASS" if all_ok else "FAIL"}')
+    all_ok = True
+    for label, col in ((nlabel, 1), ('<PE>', 2)):
+        chi2 = sum((r[col][4] / r[col][5]) ** 2 for r in results)
+        pval = chi2_dist.sf(chi2, len(results))
+        ok = pval > CHI2_P_MIN
+        all_ok &= ok
+        print(f'  {label} chi2 = {chi2:.1f} over {len(results)} points, '
+              f'p = {pval:.3f}  {"PASS" if ok else "FAIL"}')
+    print(f'  {name}: {"PASS" if all_ok else "FAIL"}')
     return all_ok, results
 
 
@@ -333,30 +383,20 @@ Masses
 """
 
 
-def stage2(outdir, lmp, lam1, shift, steps_mcpy, lmp_steps, mus):
-    print('== Stage 2: rigid LJ dimer, exchange-only ==')
+def _stage2_point(outdir, lmp, lam, shift, steps_mcpy, mu, rep):
     # lj units: lambda = 1 in both codes regardless of mass (mcpy _set_lj_units,
     # LAMMPS fix gcmc lj convention) -- no mass correction.
-    lam2 = lam1
-    molfile = os.path.join(outdir, 'dimer.mol')
-    with open(molfile, 'w') as f:
-        f.write(DIMER_MOL)
+    mu_l = mu_map(mu, lam)
+    k = 100 * rep
     template = Atoms('H2', positions=[[0, 0, 0], [0, 0, 1.0]])
-    results = []
-    all_ok = True
-    for mu in mus:
-        mu_l = mu_map(mu, lam2)
-        print(f'  mu_mcpy={mu}  (mu_lammps={mu_l:.4f})')
-        cell = Cell(Atoms(cell=[L, L, L], pbc=True))
-        moves = [MoleculeInsertionMove(cell, template, 'H2', seed=31),
-                 MoleculeDeletionMove(cell, template, 'H2', seed=32)]
-        n_ser, e_ser = run_mcpy(
-            LJCalc(), moves, [1, 1], {'H2': mu}, [], {'H2': template},
-            steps_mcpy, seed=33)
-        mn, sn = block_stats(n_ser / 2.0)  # molecules
-        me, se = block_stats(e_ser)
+    cell = Cell(Atoms(cell=[L, L, L], pbc=True), seed=30 + k)
+    moves = [MoleculeInsertionMove(cell, template, 'H2', seed=31 + k),
+             MoleculeDeletionMove(cell, template, 'H2', seed=32 + k)]
+    n_ser, e_ser = run_mcpy(
+        LJCalc(), moves, [1, 1], {'H2': mu}, [], {'H2': template},
+        steps_mcpy, seed=33 + k)
 
-        deck = f"""units lj
+    deck = f"""units lj
 atom_style molecular
 boundary p p p
 region box block 0 {L} 0 {L} 0 {L}
@@ -367,22 +407,24 @@ pair_coeff 1 1 1.0 1.0
 pair_modify shift {shift}
 neighbor 0.3 bin
 molecule dimer dimer.mol
-fix g all gcmc 1 10 0 0 888 {T} {mu_l} 0.0 mol dimer
+fix g all gcmc 1 1 0 0 {888 + k} {T} {mu_l} 0.0 mol dimer
 thermo 5
 thermo_style custom step atoms pe
-run {lmp_steps}
+run {steps_mcpy}
 """
-        th = run_lammps(deck, outdir, f'stage2_mu{mu}', lmp)
-        mln, sln = block_stats(th['atoms'] / 2.0)
-        pe_ext = th['pe'] * th['atoms']
-        mle, sle = block_stats(pe_ext)
+    th = run_lammps(deck, outdir, f'stage2_mu{mu}_r{rep}', lmp)
+    return (_burned_mean(n_ser / 2.0), _burned_mean(e_ser),  # molecules
+            _burned_mean(th['atoms'] / 2.0),
+            _burned_mean(th['pe'] * th['atoms']))
 
-        okn, rown = compare('<Nmol>', mn, sn, mln, sln, 2)
-        oke, rowe = compare('<PE>', me, se, mle, sle, 3)
-        all_ok &= okn and oke
-        results.append((mu, rown, rowe, okn and oke))
-    print(f'  Stage 2: {"PASS" if all_ok else "FAIL"}')
-    return all_ok, results
+
+def stage2(outdir, lmp, lam, shift, steps_mcpy, mus):
+    print('== Stage 2: rigid LJ dimer, exchange-only ==')
+    with open(os.path.join(outdir, 'dimer.mol'), 'w') as f:
+        f.write(DIMER_MOL)
+    return _run_points(_stage2_point, '<Nmol>',
+                       (outdir, lmp, lam, shift, steps_mcpy), mus,
+                       'Stage 2')
 
 
 # --------------------------------------------------------------------------
@@ -391,17 +433,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--lmp', default=LMP_DEFAULT)
     p.add_argument('--stage', default='all', choices=['all', '0', '1', '2'])
-    p.add_argument('--mcpy-steps', type=int, default=150_000,
-                   help='mcpy trial moves per (stage, mu)')
-    p.add_argument('--lmp-steps', type=int, default=20_000,
-                   help='LAMMPS timesteps per (stage, mu)')
+    p.add_argument('--mcpy-steps', type=int, default=200_000,
+                   help='trial moves per (stage, mu, replica), same for both codes')
     p.add_argument('--outdir', default='benchmark/lammps_parity')
     args = p.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
     lam = lambda_lj(1.0)
     if args.stage in ('all', '0'):
-        ok, lam = stage0(args.outdir, args.lmp, args.mcpy_steps, args.lmp_steps)
+        # stage 0 only checks lambda_L ~ 1; later stages keep the exact
+        # lambda = 1 convention rather than the noisy fitted value.
+        ok, _ = stage0(args.outdir, args.lmp, args.mcpy_steps)
         if not ok:
             raise SystemExit('Stage 0 FAILED: mu mapping unreliable, aborting.')
         if args.stage == '0':
@@ -411,26 +453,24 @@ def main():
     if shift is None:
         raise SystemExit('Potential parity probe FAILED, aborting.')
 
-    mus1 = [-3.0, -2.4, -1.8]
+    mus1 = [round(-4.0 + 0.2 * i, 1) for i in range(13)]  # -4.0 .. -1.6
     # Dimer grid sits lower: at mu >= -3 the dimer system is a dense liquid
     # (>400 atoms) that exchange-only sampling cannot equilibrate in these run
     # lengths; both codes showed still-climbing N traces there.
-    mus2 = [-6.0, -5.0, -4.0]
-    s1_results, s2_results = [], []
+    mus2 = [round(-7.0 + 0.25 * i, 2) for i in range(13)]  # -7.0 .. -4.0
     if args.stage in ('all', '1'):
         ok1, s1_results = stage1(args.outdir, args.lmp, lam, shift,
-                                 args.mcpy_steps, args.lmp_steps, mus1)
+                                 args.mcpy_steps, mus1)
         write_csv(args.outdir, 1, s1_results)
         if not ok1 and args.stage == 'all':
             raise SystemExit('Stage 1 FAILED, aborting before stage 2.')
 
     if args.stage in ('all', '2'):
-        ok2, s2_results = stage2(args.outdir, args.lmp, lam, shift,
-                                 args.mcpy_steps, args.lmp_steps, mus2)
+        _, s2_results = stage2(args.outdir, args.lmp, lam, shift,
+                               args.mcpy_steps, mus2)
         write_csv(args.outdir, 2, s2_results)
 
-    if s1_results or s2_results:
-        plot_isotherms(args.outdir, s1_results, s2_results)
+    plot_isotherms(args.outdir)
 
 
 if __name__ == '__main__':

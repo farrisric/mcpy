@@ -75,3 +75,4 @@ runs/
 # JOSS paper build outputs (the Draft PDF workflow uploads the PDF as an artifact)
 paper/jats/
 paper/paper.pdf
+benchmark/lj_isotherms/

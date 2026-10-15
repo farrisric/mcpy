@@ -156,22 +156,22 @@ experimental temperature and partial pressure.
 
 To validate the grand canonical sampling independently of any MLIP, we
 reproduced two Lennard-Jones reference systems against LAMMPS [@lammps2022]
-(\autoref{fig:validation}): a purely Lennard-Jones fluid in reduced units and real
-argon in physical (eV) units. The average particle number and density as a
-function of chemical potential agree between the two codes across both unit
-systems, including the sharp gas–liquid condensation of argon. Although `mcpy`
+(\autoref{fig:validation}): a purely repulsive Lennard-Jones fluid in reduced units and real
+argon in physical (eV) units.
+Both codes run the same potential, initial state, move mix, and number of trial moves, with four independently seeded runs per chemical potential.
+The average particle number agrees within statistical error across both unit systems, including the sharp gas–liquid condensation of argon.
+The script that produces the figure, `benchmark/lammps_lj_isotherms.py`, is part of the repository.
+Although `mcpy`
 has so far been applied mainly to metal surfaces and nanoparticles, this
 benchmark confirms that its grand canonical machinery is correct and general,
 applicable to atomistic materials beyond the metallic systems that motivated
 it.
 
-![Validation of `mcpy`'s grand canonical sampling against LAMMPS [@lammps2022]
-for two Lennard-Jones reference systems. (a) A purely repulsive Lennard-Jones
-fluid in reduced units: chemical potential $\mu$ (in units of $\epsilon$)
-versus reduced density $\sigma^3\rho$ and average particle number. (b) Real
-argon in physical units: $\mu$ (eV) versus average particle number and number
-density, capturing the sharp gas–liquid condensation. `mcpy` (red) reproduces
-LAMMPS (blue) across both unit systems.\label{fig:validation}](argon_lammps_validation.png)
+![Validation of `mcpy`'s grand canonical sampling against LAMMPS [@lammps2022] for two Lennard-Jones reference systems.
+(a) A purely repulsive Lennard-Jones fluid in reduced units ($T^*=1$).
+(b) Argon in physical units ($T=87.79$ K) across the gas–liquid condensation.
+Top: average particle number $\langle N \rangle$ versus chemical potential $\mu$ for `mcpy` (red) and LAMMPS (blue).
+Bottom: the difference between the two codes, with error bars and a grey band of two combined standard errors over four independent runs per code.\label{fig:validation}](argon_lammps_validation.png)
 
 # Research impact statement
 

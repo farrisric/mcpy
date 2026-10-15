@@ -14,6 +14,33 @@ import subprocess
 import numpy as np
 
 
+class LJCalc:
+    """Vectorized lj/cut in a cubic periodic box of side ``box`` (minimum
+    image), for repeated single-point calls where ASE ``LennardJones`` is ~10x
+    slower. ``shift=True`` matches LAMMPS ``pair_modify shift yes``; the
+    default matches the LAMMPS default (unshifted)."""
+
+    def __init__(self, box, rc, epsilon=1.0, sigma=1.0, shift=False):
+        self.box = box
+        self.rc2 = rc * rc
+        self.epsilon = epsilon
+        self.sigma6 = sigma ** 6
+        self.e_shift = (4.0 * epsilon * (self.sigma6 ** 2 / rc ** 12 - self.sigma6 / rc ** 6)
+                        if shift else 0.0)
+
+    def get_potential_energy(self, atoms):
+        pos = atoms.positions
+        n = len(pos)
+        if n < 2:
+            return 0.0
+        d = pos[:, None, :] - pos[None, :, :]
+        d -= self.box * np.round(d / self.box)
+        r2 = np.einsum('ijk,ijk->ij', d, d)[np.triu_indices(n, k=1)]
+        r2 = r2[r2 < self.rc2]
+        s6 = self.sigma6 / r2 ** 3
+        return float(np.sum(4.0 * self.epsilon * (s6 * s6 - s6) - self.e_shift))
+
+
 class ZeroCalc:
     """Zero energy, for the ideal-gas stage where only the prefactor matters."""
 

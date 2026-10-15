@@ -184,7 +184,7 @@ def stage1(outdir, lmp, steps_mcpy, lmp_steps):
 
     template = o2_template()
     atoms = Atoms(cell=[box] * 3, pbc=True)
-    cell = Cell(atoms)
+    cell = Cell(atoms, seed=40)
     moves = [MoleculeInsertionMove(cell, template, 'O2', seed=41),
              MoleculeDeletionMove(cell, template, 'O2', seed=42)]
     n_ser, _ = run_mcpy(atoms, [cell], ZeroCalc(), moves, {'O2': mu},
@@ -248,7 +248,7 @@ def stage2(outdir, lmp, model, py_calc, steps_mcpy, lmp_attempts, deltas):
         print(f'  delta_mu={delta}  (mu={mu:.4f} eV)')
         atoms = slab.copy()
         cell = CustomCell(atoms, custom_height=height, bottom_z=z0,
-                          species_radii={'Ag': 0.0, 'O': 0.0})
+                          species_radii={'Ag': 0.0, 'O': 0.0}, seed=50)
         moves = [MoleculeInsertionMove(cell, template, 'O2', seed=51),
                  MoleculeDeletionMove(cell, template, 'O2', seed=52)]
         n_ser, e_ser = run_mcpy(atoms, [cell], py_calc, moves, {'O2': mu},
