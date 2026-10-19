@@ -60,7 +60,13 @@ Only two numbers stay physical inputs.
 ``DELTA_MU_O`` sets the O\ :sub:`2` gas conditions relative to
 :math:`E(\mathrm{O_2})/2`.
 ``MU_AG_CORRECTION`` = -0.176 eV shifts the Ag reservoir below bulk Ag.
-The value comes from thermodynamic tables, cited in the mcpy paper.
+It is :math:`G(500\,\mathrm{K}) - H(0\,\mathrm{K})` per atom of solid Ag at 1 bar.
+500 K is ``TEMPERATURE`` in the script.
+Recompute the value when you change ``TEMPERATURE``.
+The CODATA Key Values for Thermodynamics (Cox, Wagman and Medvedev, 1989) give the data of Ag(cr) at 298.15 K: :math:`S^\circ` = 42.55 J/(mol K) and :math:`H(298.15\,\mathrm{K}) - H(0\,\mathrm{K})` = 5.745 kJ/mol.
+The NASA Glenn coefficients for Ag(cr) (McBride et al., NASA/TP-2002-211556) fit these data.
+They give the heat capacity from 298 to 500 K.
+A constant heat capacity of 25.4 J/(mol K) gives the same value to within 1 meV.
 Set it to 0.0 for a reservoir in equilibrium with bulk Ag.
 
 The calibration constants at the top of the script (``AG_LATTICE``,

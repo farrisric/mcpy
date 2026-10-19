@@ -43,6 +43,9 @@ function:
 ``frames`` takes a flat list of ``Atoms`` or a list of trajectories and
 flattens them; frames written by mcpy carry their energy on the comment line,
 so nothing is re-evaluated.
+If the runs also exchange metal atoms, pass ``mu_metal`` (see below).
+Without it, the function raises an error when the frames hold different
+metal counts.
 The returned dict carries the grid (``dmu_grid``), the per-frame lines
 (``free``), the envelope (``min_gamma``), the winning frame indices
 (``stable_idx``, ``phase_order``), and the boundary positions
@@ -68,8 +71,10 @@ The returned dict carries the grid (``dmu_grid``), the per-frame lines
    :math:`\Delta\mu_{\mathrm{O}} > -0.365` eV, where bulk
    Ag\ :sub:`2`\ O is more stable than any surface phase.
    The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
-   pressure with :math:`p = p^0` at :math:`\Delta\mu_{\mathrm{O}} = 0`,
-   the convention of ``plot_phase_diagram``.
+   pressure.
+   It reads :math:`p = p^0` at
+   :math:`\Delta\mu_{\mathrm{O}} = \Delta\mu^0_{\mathrm{O}}(T)`, which is
+   -0.50 eV at 500 K.
    The notebook writes this figure with one ``plot_phase_diagram`` call.
 
 
@@ -85,7 +90,48 @@ Key parameters
 ``mu_ref``
    The adsorbate reference on your calculator's energy scale, for example
    half the O\ :sub:`2` energy.
-   The twin pressure axis converts :math:`\Delta\mu` at the given ``T``.
+   The twin pressure axis converts :math:`\Delta\mu` at the given ``T``
+   (see ``dmu_standard``).
+
+``mu_metal``
+   The chemical potentials of the metal species, as a dict, for example
+   ``{'Ag': mu_ag}``.
+   Use the values of the GCMC runs.
+   Pass it when the runs exchange metal atoms, for example O and Ag on
+   Ag(111) (``examples/03_gcmc_surface_mace.py`` with ``EXCHANGE_AG = True``).
+   Each frame then scores
+   :math:`E - \sum_m \mu_m (N_m - N_{m,\mathrm{ref}})`.
+   The clean frame with the lowest score is the reference.
+   For each adsorbate count, the frame with the lowest score is the phase.
+   ``results['phase_metal_counts']`` gives the metal counts of each phase.
+   The function raises an error if the frames hold different counts of a
+   metal species and ``mu_metal`` does not give it.
+
+``dmu_standard``
+   The standard chemical potential
+   :math:`\Delta\mu^0(T)` of the adsorbate at :math:`p^0`, in eV per adsorbed
+   unit.
+   The twin axis shows
+   :math:`\log_{10}(p/p^0) = n\,(\Delta\mu - \Delta\mu^0(T)) / (k_B T \ln 10)`,
+   with :math:`n` = ``atoms_per_reservoir_molecule``.
+   For O from O\ :sub:`2` and H from H\ :sub:`2`, the default ``None`` takes
+   :math:`\Delta\mu^0(T)` from built-in NIST-JANAF tables (100 to 1000 K).
+   These tables use the convention of Reuter and Scheffler (PRB 65, 035406,
+   2001): the reference is the total energy of the molecule, without
+   zero-point energy.
+   For O, they agree with Table I of that paper within 0.006 eV.
+   The axis is exact only if ``mu_ref`` includes :math:`\mathrm{ZPE}/n`,
+   with ZPE the zero-point energy of the molecule.
+   With a bare ``mu_ref``, for example from ``derive_mu_gas``, the true
+   :math:`p = p^0` is at :math:`\Delta\mu^0(T) + \mathrm{ZPE}/n`.
+   This shift is 0.049 eV for O (1.0 decade at 500 K) and 0.135 eV for H
+   (4.5 decades at 300 K).
+   To show the true gas pressure with a bare ``mu_ref``, pass
+   ``dmu_standard`` = :math:`\Delta\mu^0(T) + \mathrm{ZPE}/n`.
+   For any other adsorbate, for example CO, give the value yourself.
+   Also give it for a ``T`` outside 100 to 1000 K.
+   If you do not, the function omits the pressure axis and logs a warning.
+   The phases and transitions do not change.
 
 ``n_bins`` / ``min_phase_width``
    Resolution of the returned :math:`\Delta\mu` grid (``dmu_grid``,
@@ -112,7 +158,7 @@ Key parameters
    symbol is a proxy.
 
 ``atoms_per_reservoir_molecule``
-   Reservoir stoichiometry for the pressure axis.
+   Reservoir stoichiometry :math:`n` for the pressure axis.
    The default ``2`` is the dissociative-diatomic convention (atomic O from
    an O\ :sub:`2` reservoir); pass ``1`` for molecular adsorbates such as CO,
    whose thumbnails then read as (CO)\ :sub:`n`.
@@ -124,7 +170,7 @@ Key parameters
 
    A molecular nanoparticle diagram: CO on Cu\ :sub:`33`\ Pd\ :sub:`5` at
    400 K, ``kind='nano'`` (:math:`\Delta G` in meV per metal atom) and
-   ``atoms_per_reservoir_molecule=1`` (CO pressure on the top axis).
+   ``atoms_per_reservoir_molecule=1``.
    The numbered regions are the stable (CO)\ :sub:`n` phases,
    n = 0, 1, 2, 3, 5 and 6; phases 2 and 4 are narrow (0.009 and 0.02 eV),
    so their numbers sit on a second row.

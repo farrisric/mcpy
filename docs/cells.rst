@@ -37,14 +37,12 @@ included) is redrawn, so insertions are uniform over :math:`V_{\mathrm{free}}`.
 Deletion moves use :math:`V_{\mathrm{free}}` of the state after the deletion.
 See :doc:`gcmc_acceptance_convention` for why both rules are needed.
 
-The thesis underlying this library calls this quantity :math:`r_{\mathrm{relax}}` and defines
-it operationally as the position of the first maximum in the radial distribution function of
-the adsorbate around the host atoms, calibrated on relaxed structures with the *same*
-calculator used in production. Using values that are too small inflates insertion attempts
-into atomic cores; using values that are too large collapses :math:`V_{\mathrm{free}}` and
-freezes the chemistry. See :doc:`species_radii` for a complete, reproducible workflow
-(including a ready-to-use script for O on Ag) and the recommended conventions for mapping
-pair distances onto element-wise radii.
+The thesis underlying this library calls this quantity :math:`r_{\mathrm{relax}}`.
+It is the most frequent nearest adsorbate-host distance after a local relaxation of random insertions.
+It is the centre of the tallest bin (the mode) of the histogram of these distances.
+Measure it with the *same* calculator and relaxation settings as in production.
+Using values that are too small inflates insertion attempts into atomic cores; using values that are too large collapses :math:`V_{\mathrm{free}}` and freezes the chemistry.
+See :doc:`species_radii` for a complete, reproducible workflow (including a ready-to-use script for O on Ag) and the recommended conventions for mapping pair distances onto element-wise radii.
 
 
 Sampling resolution (`mc_sample_points`)
@@ -71,7 +69,7 @@ With `species_radii` the volume is the free volume, as for the other cells.
 
    from mcpy.cell import Cell
 
-   cell = Cell(atoms, species_radii={"O": 0.0, "Ag": 2.947})
+   cell = Cell(atoms, species_radii={"O": 0.5, "Ag": 2.14})
    cell.calculate_volume(atoms)
    V = cell.get_volume()
 
@@ -99,7 +97,7 @@ Key parameters:
        atoms,
        custom_height=5.5,
        bottom_z=5.0,
-       species_radii={"O": 0.0, "Ag": 2.947},
+       species_radii={"O": 0.5, "Ag": 2.14},
        mc_sample_points=100_000,
    )
    custom_cell.calculate_volume(atoms)
@@ -131,7 +129,7 @@ If it does not, the constructor raises ``ValueError``.
    spherical_cell = SphericalCell(
        atoms,
        vacuum=3.0,
-       species_radii={"Ag": 2.947, "O": 0.0},
+       species_radii={"Ag": 2.14, "O": 0.5},
        mc_sample_points=100_000,
    )
    spherical_cell.calculate_volume(atoms)

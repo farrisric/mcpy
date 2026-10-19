@@ -359,15 +359,22 @@ def fig_radii(n_trials=150):
         distances.append(d.min())
 
     distances = np.array(distances)
+    bin_width = 0.05
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.hist(distances, bins=30, color=SKY, edgecolor='white')
-    r = np.percentile(distances, 5)
-    ax.axvline(r, color=VERMILION, linewidth=1.6, linestyle='--',
-               label=f'first-peak edge $r$ = {r:.2f} Å (EMT)')
+    counts, edges, bars = ax.hist(
+        distances, bins=np.arange(0.0, distances.max() + bin_width, bin_width),
+        color=SKY, edgecolor='white', linewidth=0.5)
+    peak = np.argmax(counts)
+    r = edges[peak] + bin_width / 2
+    bars[peak].set_facecolor(VERMILION)
+    ax.annotate(f'most frequent distance\n$r$ = {r:.2f} Å (EMT)',
+                xy=(r + bin_width / 2, counts[peak]), xytext=(r + 0.6, 0.8 * counts[peak]),
+                color=VERMILION, va='center',
+                arrowprops=dict(arrowstyle='->', color=VERMILION))
+    ax.set_xlim(distances.min() - 0.3, distances.max() + 0.3)
     ax.set_xlabel('nearest O-Ag distance after relaxation (Å)')
     ax.set_ylabel('count')
     ax.set_title(f'{n_trials} relaxed O insertions on Ag(111), EMT')
-    ax.legend(frameon=False)
     fig.tight_layout()
     fig.savefig(STATIC / 'fig_species_radii.png')
     plt.close(fig)

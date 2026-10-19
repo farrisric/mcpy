@@ -43,7 +43,7 @@ from mcpy.utils.logging import configure as configure_logging
 
 # --- the ladder ------------------------------------------------------------
 # One rung per electrode potential (V vs SHE), all at the same pH and T.
-# A mu ladder only: the swap rule is exact for mu ladders.
+# A mu ladder: one shared T, one mu per rung.
 U_SHE_LADDER = [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00]
 PH = 0.0
 TEMPERATURE = 300.0
@@ -79,8 +79,9 @@ BOX_VACUUM = 12.0        # A of empty box around the particle
 # --- insertion region ------------------------------------------------------
 # The sphere reaches this far (A) beyond the outermost Pt.
 SHELL = 2.5
-# Exclusion radius an incoming H sees around Pt (A). Just below the Pt-H
-# on-top bond (~1.55 A), so on-top, bridge and hollow sites stay reachable.
+# Exclusion radius an incoming H sees around Pt (A). A value near the Pt-H
+# on-top bond (~1.55 A), not a histogram mode, so on-top, bridge and hollow
+# sites stay reachable.
 R_H_PT = 1.5
 # Exclusion radius around an existing H (A). Stops an insertion on top of an
 # H atom; it is a clearance, not a bond length.

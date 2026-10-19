@@ -51,16 +51,18 @@ AG_LATTICE = 4.165   # fcc Ag lattice constant (A): the minimum of E(a), 4.166 A
 # as the exclusion radius an incoming O sees around Ag, and as how far below
 # the top layer the exchange region starts, so subsurface sites are reachable.
 R_O_AG = 2.14
-# An incoming Ag needs a larger radius: 2.75 A sits just below the relaxed Ag
-# adatom-Ag bond on Ag(111) (2.78 A). This is why each species gets its own
-# cell over the same region.
+# An incoming Ag needs a larger radius. 2.75 A is a value near the relaxed Ag
+# adatom-Ag bond on Ag(111) (2.78 A), not a histogram mode. This is why each
+# species gets its own cell over the same region.
 R_AG_AG = 2.75
 # Exclusion radius around an existing O (A). A minimal clearance that stops an
 # insertion on top of an O atom, not a bond length.
 R_O = 0.5
-# Shift (eV) on the bulk Ag energy per atom, taken from thermodynamic
-# tables (cited in the mcpy paper). Set 0.0 for Ag in equilibrium with
-# bulk Ag.
+# Shift (eV) on the bulk Ag energy per atom: G(500 K) - H(0 K) of Ag(s) at
+# 1 bar, from the CODATA data of Ag(cr) (Cox, Wagman and Medvedev, 1989) as
+# fitted in the NASA Glenn coefficients (McBride et al., NASA/TP-2002-211556).
+# NIST-JANAF has no Ag table. The value is for TEMPERATURE = 500 K. Set 0.0
+# to leave out the thermal term (static bulk Ag at 0 K).
 MU_AG_CORRECTION = -0.176
 
 # --- system ----------------------------------------------------------------

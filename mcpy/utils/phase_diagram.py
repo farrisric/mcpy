@@ -1,11 +1,13 @@
 import argparse
 import functools
+import logging
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms
 from ase.io import read
+from ase.units import kJ, mol
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.gridspec import GridSpec
 from matplotlib.lines import Line2D
@@ -19,6 +21,49 @@ _MPL_STYLE = {
     'font.size': 14,
     'mathtext.default': 'regular',
 }
+
+logger = logging.getLogger(__name__)
+
+# NIST-JANAF Thermochemical Tables (4th ed., Chase 1998), janaf.nist.gov tables
+# O-029 (O2) and H-050 (H2), p0 = 1 bar. Per gas: H(0) - H(Tr) [kJ/mol], then
+# the rows T [K], S [J/mol/K], H - H(Tr) [kJ/mol] from 100 to 1000 K.
+_JANAF = {
+    'O2': (-8.683, np.array([
+        (100.0, 173.307, -5.779), (200.0, 193.485, -2.868), (250.0, 199.990, -1.410),
+        (298.15, 205.147, 0.0), (300.0, 205.329, 0.054), (350.0, 209.880, 1.531),
+        (400.0, 213.871, 3.025), (450.0, 217.445, 4.543), (500.0, 220.693, 6.084),
+        (600.0, 226.451, 9.244), (700.0, 231.466, 12.499), (800.0, 235.921, 15.835),
+        (900.0, 239.931, 19.241), (1000.0, 243.578, 22.703)])),
+    'H2': (-8.467, np.array([
+        (100.0, 100.727, -5.468), (200.0, 119.412, -2.774), (250.0, 125.640, -1.378),
+        (298.15, 130.680, 0.0), (300.0, 130.858, 0.053), (350.0, 135.325, 1.502),
+        (400.0, 139.216, 2.959), (450.0, 142.656, 4.420), (500.0, 145.737, 5.882),
+        (600.0, 151.077, 8.811), (700.0, 155.606, 11.749), (800.0, 159.548, 14.702),
+        (900.0, 163.051, 17.676), (1000.0, 166.216, 20.680)])),
+}
+
+
+def _janaf_dmu0(gas, T, n_atoms):
+    """Delta mu^0(T) per adsorbed unit [eV] of a ``_JANAF`` gas at p0.
+
+    Delta mu^0(T) = [(H(T) - H(0)) - T S(T)] / n_atoms per gas molecule: the
+    convention of Reuter and Scheffler, PRB 65, 035406 (2001), Table I. The
+    reference is the total energy of the molecule, without zero-point energy.
+    Linear interpolation between the table rows.
+    """
+    h0, rows = _JANAF[gas]
+    t, s, dh = rows.T
+    if not t[0] <= T <= t[-1]:
+        raise ValueError(
+            f'T = {T} K is outside the NIST-JANAF {gas} table ({t[0]:g} to {t[-1]:g} K). '
+            'Give Delta mu^0(T) yourself (from_mu_to_press: mu_ref).')
+    dmu0 = (dh - h0 - t * s / 1000.0) * (kJ / mol) / n_atoms
+    return float(np.interp(T, t, dmu0))
+
+
+def _log10_p_over_p0(dmu, dmu0, T, n_atoms, k_b=8.617e-5):
+    """log10(p/p0) of the reservoir gas, from p/p0 = exp(n (dmu - dmu0(T)) / kT)."""
+    return n_atoms * (np.asarray(dmu, float) - dmu0) / (k_b * T * np.log(10.0))
 
 
 def _with_mpl_style(style):
@@ -38,7 +83,15 @@ def free_en(en_dft, n_host, n_oxygen, e_host, e_o2, delta_mu_o, delta_mu_host, a
     return (free - (n_host * delta_mu_host) - (n_oxygen * delta_mu_o)) / area
 
 
-def from_mu_to_press(mu, T=500, mu_ref=-0.5, p_0=1, k_b=0.00008617, U_dft=-9.8612 / 2):
+def from_mu_to_press(mu, T=500, mu_ref=None, p_0=1, k_b=0.00008617, U_dft=-9.8612 / 2):
+    """O2 pressure in equilibrium with the O chemical potential ``mu`` [eV].
+
+    p = p_0 exp(2 (mu - U_dft - mu_ref) / kT). ``U_dft`` is E(O2)/2 on the
+    energy scale of ``mu``. ``mu_ref`` is Delta mu_O^0(T) at ``p_0``; ``None``
+    takes it at ``T`` from the NIST-JANAF O2 table (-0.495 eV at 500 K).
+    """
+    if mu_ref is None:
+        mu_ref = _janaf_dmu0('O2', T, 2)
     return np.exp(((mu - mu_ref - U_dft) * 2) / (k_b * T)) * p_0
 
 
@@ -75,10 +128,15 @@ def analyze_phase_diagram_results(
             f'idx_ref={idx_ref} is out of range for trajectory with {len(traj)} frames.'
         )
 
-    e_o2 = (e_host_oxide - (2 * (e_host + delta_mu_host)) + h_f_host_oxide) * 2
+    # E(Ag2O) = 2 E(Ag) + E(O2)/2 - h_f fixes the O2 reference; it does not
+    # depend on mu_Ag. Bulk Ag2O is stable where 2 mu_Ag + mu_O >= E(Ag2O),
+    # with mu_Ag = e_host + delta_mu_host, so at delta_mu_o >= dmu_o_oxide.
+    e_o2 = (e_host_oxide - (2 * e_host) + h_f_host_oxide) * 2
+    dmu_o_oxide = -h_f_host_oxide - 2 * delta_mu_host
     delta_mu_o = np.linspace(delta_mu_o_min, delta_mu_o_max, n_bins)
 
-    area = np.linalg.norm(traj[-1].get_cell()[0]) * np.linalg.norm(traj[-1].get_cell()[1])
+    cell = traj[-1].get_cell()
+    area = np.linalg.norm(np.cross(cell[0], cell[1]))
 
     conf_ref = traj[idx_ref]
     free_ref = free_en(
@@ -183,35 +241,39 @@ def analyze_phase_diagram_results(
 
     # Draw transition lines below bulk-oxide limit.
     for x in transitions:
-        if x <= -h_f_host_oxide:
+        if x <= dmu_o_oxide:
             ax.axvline(x, c='black', lw=1, zorder=10)
 
     linew = 0.8
     mpl.rcParams['hatch.linewidth'] = linew
-    ax.axvspan(
-        -h_f_host_oxide,
-        0,
-        facecolor='darkred',
-        hatch='//',
-        linestyle='dashed',
-        lw=linew,
-        edgecolor='black',
-        zorder=8,
-    )
+    if dmu_o_oxide < 0:
+        ax.axvspan(
+            dmu_o_oxide,
+            0,
+            facecolor='darkred',
+            hatch='//',
+            linestyle='dashed',
+            lw=linew,
+            edgecolor='black',
+            zorder=8,
+        )
 
-    ax2 = ax.twiny()
-    ax2.plot(np.log10(from_mu_to_press(delta_mu_o + (e_o2 / 2), T=T)), min_energy, lw=0)
-    ax2.set_xlabel(f'log$_{{10}}$ $(p_{{O_2}}/p_0)$, T = {T} K', fontsize=18, labelpad=10)
-    ax2.tick_params(direction='in', labelsize=15)
+    try:
+        dmu0 = _janaf_dmu0('O2', T, 2)
+    except ValueError:
+        logger.warning('T = %g K is outside the NIST-JANAF O2 table (100 to 1000 K): the '
+                       'pressure axis is omitted.', T)
+    else:
+        ax2 = ax.twiny()
+        ax2.plot(_log10_p_over_p0(delta_mu_o, dmu0, T, 2), min_energy, lw=0)
+        ax2.set_xlabel(f'log$_{{10}}$ $(p_{{O_2}}/p_0)$, T = {T} K', fontsize=18, labelpad=10)
+        ax2.tick_params(direction='in', labelsize=15)
+        ax2.set_xlim(*_log10_p_over_p0(np.array(xlim), dmu0, T, 2))
 
     ax.set_xlabel('$\\Delta \\mu_{O}(T,p)$ [eV]', fontsize=18)
     ax.set_ylabel('$\\gamma$ [meV/$\\AA^2$]', fontsize=18)
     ax.tick_params(direction='in', labelsize=15)
     ax.set_xlim(*xlim)
-    ax2.set_xlim(
-        np.log10(from_mu_to_press(xlim[0] + (e_o2 / 2), T=T)),
-        np.log10(from_mu_to_press(xlim[1] + (e_o2 / 2), T=T)),
-    )
     ax.set_ylim(ymin, ymax)
 
     plt.tight_layout()
@@ -333,12 +395,17 @@ def plot_phase_diagram(
     hatch_from=None,
     hatch_label=None,
     dpi=250,
+    mu_metal=None,
+    dmu_standard=None,
 ):
     """Build a grand-canonical adsorbate phase diagram for one configuration.
 
     All ``frames`` are assumed to belong to a single system configuration (e.g.
     one surface facet or one nanoparticle size); they typically sweep a range of
-    chemical potentials. The lowest-energy adsorbate-free frame is the reference.
+    chemical potentials. Each frame scores E - sum_m mu_m (N_m - N_m,ref) over
+    the ``metal_symbols``; this is E when all frames share one metal
+    composition. The adsorbate-free frame with the lowest score is the
+    reference, and the lowest score wins per adsorbate count.
 
     Every phase on the stable envelope is kept. The phase boundaries are the
     exact crossings of the linear free-energy lines, so the dashed transition
@@ -353,7 +420,8 @@ def plot_phase_diagram(
     adsorbate : str
         Symbol of the species whose count defines the stoichiometry (e.g. "H").
     metal_symbols : tuple[str, ...]
-        Host species, used for per-atom normalization and structure labels.
+        Host species, used for per-atom normalization, structure labels and
+        the ``mu_metal`` term.
     mu_ref : float
         Reference chemical potential of the adsorbate (e.g. ½E(H2)) [eV].
     kind : str
@@ -408,6 +476,20 @@ def plot_phase_diagram(
         Legend text of the hatched range.
     dpi : int
         Resolution of the saved figure.
+    mu_metal : dict[str, float] | None
+        Chemical potential [eV] of each host species whose count differs
+        between frames, e.g. ``{'Ag': mu_ag}`` from a run that exchanges Ag.
+        If the frames hold more than one count of a species in
+        ``metal_symbols`` and ``mu_metal`` does not give it, a ValueError is
+        raised.
+    dmu_standard : float | None
+        Delta mu^0(T) of the adsorbate at p0 [eV per adsorbed unit]. The twin
+        axis is log10(p/p0) = n (dmu - dmu_standard) / (kT ln 10), with n =
+        ``atoms_per_reservoir_molecule``. ``None`` takes it from the built-in
+        NIST-JANAF tables for O (O2 reservoir) and H (H2 reservoir), 100 to
+        1000 K. For any other adsorbate or T the twin axis is omitted, with a
+        warning. The built-in values leave out the zero-point energy (ZPE):
+        with a bare ``mu_ref``, the true p = p0 is at Delta mu^0(T) + ZPE / n.
 
     Returns
     -------
@@ -427,14 +509,34 @@ def plot_phase_diagram(
             n_ads = int(adsorbate_count_fn(at))
         else:
             n_ads = sum(1 for a in at if a.symbol == adsorbate)
-        data.append((at, float(energy), n_ads))
+        syms = at.get_chemical_symbols()
+        n_m = tuple(syms.count(m) for m in metal_symbols)
+        data.append((at, float(energy), n_ads, n_m))
     if not data:
         raise ValueError('No frames with a retrievable energy were provided.')
 
-    clean = sorted((d for d in data if d[2] == 0), key=lambda d: d[1])
+    mu_m = dict(mu_metal or {})
+    unknown = sorted(set(mu_m) - set(metal_symbols))
+    if unknown:
+        raise ValueError(f'mu_metal gives {unknown}, which are not in metal_symbols '
+                         f'{tuple(metal_symbols)}.')
+    for i, m in enumerate(metal_symbols):
+        counts = sorted({d[3][i] for d in data})
+        if len(counts) > 1 and m not in mu_m:
+            raise ValueError(
+                f'The frames hold {counts} {m} atoms. Pass mu_metal={{{m!r}: mu_{m}}} '
+                f'(eV) to compare frames with different {m} counts.')
+
+    def score(energy, n_m, n_ref):
+        # E - sum_m mu_m (N_m - N_m,ref); exactly E when the metal counts match.
+        return energy - sum(mu_m[m] * (n - r)
+                            for m, n, r in zip(metal_symbols, n_m, n_ref) if n != r)
+
+    clean = [d for d in data if d[2] == 0]
     if not clean:
         raise ValueError(f'No adsorbate-free ({adsorbate} count == 0) reference frame found.')
-    ref_atoms, ref_E = clean[0][0], clean[0][1]
+    ref = min(clean, key=lambda d: score(d[1], d[3], clean[0][3]))
+    ref_atoms, ref_E = ref[0], ref[1]
 
     n_metal = sum(1 for a in ref_atoms if a.symbol in metal_symbols)
     gamma_scale = 1.0 if gamma_in_ev else 1000.0
@@ -452,9 +554,10 @@ def plot_phase_diagram(
         symbol = r'\Delta G'
 
     best = {}
-    for at, energy, n_ads in data:
-        if n_ads not in best or energy < best[n_ads][1]:
-            best[n_ads] = (at, energy)
+    for at, energy, n_ads, n_m in data:
+        omega = score(energy, n_m, ref[3])
+        if n_ads not in best or omega < best[n_ads][1]:
+            best[n_ads] = (at, omega, n_m)
     stoich = sorted(best)
 
     # Each stoichiometry is a straight line in dmu: free = icpt + slope * dmu.
@@ -469,7 +572,8 @@ def plot_phase_diagram(
     s_idx = np.argmin(free, axis=0)
     min_g = free[s_idx, np.arange(n_bins)]
 
-    ratios = [stoich[i] / n_metal for i in phase_order] if n_metal else [0.0] * len(phase_order)
+    n_m_phase = [sum(best[stoich[i]][2]) for i in phase_order]
+    ratios = [stoich[i] / n if n else 0.0 for i, n in zip(phase_order, n_m_phase)]
     n_p = len(phase_order)
     colors = [PHASE_COLORS[i % len(PHASE_COLORS)] for i in range(n_p)]
     bounds = [x0] + transitions + [x1]
@@ -530,11 +634,21 @@ def plot_phase_diagram(
               ncol=2 if len(handles) == 4 else 3, frameon=False, fontsize=9.5,
               handlelength=2.2, columnspacing=1.2)
 
-    # p = p0 at dmu = 0: dmu is referenced to the reservoir energy alone.
-    ax2 = ax.twiny()
-    ax2.set_xlim(*(n_res * np.array([x0, x1]) / (k_b * T * np.log(10.0))))
-    ax2.set_xlabel(rf'$\log_{{10}}(p_{{{gas_label}}}/p^0)$ at T = {T:g} K')
-    ax2.tick_params(direction='in')
+    # p = p0 at dmu = dmu_standard, the reservoir's Delta mu^0(T).
+    gas = label if atoms_per_reservoir_molecule == 1 else f'{label}{atoms_per_reservoir_molecule}'
+    if dmu_standard is None and gas in _JANAF:
+        try:
+            dmu_standard = _janaf_dmu0(gas, T, n_res)
+        except ValueError:
+            pass  # T outside the table: same as no table
+    if dmu_standard is None:
+        logger.warning('No built-in Delta mu^0(T) for a %s reservoir at T = %g K: the pressure '
+                       'axis is omitted. Pass dmu_standard to draw it.', gas, T)
+    else:
+        ax2 = ax.twiny()
+        ax2.set_xlim(*_log10_p_over_p0(np.array([x0, x1]), dmu_standard, T, n_res, k_b))
+        ax2.set_xlabel(rf'$\log_{{10}}(p_{{{gas_label}}}/p^0)$ at T = {T:g} K')
+        ax2.tick_params(direction='in')
 
     if show_structures:
         from ase.visualize.plot import plot_atoms
@@ -594,6 +708,8 @@ def plot_phase_diagram(
         'transitions': np.array(transitions),
         'phase_order': np.array(phase_order),
         'phase_ratios': np.array(ratios),
+        'phase_metal_counts': [dict(zip(metal_symbols, best[stoich[i]][2]))
+                               for i in phase_order],
         'unit': unit,
         'plot_path': outfile,
     }
