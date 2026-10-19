@@ -25,6 +25,8 @@ class SetUnits:
                 masses. Molecular species are identified by composition, so two
                 templates with the same composition cannot coexist.
         """
+        if not (np.isfinite(temperature) and temperature > 0):
+            raise ValueError(f'temperature must be finite and > 0, got {temperature}')
         self.unit_type = unit_type
         self.species = species
         self.temperature = temperature

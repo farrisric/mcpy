@@ -18,13 +18,27 @@ rotates a molecule without bending it.
 With a relaxing calculator the molecule still relaxes after placement, so
 the rigid template is a starting point, not a frozen geometry.
 
-**mu means the full molecular chemical potential.**
-Orientations are proposed uniformly, which absorbs the rotational partition
-function into the chemical potential rather than into the acceptance rule.
-Compute the molecule's energy in a box with your production calculator and
-pass ``mu = E(molecule) + delta_mu``, where ``delta_mu`` carries the
-translational, rotational, and pressure contributions of the reference
-reservoir.
+**The mu to pass depends on the trial energies.**
+The acceptance rule has no rotational factor, and the insertion draws
+orientations uniformly.
+Compute the molecule's energy ``E(molecule)`` in a box with your production
+calculator.
+
+- With relaxed trials (the default), pass the full thermochemical chemical
+  potential, ``mu = E(molecule) + delta_mu(T, p)``.
+  ``delta_mu`` carries the translational, rotational, internal, and
+  pressure terms of the gas reservoir (for example from NIST-JANAF tables).
+  The relaxation moves each trial into a basin, so the orientation of the
+  seed matters little.
+  This is a good approximation for adsorbates, not an exact rule.
+- With single-point trials (``steps=0``, or a calculator that does not
+  relax), pass ``mu = E(molecule) + kT ln(p Lambda^3 / kT)``, with
+  ``Lambda`` from the total molecular mass.
+  This is the translational ideal-gas term only, without the rotational
+  partition function ``q_rot``: the convention of LAMMPS ``fix gcmc``.
+  The full thermochemical value would be ``kT ln q_rot`` too low.
+
+:doc:`gcmc_acceptance_convention` gives the details for both cases.
 
 **Acceptance counts molecules of the exchanged species.**
 The combinatorial :math:`N` in the insertion and deletion rules is the
@@ -38,6 +52,13 @@ coexist in one run.
 **A per-atom molecule_id array tracks membership.**
 Every atom carries an integer id, with members of one molecule sharing a
 value and free atoms carrying ``-1``.
+Host atoms are free atoms, so they must carry ``-1`` too.
+If you build a structure from a molecule and a host, set ``molecule_id`` to
+``-1`` on the host first: ASE fills a missing array with 0 when it combines
+atoms, which would make the whole host one fake molecule.
+``GrandCanonicalEnsemble`` checks this at construction.
+It raises ``ValueError`` when a ``molecule_id`` group matches no template in
+``molecules``.
 Deletion removes a whole id group, and the array shrinks with the structure,
 so membership never drifts out of sync with the atom list.
 
@@ -58,8 +79,19 @@ array extension would otherwise zero-fill the id and silently attach the
 atom to molecule 0.
 An atomic deletion draws only from free atoms and never dismembers a
 molecule.
-This enables mixed reservoirs, for example dissociative O at half the
-O\ :sub:`2` chemical potential alongside molecular O\ :sub:`2`.
+This enables mixed reservoirs, for example dissociative O alongside
+molecular O\ :sub:`2`.
+In equilibrium, :math:`\mu_\mathrm{O}` is half the physical
+:math:`\mu_{\mathrm{O_2}}`.
+With relaxed trials, use half the full thermochemical
+:math:`\mu_{\mathrm{O_2}}` that you pass for O\ :sub:`2`.
+With single-point trials, the value you pass for O\ :sub:`2` has no
+:math:`q_\mathrm{rot}` term, so use
+:math:`\mu_\mathrm{O} = (\mu_{\mathrm{O_2}} - k_BT \ln q_\mathrm{rot})/2`, not
+half the value you pass.
+In both cases the atomic O moves use the total atom count, which shifts the
+effective :math:`\mu_\mathrm{O}` by
+:math:`k_BT \ln((N_\mathrm{total}+1)/(N_\mathrm{O}+1))` (ADR 0001).
 One caveat remains: the atomic displacement-type moves are not
 molecule-aware and can drag a single member atom, which a relaxing
 calculator tolerates but the rigid-molecule picture does not.
@@ -113,6 +145,8 @@ Exchanging molecules with the reservoir
    inside an exclusion sphere of the cell ``species_radii`` are redrawn.
    With ``min_insert`` the center of mass only keeps ``min_insert`` from
    every atom, a seed for the relaxation (ADR 0004).
+   Use ``min_insert`` only with a relaxing calculator; with single-point
+   energies it shifts ``mu`` and the ensemble warns.
    ``max_molecules`` skips the trial once the population reaches a cap.
 
 ``MoleculeDeletionMove(cell, molecule, name, seed, min_molecules=None)``
@@ -131,18 +165,23 @@ Moving adsorbed molecules between sites
    displaced center.
    Both parts are symmetric proposals, so the move runs under the plain
    Metropolis rule.
-   A displacement that would carry the center of mass out of the cell is
+   Candidates are the molecules whose center of mass passes
+   ``cell.is_point_inside``.
+   A displacement that would carry the center of mass out of that region is
    rejected, because a molecule outside the region would silently leave the
    grand-canonical bookkeeping.
+   For a ``CustomCell`` the top of the cell is therefore a hard wall.
    Set ``max_angle`` (radians) for anchored adsorbates such as CO, and leave
    the full rotation for physisorbed ones.
 
 Inspecting molecules in a configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``find_molecules(atoms, template_symbols, cell=None)``
+``find_molecules(atoms, template_symbols, cell=None, proposal_region=False)``
    Returns the member-index groups of every molecule matching the template
    composition, optionally filtered to centers of mass inside a cell.
+   The filter is ``cell.is_point_exchangeable``, or ``cell.is_point_inside``
+   with ``proposal_region=True``.
    Useful for counting coverage per frame when post-processing a trajectory.
 
 ``molecule_com(atoms, members)``

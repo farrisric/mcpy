@@ -53,7 +53,15 @@ class MoveSelector:
     """
 
     def __init__(self, probabilities, move_list, seed=None, n_moves=None):
-        assert len(probabilities) == len(move_list)
+        if len(probabilities) != len(move_list):
+            raise ValueError(f'{len(probabilities)} weights for {len(move_list)} moves')
+        weights = np.asarray(probabilities, dtype=float)
+        if not np.all(np.isfinite(weights)) or np.any(weights < 0) or weights.sum() <= 0:
+            raise ValueError(
+                f'move weights must be finite and >= 0 with a positive sum, got {probabilities}')
+        # The raw weights: GrandCanonicalEnsemble checks the insertion and
+        # deletion attempt probabilities against them.
+        self.probabilities = list(probabilities)
         self.move_list = move_list
         self.move_list_names = [_abbreviate(move.__class__.__name__) for move in move_list]
         if n_moves is None:
@@ -115,9 +123,6 @@ class MoveSelector:
         valid for the move chosen by the last :meth:`do_trial_move`.
         """
         return getattr(self.move_list[self.to_use], 'last_exchange_count', None)
-
-    def calculate_volume(self, atoms):
-        return self.move_list[self.to_use].calculate_volume(atoms)
 
     def acceptance_counter(self):
         self.move_acceptance[self.to_use] += 1

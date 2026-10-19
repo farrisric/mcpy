@@ -104,5 +104,6 @@ class DomeCell(SphericalCell):
 
     def _volume_samples(self):
         """Ball samples above the surface; the domain is the full ball."""
-        pts = self._sample_sphere_points(self.mc_sample_points)
+        # Full cap, then a prefix: see Cell._volume_samples.
+        pts = self._sample_sphere_points(self.max_sample_points)[:self.mc_sample_points]
         return pts[pts[:, 2] >= self.bottom_z], self.sphere_volume

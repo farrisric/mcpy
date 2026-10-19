@@ -58,7 +58,9 @@ CHECKPOINT = os.path.expanduser('~/.cache/mace/macemh1model')
 HEAD = 'omat_pbe'
 DEVICE = 'cuda'
 ENABLE_CUEQ = True
-COMPILE_MODEL = True
+# torch.compile gives wrong mh-1 forces with cuEq (inductor bug), so mcpy
+# turns it off for this model anyway; False skips the warning.
+COMPILE_MODEL = False
 # LBFGS converges in ~3x fewer steps than FIRE. It needs nvalchemi newer
 # than 0.2.0 (GitHub main); set 'fire' on nvalchemi 0.2.0.
 OPTIMIZER = 'lbfgs'
@@ -67,6 +69,11 @@ OPTIMIZER = 'lbfgs'
 # Shift (eV) on mu_H. The CHE helper uses bare energies; the usual CHE
 # correction for H* (ZPE and entropy, +0.24 eV per adsorbed H, Norskov et al.
 # 2005) is the same as lowering mu_H by 0.24 eV. Set 0.0 for bare energies.
+# The trials are relaxed, so the run samples at an effective mu_H that is
+# offset from the CHE value by about 0.1 eV, and the offset changes with
+# coverage. The U_SHE of a rung is therefore nominal: read the transition
+# potentials from the frame energies with plot_phase_diagram
+# (docs/gcmc_acceptance_convention.rst).
 MU_H_CORRECTION = -0.24
 
 # --- system ----------------------------------------------------------------
@@ -120,10 +127,9 @@ def main():
     )
 
     # E(H2) comes from the running calculator, so the reference always
-    # matches the head in use.
-    mus = [{'H': mu_h_che(calculator, ph=PH, u_she=u, temperature=TEMPERATURE)
-            + MU_H_CORRECTION}
-           for u in U_SHE_LADDER]
+    # matches the head in use. mu_H is linear in U_SHE: derive it once.
+    mu_h0 = mu_h_che(calculator, ph=PH, u_she=0.0, temperature=TEMPERATURE)
+    mus = [{'H': mu_h0 - u + MU_H_CORRECTION} for u in U_SHE_LADDER]
 
     def gcmc_factory(mu, rank):
         """Build replica ``rank``. Called once per rung of the ladder.

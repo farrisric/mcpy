@@ -1,7 +1,8 @@
 """GPU-native MACE calculators on the nvalchemi stack.
 
 Two calculators over one base: :class:`AlchemiCalculator` evaluates energies
-with a single forward pass, :class:`AlchemiFCalculator` relaxes with FIRE first.
+with a single forward pass, :class:`AlchemiFCalculator` relaxes first (FIRE by
+default, ``optimizer=``).
 Everything they share -- loading and configuring the model, batching, the
 neighbour-list hook, the chunked batched-evaluation template, Langevin MD --
 lives on :class:`_AlchemiBase`, so a subclass only says what is different about
@@ -26,6 +27,7 @@ from nvalchemi.data.batch import Batch
 from nvalchemi.dynamics import (FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2,
                                 ConvergenceHook, NVTLangevin,
                                 initialize_velocities)
+from nvalchemi.dynamics._ops.thermostat_utils import remove_com_motion
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook, NaNDetectorHook
 from nvalchemi.hooks import DynamicsContext
@@ -33,6 +35,7 @@ from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.models.mace import MACEWrapper
 
 from ..utils.chunking import chunk_ranges
+from ..utils.md_trajectory import write_md_frame
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +128,19 @@ def _cueq_or_fallback(raw, checkpoint) -> bool:
     return False
 
 
+def _cueq_compile_breaks_forces(raw) -> bool:
+    """Whether torch.compile gives wrong forces for ``raw`` with cuEq kernels.
+
+    With cuEq, the gate -> ``transpose_ir_mul`` -> ``linear_2`` tail of a
+    ``RealAgnosticResidualNonLinearInteractionBlock`` (mh-1) is miscompiled
+    by inductor on torch 2.12: energies stay right, forces are off by up to
+    ~1 eV/A and change with the compile cache. The ``aot_eager`` backend and
+    the e3nn kernels are exact, so it is an inductor bug, not the mh-1 repair.
+    """
+    return any(type(b).__name__ == 'RealAgnosticResidualNonLinearInteractionBlock'
+               for b in raw.interactions)
+
+
 def _load_model(
     checkpoint: Union[str, MACEWrapper],
     device: str,
@@ -152,7 +168,12 @@ def _load_model(
     # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
     # string as a download alias, so it cannot open local paths. ``head``
     # selects a multihead model's head by name or index.
-    if isinstance(checkpoint, (str, os.PathLike)) and os.path.exists(checkpoint):
+    looks_like_path = isinstance(checkpoint, os.PathLike) or (
+        os.sep in checkpoint or checkpoint.endswith(('.model', '.pt')))
+    if looks_like_path and not os.path.exists(checkpoint):
+        # Else the typo is taken for a download alias, with a misleading error.
+        raise FileNotFoundError(f'MACE checkpoint not found: {checkpoint}')
+    if os.path.exists(checkpoint):
         raw = torch.load(checkpoint, map_location=device, weights_only=False).to(dtype)
         # Resolve the head index before any cuEq conversion, while ``raw.heads``
         # is guaranteed present.
@@ -168,7 +189,20 @@ def _load_model(
                     "enable_cueq=True requires the 'cuequivariance' package; "
                     "install with: pip install 'nvalchemi-toolkit[mace]'"
                 ) from exc
-            raw = _to_cueq(raw, return_model=True, device=device)
+            # The conversion sets the process-wide default dtype to the
+            # model's and leaves it there, which breaks a later float32 load.
+            default_dtype = torch.get_default_dtype()
+            try:
+                raw = _to_cueq(raw, return_model=True, device=device)
+            finally:
+                torch.set_default_dtype(default_dtype)
+            if compile_model and _cueq_compile_breaks_forces(raw):
+                logger.warning(
+                    'compile_model disabled for %s: with cuEq kernels, '
+                    'torch.compile gives wrong forces for its non-linear '
+                    'interaction blocks (energies stay right). cuEq stays on.',
+                    checkpoint)
+                compile_model = False
         raw = raw.to(device)
         if compile_model:
             # Mirror MACEWrapper.from_checkpoint step 3: the model is
@@ -200,11 +234,12 @@ def _load_model(
         from mace.calculators.foundations_models import download_mace_mp_checkpoint
         path = download_mace_mp_checkpoint(checkpoint)
         raw = torch.load(path, map_location='cpu', weights_only=False)
-        matches = _cueq_rebuild_matches(raw)
+        local = not _cueq_rebuild_matches(raw) or (
+            compile_model and _cueq_compile_breaks_forces(raw))
         del raw
-        if not matches:
-            # from_checkpoint would convert its own unrepaired copy; load the
-            # cached file through the local path, which repairs it first.
+        if local:
+            # from_checkpoint would convert its own unrepaired copy, or compile
+            # it; the local path repairs it and keeps compile off.
             return _load_model(path, device, dtype, enable_cueq, compile_model)
     return MACEWrapper.from_checkpoint(
         checkpoint,
@@ -221,19 +256,27 @@ def _make_batch(atoms_list, device: str, dtype: torch.dtype) -> Batch:
     """Batch one ``Atoms`` or a list of them; a single structure is a batch of one."""
     if isinstance(atoms_list, Atoms):
         atoms_list = [atoms_list]
-    data = [AtomicData.from_atoms(a, device=device, dtype=dtype) for a in atoms_list]
+    # Only what the model reads: from_atoms turns atoms.info entries (energy,
+    # stress, lists) into batch fields that must agree across structures.
+    data = [
+        AtomicData.from_atoms(
+            Atoms(numbers=a.numbers, positions=a.positions, cell=a.cell,
+                  pbc=a.pbc, masses=a.get_masses()),
+            device=device, dtype=dtype)
+        for a in atoms_list]
     return Batch.from_data_list(data, device=device)
 
 
-def _per_graph_energies(out_energy: torch.Tensor, n_graphs: int) -> np.ndarray:
-    """Reduce model output to a (n_graphs,) numpy array regardless of layout."""
-    e = out_energy.detach().to('cpu')
-    if e.numel() == n_graphs:
-        return e.view(-1).numpy()
-    raise RuntimeError(
-        f'Unexpected energy tensor shape {tuple(out_energy.shape)} for {n_graphs} graphs. '
-        'Batched eval expects one energy per graph.'
-    )
+def _graph_energies(out, batch: Batch) -> np.ndarray:
+    """Per-graph energies, summed in float64 from the model's atomic energies.
+
+    The model's own per-graph sum runs in the model dtype; in float32 that
+    rounds a ~1e3 eV total to meV, which then shows up in every deltaE.
+    """
+    atomic = out['atomic_energies'].detach().reshape(-1).to(torch.float64)
+    e = torch.zeros(batch.num_graphs, dtype=torch.float64, device=atomic.device)
+    e.index_add_(0, batch.batch_idx, atomic)
+    return e.cpu().numpy()
 
 
 def _build_nl(batch: Batch, nl_hook: NeighborListHook) -> None:
@@ -273,7 +316,62 @@ def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
     if not fixed:
         return None
     batch.atom_categories[fixed] = AtomCategory.SPECIAL.value
-    return [FreezeAtomsHook()]
+    hook = FreezeAtomsHook()
+    # nvalchemi 0.2.0 restores only after post_update, so the Langevin noise
+    # of pre_update moved frozen rows during the force evaluation. Restore
+    # before compute too (nvalchemi > 0.2.0 already does).
+    hook._active_stages = hook._active_stages | {DynamicsStage.AFTER_PRE_UPDATE}
+    return [hook]
+
+
+class _RemoveCOMMotionHook:
+    """Zero each graph's center-of-mass velocity after every MD step.
+
+    The Langevin random force kicks the center of mass at every step, so a
+    free particle drifts even when its initial velocities have no net
+    momentum. Without this, repeated MD proposals shift the particle as a
+    random walk.
+    """
+
+    frequency = 1
+    stage = DynamicsStage.AFTER_POST_UPDATE
+
+    def __call__(self, ctx: DynamicsContext, stage) -> None:
+        batch = ctx.batch
+        with torch.no_grad():
+            remove_com_motion(batch.velocities, batch.atomic_masses,
+                              batch.batch_idx.int(), batch.num_graphs)
+
+
+class _TrajectoryHook:
+    """Append the state after every MD step to an extended-XYZ file.
+
+    Fires at ``AFTER_STEP``, so the frozen-atom and center-of-mass hooks
+    have already run and the frame shows the state the next step starts from.
+    nvalchemi velocities are in A per ASE time unit, so they pass through.
+    """
+
+    frequency = 1
+    stage = DynamicsStage.AFTER_STEP
+
+    def __init__(self, path: str, atoms: Atoms, **frame_kw) -> None:
+        self.path = path
+        self.atoms = atoms
+        self.frame_kw = frame_kw
+
+    def write(self, batch: Batch, md_step: int) -> None:
+        with torch.no_grad():
+            write_md_frame(
+                self.path, self.atoms,
+                batch.positions.detach().cpu().numpy().astype(np.float64),
+                batch.velocities.detach().cpu().numpy().astype(np.float64),
+                float(batch.energy.detach().sum()),
+                batch.forces.detach().cpu().numpy().astype(np.float64),
+                md_step=md_step, **self.frame_kw)
+
+    def __call__(self, ctx: DynamicsContext, stage) -> None:
+        # step_count is incremented after AFTER_STEP, so it is 0 on step 1.
+        self.write(ctx.batch, ctx.step_count + 1)
 
 
 def _write_back_positions(atoms: Atoms, batch: Batch) -> None:
@@ -338,6 +436,8 @@ class _AlchemiBase:
         self.model = _load_model(checkpoint, device, dtype, enable_cueq,
                                  compile_model, head)
         self._nl_config = self.model.model_config.neighbor_config
+        # Per-atom energies, for the float64 per-graph sum (_graph_energies).
+        self.model.model_config.active_outputs.add('atomic_energies')
 
     # -- helpers a subclass builds its evaluation from
 
@@ -354,17 +454,18 @@ class _AlchemiBase:
 
     @staticmethod
     def _bootstrap(opt, batch: Batch, nl_hook: NeighborListHook,
-                   fixed: List[int]) -> None:
+                   fixed: List[int]):
         """Build the neighbour list and initial forces before the loop starts.
 
         ``FreezeAtomsHook`` zeros frozen forces only at ``AFTER_POST_UPDATE``,
         and this ``compute()`` runs outside the hook loop, so step 0 would
-        otherwise displace the frozen rows once.
+        otherwise displace the frozen rows once. Returns the model outputs.
         """
         _build_nl(batch, nl_hook)
-        opt.compute(batch)
+        out = opt.compute(batch)
         if fixed:
             batch.forces[fixed] = 0.0
+        return out
 
     # -- the public evaluation surface
 
@@ -395,9 +496,15 @@ class _AlchemiBase:
         most that many structures, evaluated one at a time, capping peak GPU
         memory at the largest chunk instead of the whole batch. ``None`` (the
         default) falls back to the instance ``chunk_size``; if that is also
-        ``None`` the whole list goes in one pass. Results are unaffected by
-        chunking (MACE message passing and FIRE convergence are both per-graph),
-        up to GPU run-to-run noise.
+        ``None`` the whole list goes in one pass. MACE message passing and
+        relaxation convergence are per-graph, but float32 rounding depends on
+        which graphs share a batch: on 36-atom Ag slabs (float32, CPU and
+        GPU) chunking changed single-point energies by up to 4e-6 eV and
+        relaxed ones by up to 4e-6 eV and 3e-6 A. A relaxation can amplify
+        such a difference into another end point within the ``fmax``
+        tolerance. A seeded run repeats bit for bit only with a fixed
+        ``chunk_size``, replica set and device, and only on the CPU: CUDA
+        reductions add run-to-run noise of the same size.
 
         Parameters
         ----------
@@ -433,6 +540,8 @@ class _AlchemiBase:
         dt: float = 2.0,
         steps: int = 100,
         seed: int = 42,
+        trajectory_file: str | None = None,
+        md_run: int = 0,
     ) -> None:
         """Run NVT Langevin (BAOAB) MD in place on ``atoms``.
 
@@ -440,7 +549,13 @@ class _AlchemiBase:
         Reuses this calculator's model and neighbour-list config, so no second
         model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
         in K (the integrator converts to internal units). ``FixAtoms``
-        constraints are held every step and restored on write-back.
+        constraints are held every step and restored on write-back. Without
+        ``FixAtoms``, the center-of-mass velocity is zeroed every step so the
+        particle does not drift; with them, the fixed atoms anchor the system.
+
+        ``trajectory_file`` (debug) appends the start state and every MD step
+        as extended-XYZ frames, tagged with ``md_run``. It copies the batch to
+        the CPU every step, so it slows the MD down.
         """
         batch = self._batch(atoms)
         self._prepare(batch, 1)
@@ -453,22 +568,35 @@ class _AlchemiBase:
         )
 
         fixed = _fixed_indices(atoms)
+        if fixed:
+            # nvalchemi 0.2.0 FreezeAtomsHook only acts after post_update, so
+            # the step-0 drift would move frozen rows with these velocities.
+            batch.velocities[fixed] = 0.0
         freeze_hooks = _freeze_hook_for(batch, fixed)
+        com_hooks = [] if fixed else [_RemoveCOMMotionHook()]
+        traj_hooks = [] if trajectory_file is None else [_TrajectoryHook(
+            trajectory_file, atoms, md_run=md_run, dt=dt,
+            temperature=temperature)]
         nl_hook = self._nl_hook()
         opt = NVTLangevin(
             model=self.model,
             dt=dt,
             temperature=temperature,
             friction=friction,
-            random_seed=seed,
+            # Step k draws its noise from random_seed + k; seed itself would
+            # repeat the velocity draw's normals and heat step 0.
+            random_seed=seed + 1,
             n_steps=steps,
             # NaN forces/energy would otherwise propagate silently into the
             # proposal the ensemble scores; the hook raises at the offending
             # step.
-            hooks=(freeze_hooks or []) + [NaNDetectorHook()],
+            hooks=(freeze_hooks or []) + com_hooks + traj_hooks
+            + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
         self._bootstrap(opt, batch, nl_hook, fixed)
+        for hook in traj_hooks:
+            hook.write(batch, 0)
         opt.run(batch)
         _write_back_positions(atoms, batch)
 
@@ -544,8 +672,7 @@ class AlchemiCalculator(_AlchemiBase):
         batch = self._batch(chunk)
         nl_hook = self._nl_hook()
         _build_nl(batch, nl_hook)
-        out = self._forward(batch)
-        return _per_graph_energies(out['energy'], len(chunk))
+        return _graph_energies(self._forward(batch), batch)
 
     def run_md(self, atoms: Atoms, **kwargs) -> None:
         if self.energy_only:
@@ -560,13 +687,14 @@ class AlchemiCalculator(_AlchemiBase):
         return super().run_md(atoms, **kwargs)
 
 
-# -------------------------------------------------------------- FIRE relaxation
+# ------------------------------------------------------------------- relaxation
 
 class AlchemiFCalculator(_AlchemiBase):
     """
-    Alchemi calculator with FIRE geometry relaxation.
+    Alchemi calculator with geometry relaxation, FIRE by default
+    (``optimizer=``).
 
-    Mirrors MACE_F_Calculator: relax atoms with FIRE then return energy. Uses
+    Mirrors MACE_F_Calculator: relax atoms, then return the energy. Uses
     the fully GPU-resident nvalchemi dynamics stack - significantly faster than
     ASE FIRE above ~100 atoms.
 
@@ -575,7 +703,7 @@ class AlchemiFCalculator(_AlchemiBase):
     Parameters
     ----------
     steps : int
-        Maximum FIRE steps before returning.
+        Maximum optimizer steps before returning. 0 is a pure single point.
     fmax : float
         Force convergence threshold in eV/Å.
     dt : float
@@ -585,7 +713,8 @@ class AlchemiFCalculator(_AlchemiBase):
         the value of ASE FIRE's dtmax; benchmarks show dt=1.0 converges in
         ~half the steps vs 0.1. Note nvalchemi grows the adaptive timestep up
         to dt_max = 10*dt, unlike ASE's dtmax=1.0 cap; per-step displacement
-        stays clamped by maxstep=0.2 A either way.
+        stays clamped by nvalchemi's default maxstep either way (0.2 A for
+        'fire', 0.1 A for 'fire2').
     optimizer : str
         'fire' (default, classic FIRE), 'fire2' (Guénolé et al variant -
         typically converges in fewer steps) or 'lbfgs' (needs nvalchemi
@@ -622,19 +751,20 @@ class AlchemiFCalculator(_AlchemiBase):
                          max_neighbors, chunk_size, head)
         if 'forces' not in self.model.model_config.active_outputs:
             # A model reused from an energy_only AlchemiCalculator (its
-            # ``.model`` attribute) has forces stripped; FIRE would only fail
+            # ``.model`` attribute) has forces stripped; relaxing would only fail
             # steps deep inside nvalchemi without naming the cause.
             raise ValueError(
                 "the provided model has 'forces' disabled in its active "
                 'outputs (an energy_only AlchemiCalculator strips them), but '
-                'FIRE relaxation needs forces. Load a fresh wrapper for this '
+                'relaxation needs forces. Load a fresh wrapper for this '
                 'calculator instead of sharing an energy-only one.'
             )
 
     def get_potential_energies(
         self, atoms_list: List[Atoms], chunk_size: int | None = None
     ) -> np.ndarray:
-        """Relax every structure with batched FIRE, then return the energies.
+        """Relax every structure with the batched optimizer, then return the
+        energies.
 
         Each structure in ``atoms_list`` is mutated in place: positions are
         updated to the relaxed configuration, respecting FixAtoms. Adds the
@@ -646,15 +776,22 @@ class AlchemiFCalculator(_AlchemiBase):
             # last = deepest chunk relaxation; total accumulates across chunks.
             self.last_relax_steps = max(self._chunk_steps)
             self.total_relax_steps += sum(self._chunk_steps)
-            logger.debug('FIRE relaxation (batched, %d graphs, %d chunk(s)): '
-                         'max %d/%d steps (fmax=%.3g eV/A)',
+            logger.debug('%s relaxation (batched, %d graphs, %d chunk(s)): '
+                         'max %d/%d steps (fmax=%.3g eV/A)', self.optimizer_name,
                          len(atoms_list), len(self._chunk_steps),
                          self.last_relax_steps, self.steps, self.fmax)
         return energies
 
     def _evaluate_chunk(self, chunk: List[Atoms]) -> np.ndarray:
-        """Batched FIRE relaxation of one sub-batch, mutating positions."""
+        """Batched relaxation of one sub-batch, mutating positions."""
         batch = self._batch(chunk)
+        if self.steps == 0:
+            # Pure single point, built before the optimizer: nvalchemi > 0.2.0
+            # rejects n_steps=0. Positions are not written back, since float32
+            # would move every atom ~1e-7 A.
+            _build_nl(batch, self._nl_hook())
+            self._chunk_steps.append(0)
+            return _graph_energies(self.model(batch), batch)
         self._prepare(batch, len(chunk))
 
         # Map each graph's FixAtoms indices into the concatenated sub-batch.
@@ -678,73 +815,84 @@ class AlchemiFCalculator(_AlchemiBase):
             hooks=(freeze_hooks or []) + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
-        self._bootstrap(opt, batch, nl_hook, fixed)
-        energies, n_steps = self._run_compacted(opt, batch, chunk)
+        out = self._bootstrap(opt, batch, nl_hook, fixed)
+        energies, n_steps = self._run_compacted(opt, batch, chunk, out)
         self._chunk_steps.append(n_steps)
         return energies
 
-    def _run_compacted(self, opt, batch, atoms_list: List[Atoms]) -> tuple:
-        """Step FIRE manually, retiring each graph from the batch at its first
-        convergence so subsequent steps only compute the still-active graphs.
+    def _run_compacted(self, opt, batch, atoms_list: List[Atoms], out) -> tuple:
+        """Step the optimizer manually, retiring each graph from the batch at
+        its first convergence so subsequent steps only compute the
+        still-active graphs.
 
         ``opt.run`` computes the FULL batch every step and stops only when all
         graphs are converged at the same step; with mixed trial moves the fast
         graphs pay for the slowest one.
 
+        Like ASE, convergence is checked on the bootstrap forces before the
+        first step: a graph that starts converged is not moved.
+
         Batch rows are removed with ``Batch.index_select`` and the optimizer's
-        per-graph FIRE state is shrunk in lockstep with
-        ``_sync_state_to_batch`` - the same primitives nvalchemi's inflight
-        refill machinery uses. Positions and energy are harvested per graph at
-        retirement; returns ``(per_graph_energies, step_count)``.
+        per-graph state is shrunk in lockstep with ``_sync_state_to_batch`` -
+        the same primitives nvalchemi's inflight refill machinery uses.
+        Positions and energy are harvested per graph at retirement; returns
+        ``(per_graph_energies, step_count)``. ``out`` holds the bootstrap
+        model outputs.
         """
         alive = np.arange(len(atoms_list))  # batch row -> atoms_list index
         energies = np.zeros(len(atoms_list))
+        e_rows = _graph_energies(out, batch)  # batch row -> current energy
         n_steps = 0
-        if self.steps == 0:
-            # Pure single point: _bootstrap already computed the energy, and
-            # writing float32 positions back would move every atom ~1e-7 A.
-            return _per_graph_energies(batch.energy, len(atoms_list)), 0
         opt._open_hooks()
         try:
-            while alive.size and n_steps < self.steps:
+            conv = opt.convergence_hook.evaluate(batch)
+            while True:
+                if conv is not None and conv.numel():
+                    rows = np.unique(conv.detach().cpu().numpy())
+                    # Unmoved graphs keep their float64 positions.
+                    self._harvest(batch, rows, alive, energies, e_rows,
+                                  atoms_list, move=n_steps > 0)
+                    keep = np.setdiff1d(np.arange(alive.size), rows)
+                    alive = alive[keep]
+                    e_rows = e_rows[keep]
+                    if alive.size:
+                        keep_t = torch.as_tensor(keep, device=batch.device)
+                        opt._sync_state_to_batch(keep_t, 0, batch)
+                        batch = batch.index_select(keep_t)
+                        # _last_converged indexes the pre-shrink batch; clear
+                        # it or the next hook context builds an out-of-bounds
+                        # mask.
+                        opt._last_converged = None
+                if not alive.size or n_steps == self.steps:
+                    break
                 batch, conv = opt.step(batch)
                 n_steps += 1
-                if conv is None or conv.numel() == 0:
-                    continue
-                rows = np.unique(conv.detach().cpu().numpy())
-                self._harvest(batch, rows, alive, energies, atoms_list)
-                keep = np.setdiff1d(np.arange(alive.size), rows)
-                alive = alive[keep]
-                if alive.size:
-                    keep_t = torch.as_tensor(keep, device=batch.device)
-                    opt._sync_state_to_batch(keep_t, 0, batch)
-                    batch = batch.index_select(keep_t)
-                    # _last_converged indexes the pre-shrink batch; clear it
-                    # or the next hook context builds an out-of-bounds mask.
-                    opt._last_converged = None
+                e_rows = _graph_energies(opt._last_outputs, batch)
             if alive.size:  # step cap hit: harvest the stragglers as-is
-                logger.warning('%d/%d graphs reached the %d-step FIRE cap '
+                logger.warning('%d/%d graphs reached the %d-step %s cap '
                                '(fmax=%.3g eV/A); their energies may be '
                                'unconverged', alive.size, len(atoms_list),
-                               self.steps, self.fmax)
+                               self.steps, self.optimizer_name, self.fmax)
                 self._harvest(batch, np.arange(alive.size), alive, energies,
-                              atoms_list)
+                              e_rows, atoms_list)
         finally:
             opt._close_hooks()
         return energies, n_steps
 
     @staticmethod
-    def _harvest(batch, rows, alive, energies, atoms_list) -> None:
+    def _harvest(batch, rows, alive, energies, e_rows, atoms_list,
+                 move: bool = True) -> None:
         """Write energy + relaxed positions of ``rows`` (batch row indices)
         back to their originating Atoms objects, restoring FixAtoms rows."""
-        e = _per_graph_energies(batch.energy, int(batch.num_graphs))
         # float64 before restoring frozen rows: see _write_back_positions.
         pos = batch.positions.detach().cpu().numpy().astype(np.float64)
         batch_idx = batch.batch_idx.detach().cpu().numpy()
         for row in rows:
             g = int(alive[row])
+            energies[g] = e_rows[row]
+            if not move:
+                continue
             atoms = atoms_list[g]
-            energies[g] = e[row]
             new_pos = pos[batch_idx == row].copy()
             for j in _fixed_indices(atoms):
                 new_pos[j] = atoms.positions[j]

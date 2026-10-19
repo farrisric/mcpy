@@ -21,6 +21,15 @@ Pass ``energy_only=False`` to keep forces, for example for ``run_md``.
 With ``enable_cueq=True``, mcpy repairs a checkpoint that MACE's cuEq conversion would otherwise corrupt (mh-1, ACEsuit/mace#1298).
 It sets the missing ``use_edge_irreps_first`` flag before the conversion, so cuEq gives the same energies as e3nn.
 A checkpoint that it cannot repair loads with the e3nn kernels, and a warning is logged.
+With cuEq on, ``torch.compile`` gives wrong forces for models with ``RealAgnosticResidualNonLinearInteractionBlock`` layers (mh-1).
+The energies stay right, but the forces are off by up to about 1 eV/Å, because of a miscompile in the torch inductor backend.
+For these models mcpy keeps cuEq on, turns ``compile_model`` off and logs a warning.
+``examples/05_pt_nanoparticle_h_che.py`` sets ``COMPILE_MODEL = False`` for this reason.
+A checkpoint string that looks like a path (it contains a path separator or ends in ``.model`` or ``.pt``) but does not exist raises ``FileNotFoundError``.
+
+The Alchemi classes sum the per-atom energies of each structure in float64.
+The model's own per-structure sum runs in the model dtype, and in float32 it rounds a total of about 1000 eV to the meV.
+``AlchemiFCalculator(steps=0)`` is a pure single point on every supported nvalchemi version: it does not build the optimizer and does not move the atoms.
 
 
 .. autoclass:: mcpy.calculators.BaseCalculator

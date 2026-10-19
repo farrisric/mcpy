@@ -20,6 +20,8 @@ class MoleculeInsertionMove(BaseMove):
     density is ``1 / V`` for the ``V`` the acceptance uses. Overlaps of the
     other member atoms are left to the energy. With ``min_insert`` the COM
     only keeps ``min_insert`` from every atom (a relaxation seed, ADR 0004).
+    Use ``min_insert`` only with a relaxing calculator: with single-point
+    energies it shifts mu by ``kT ln(V_free / V_seed)``.
 
     Sets ``last_exchange_count`` to the pre-move count of molecules of this
     species with COM inside the cell: the N of the textbook rigid-molecule
@@ -36,6 +38,9 @@ class MoleculeInsertionMove(BaseMove):
         super().__init__(cell, [name], seed)
         self.name = name
         self.molecule = molecule.copy()
+        # A template cut from an mcpy frame carries molecule_id; the move
+        # writes its own.
+        self.molecule.arrays.pop('molecule_id', None)
         self.molecule.positions -= self.molecule.get_center_of_mass()
         self._template_symbols = sorted(self.molecule.get_chemical_symbols())
         self.min_insert = min_insert

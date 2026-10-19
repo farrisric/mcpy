@@ -1,3 +1,4 @@
+import operator
 from random import Random
 
 
@@ -10,8 +11,9 @@ class RandomNumberGenerator:
 
         Parameters:
         seed (int, optional): Seed for reproducibility. Default is None.
+        Any integer type, numpy integers included.
         """
-        self.random = Random(seed)
+        self.random = Random(None if seed is None else operator.index(seed))
 
     def get_uniform(self, a=0.0, b=1.0) -> float:
         """

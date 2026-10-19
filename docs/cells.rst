@@ -48,11 +48,16 @@ See :doc:`species_radii` for a complete, reproducible workflow (including a read
 Sampling resolution (`mc_sample_points`)
 ----------------------------------------
 
-`mc_sample_points` sets the number of random points used in the free-volume estimate.
-Larger values reduce statistical noise on :math:`V_{\mathrm{free}}` at the cost of one
-up-front sweep per configuration change. In practice, :math:`10^5` points is a good default
-for nanoparticle- and slab-sized systems. The ensemble recomputes the estimate after every
-accepted move, and each deletion trial computes one for its post-deletion state.
+`mc_sample_points` sets the maximum number of random points used in the free-volume estimate.
+The first estimate draws all of them.
+Each later estimate draws only enough points for about 0.5% relative noise on
+:math:`V_{\mathrm{free}}`.
+For a free fraction :math:`f` of the previous estimate, that is
+:math:`N = (1-f)/(f \cdot 0.005^2)` points, between 5000 and `mc_sample_points`.
+A mostly free region thus needs far fewer points than the cap, and a nearly full one uses the cap.
+In practice, :math:`10^5` points is a good cap for nanoparticle- and slab-sized systems.
+The ensemble recomputes the estimate after every accepted move, and each deletion trial computes
+one for its post-deletion state.
 
 
 `Cell` -- full periodic simulation box
@@ -88,6 +93,10 @@ Key parameters:
 - `bottom_z` -- :math:`z`-coordinate of its lower face,
 - `species_radii` -- per-element exclusion radii,
 - `mc_sample_points` -- free-volume sampling resolution.
+
+The sub-slab is the region ``bottom_z <= z < bottom_z + custom_height``.
+The `a` and `b` box vectors must have no :math:`z` component, or the constructor raises ``ValueError``.
+A tilted `c` vector is allowed: the cell scales it, so the sub-slab keeps the shear of the box.
 
 .. code-block:: python
 
@@ -189,3 +198,19 @@ Choosing the right cell
 - `NullCell` -- moves that need no region: ``DisplacementMove``, ``ShakeMove``,
   ``PermutationMove``, ``BrownianMove`` and
   ``AlchemiBrownianMove`` use it internally. Its region queries raise an error.
+
+The `NullCell` moves pick atoms anywhere in the box, so they can carry an exchanged atom out of
+the region of the insertion and deletion moves.
+Outside the region the atom cannot be deleted, but it still counts in the total atom count of the
+acceptance, so it would suppress every later insertion.
+`GrandCanonicalEnsemble` therefore rejects any trial that changes the number of free exchanged
+atoms outside the ball of a `SphericalCell` or `DomeCell`.
+Both directions are blocked, so the move stays reversible.
+The check applies to atomic species; `MoleculeDisplacementMove` keeps each molecule's center of
+mass inside ``cell.is_point_inside`` itself.
+The top of a `CustomCell` that an insertion move uses is a hard wall for these moves too.
+A trial that carries an exchanged atom across it, in either direction, is rejected before the
+energy call.
+Atoms that the relaxation of a trial pushes above the top are kept and stay deletable.
+The floors are not guarded, on purpose: atoms that sink below the `DomeCell` support floor or the
+`CustomCell` floor are kept (absorbed into the support).

@@ -64,6 +64,42 @@ def mus_differ(mus):
     return len({tuple(sorted((mu or {}).items())) for mu in mus}) > 1
 
 
+def rng_fingerprint(ensemble):
+    """The state of every random stream of one replica, keyed by its role
+    (ensemble seed, move selector, each move, each cell). Picklable."""
+    fp = {'random_seed': getattr(ensemble, '_random_seed', None)}
+    selector = getattr(ensemble, 'move_selector', None)
+    if selector is not None:
+        fp['move selector'] = selector.rng.random.getstate()
+        for k, move in enumerate(selector.move_list):
+            fp[f'move {k}'] = move.rng.random.getstate()
+            np_rng = getattr(move, '_np_rng', None)
+            if np_rng is not None:
+                fp[f'move {k} numpy'] = repr(np_rng.bit_generator.state)
+    for k, cell in enumerate(getattr(ensemble, 'cells', None) or []):
+        rng = getattr(cell, '_rng', None)
+        if rng is not None:
+            fp[f'cell {k}'] = repr(rng.bit_generator.state)
+    return fp
+
+
+def check_independent_seeds(fingerprints):
+    """Raise ValueError when two replicas start any random stream in the same
+    state. Common random numbers couple the replicas, so the swap rule's
+    product measure no longer holds. Shared by both drivers."""
+    for a, fa in enumerate(fingerprints):
+        for b in range(a + 1, len(fingerprints)):
+            fb = fingerprints[b]
+            same = [k for k, v in fa.items()
+                    if v is not None and k in fb and fb[k] == v]
+            if same:
+                raise ValueError(
+                    f'replicas {a} and {b} share the random state of '
+                    f"{', '.join(same)}; seed every replica independently "
+                    '(derive each seed from rank). Common random numbers '
+                    'couple the replicas and bias the swap rule.')
+
+
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
@@ -79,7 +115,11 @@ class ReplicaExchange:
 
         ``gcmc_factory`` must produce per-rank unique output filenames (e.g.
         by including ``rank`` in the traj/outfile paths), otherwise all
-        ranks race on the same files.
+        ranks race on the same files. It must also seed every rank
+        independently (ensemble, move selector, moves and cells): ranks that
+        share a random stream raise ValueError on every rank.
+
+        An exception in the factory on any rank aborts the whole job.
         """
         if temperatures is None and mus is None:
             raise ValueError('Provide either temperatures or mus (one per rank).')
@@ -95,15 +135,28 @@ class ReplicaExchange:
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
 
-        if temperatures:
-            assert len(temperatures) == self.size, 'Number of temperatures must match MPI ranks.'
-            self.temperatures = temperatures
-            self.gcmc = gcmc_factory(T=temperatures[self.rank], rank=self.rank)
+        self.temperatures = None if temperatures is None else list(temperatures)
+        self.mus = None if mus is None else list(mus)
+        ladder = self.temperatures if temperatures is not None else self.mus
+        if len(ladder) != self.size:
+            raise ValueError(
+                f'{len(ladder)} ladder entries for {self.size} MPI ranks; '
+                'pass one per rank.')
 
-        if mus:
-            assert len(mus) == self.size, 'Number of mus must match MPI ranks.'
-            self.mus = mus
-            self.gcmc = gcmc_factory(mu=mus[self.rank], rank=self.rank)
+        self.logger = logging.getLogger(f'{__name__}.rank{self.rank}')
+        # The other ranks block in the allgather below; a factory error here
+        # (bad checkpoint, OOM) must not leave them hanging.
+        try:
+            if self.temperatures is not None:
+                self.gcmc = gcmc_factory(T=self.temperatures[self.rank], rank=self.rank)
+            else:
+                self.gcmc = gcmc_factory(mu=self.mus[self.rank], rank=self.rank)
+        except BaseException:
+            self.logger.exception('rank %d: gcmc_factory failed; aborting all ranks',
+                                  self.rank)
+            self.comm.Abort(1)
+            raise
+        check_independent_seeds(self.comm.allgather(rng_fingerprint(self.gcmc)))
 
         # getattr chain: CanonicalEnsemble has no ``units`` attribute (it
         # stores ``_beta`` directly) and is a supported temperature-ladder
@@ -127,10 +180,10 @@ class ReplicaExchange:
         # identical seeds gave every pair in a round the same u. Rank 0's
         # stream (seed + 0) is the one broadcast for the pairing, unchanged.
         self.rng = RandomNumberGenerator(seed=seed + self.rank)
-        self.logger = logging.getLogger(f'{__name__}.rank{self.rank}')
 
         self._outfile = outfile
         self._outfile_handle = None
+        self._log_started = False
         self.write_out_interval = write_out_interval
         self._global_minimum_file = global_minimum_file
 
@@ -282,21 +335,21 @@ class ReplicaExchange:
                     self.write_outfile(step)
 
                 self._re_step += 1
+
+            self._close_files()
+            self._write_global_minimum()
+            final_states = self.comm.gather(self.gcmc.get_state(), root=0)
+            if self.rank == 0:
+                self.logger.info('Final states gathered from all ranks:')
+                for i, state in enumerate(final_states):
+                    self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
+                                     f"Energy: {state['energy']:.3f}, "
+                                     f"Mu: {state.get('mu', 'N/A')}")
         except BaseException:
             self.logger.exception('rank %d failed; aborting all ranks', self.rank)
             self._close_files()
             self.comm.Abort(1)
             raise
-        self._close_files()
-        self._write_global_minimum()
-
-        final_states = self.comm.gather(self.gcmc.get_state(), root=0)
-        if self.rank == 0:
-            self.logger.info('Final states gathered from all ranks:')
-            for i, state in enumerate(final_states):
-                self.logger.info(f"Rank {i}: Temperature: {state['temperature']}, "
-                                 f"Energy: {state['energy']:.3f}, "
-                                 f"Mu: {state.get('mu', 'N/A')}")
 
     def _close_files(self) -> None:
         """Close this rank's files. Local only: safe on the error path."""
@@ -394,8 +447,11 @@ class ReplicaExchange:
         if self._outfile is None:
             return
         try:
-            with open(self._outfile, 'w') as outfile:
-                outfile.write('\n'.join(self._banner()) + '\n')
+            # A later run() continues the log, as the replica files do.
+            if not self._log_started:
+                with open(self._outfile, 'w') as outfile:
+                    outfile.write('\n'.join(self._banner()) + '\n')
+                self._log_started = True
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
             self.logger.exception('Error opening output file %s', self._outfile)

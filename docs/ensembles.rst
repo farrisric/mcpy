@@ -67,9 +67,19 @@ In a grand-canonical run, the user fixes:
 - `temperature` -- sets :math:`\beta = 1/(k_B T)`,
 - `mu` -- a dictionary mapping each chemical species to its reservoir chemical potential,
 - `species` -- the chemical symbols that the move set is allowed to insert or delete,
-- `cells` -- one or more cell objects defining the insertion region and providing the
-  accessible (free) volume,
+- `cells` -- the cells whose free volume the ensemble refreshes after every accepted move.
+  The ensemble adds the cell of every insertion move to this list automatically, because the
+  insertion acceptance reads the cached volume of its cell.
+  You can still pass other cells here,
 - `move_selector` -- the weighted collection of trial moves.
+
+The constructor checks the setup before the first energy call and raises ``ValueError`` when:
+
+- an entry of `species` is not an element symbol (molecular species go in `molecules`),
+- a move exchanges a species that is not declared or has no entry in `mu`,
+- a species is inserted and deleted with different probabilities per trial in the same cell
+  (see :doc:`moves`),
+- a ``molecule_id`` group matches no molecule template (see :doc:`molecular_adsorbates`).
 
 Acceptance rules
 ~~~~~~~~~~~~~~~~
@@ -135,6 +145,8 @@ Outputs
 - The current configuration is appended to `traj_file` (extended XYZ, with `energy=` and
   `Lattice=` on the comment line) every `trajectory_write_interval` steps, whether or not
   the last trial was accepted.
+- The header of `outfile` lists the run parameters, including the mcpy version (plus the
+  ``git describe`` output when mcpy runs from a git checkout).
 - A human-readable log is written to `outfile` every `outfile_write_interval` steps,
   containing the step index, particle count, current energy, and the per-interval
   acceptance ratio of each registered move. The interval counters are reset after every
@@ -230,6 +242,7 @@ Either channel can be disabled independently by passing ``None``. The four usefu
 
 - ``'a'`` (default) -- append every new minimum, building a history of improving structures.
   The last frame of the file is always the running best.
+  A new ensemble starts the file anew; a later ``run()`` of the same ensemble continues it.
 - ``'w'`` -- overwrite, keeping a single frame with the current best configuration.
 
 Each minima frame carries ``step=`` and ``score=`` in its comment line, so the improvement
@@ -309,9 +322,10 @@ Two parameters control this estimator on every cell:
   most of its time proposing overlapping insertions; if they are too large, the accessible
   volume collapses and insertions become impossible. See :doc:`species_radii` for a
   reproducible workflow to calibrate them from short relaxation trials.
-- `mc_sample_points` -- number of random points used in the estimate. More points reduce
-  statistical noise on :math:`V_{\mathrm{free}}` at the cost of a single up-front sweep per
-  configuration change.
+- `mc_sample_points` -- the maximum number of random points used in the estimate.
+  The first estimate draws all of them.
+  Later estimates draw only enough for about 0.5% relative noise at the free fraction of the
+  previous estimate (see :doc:`cells`).
 
 With or without relaxation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -343,14 +357,19 @@ Each pair accepts or rejects its swap with the rule in :ref:`replica-exchange-sw
 After an accepted swap, the two ranks exchange configurations and energies.
 Each rank keeps its own temperature and chemical potentials.
 
-Launch one MPI rank per replica, e.g. ``mpirun -n 4 python my_run.py`` for a four-rung
-ladder; :doc:`examples/replica_exchange` has a complete script.
+Launch one MPI rank per replica, e.g. ``mpirun -n 4 python -m mpi4py my_run.py`` for a
+four-rung ladder; :doc:`examples/replica_exchange` has a complete script.
+``python -m mpi4py`` makes an uncaught exception on one rank abort all ranks.
 
 Notes:
 
 - the ensemble factory must produce per-rank output filenames (e.g. by including `rank` in
   the trajectory, log, and minima paths) so that ranks do not race on the same files;
 - one MPI rank corresponds to one replica;
+- the factory must seed every rank independently: the ensemble, the move selector, every move
+  and every cell. Derive each seed from `rank`. If two ranks start any random stream in the same
+  state, the constructor raises ``ValueError`` on every rank, because common random numbers
+  couple the replicas and bias the swap rule;
 - at the end of the run, rank 0 collects each replica's running best (via ``comm.gather``)
   and writes it to ``global_minimum_file`` (default ``"global_minimum.xyz"``; pass ``None``
   to disable): one frame on a temperature ladder, one frame per rung on a :math:`\mu`
@@ -414,7 +433,8 @@ Requirements:
   optional ``AlchemiCalculator`` does;
 - ``gcmc_factory(T=..., rank=i)`` (or ``mu=..., rank=i`` for chemical-potential ladders) must
   return a fresh, independently-seeded :class:`GrandCanonicalEnsemble` with its own cells and
-  move selector.
+  move selector. Shared objects or equal random streams between two replicas raise
+  ``ValueError``.
 
 Swaps use the same rule as :class:`ReplicaExchange` (see :ref:`replica-exchange-swap`).
 

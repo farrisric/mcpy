@@ -1,10 +1,18 @@
+import logging
+
 import numpy as np
 from scipy.spatial import cKDTree
 
 from .base_cell import BaseCell
 
+logger = logging.getLogger(__name__)
 
 _MAX_INSERT_ATTEMPTS = 1000
+# Adaptive free-volume sampling: draw enough points that the relative noise
+# sqrt((1 - f) / (f N)) of the estimate stays near this target, given the
+# free fraction f of the previous estimate.
+_TARGET_REL_NOISE = 0.005
+_MIN_SAMPLE_POINTS = 5_000
 
 
 class Cell(BaseCell):
@@ -34,8 +42,12 @@ class Cell(BaseCell):
                      :meth:`get_random_point` and the free-volume sampler.
                      ``None`` seeds that generator from OS entropy, so the
                      run is not repeatable.
-        :param mc_sample_points: Number of random points used to estimate
-                                 the free volume when ``species_radii`` is set.
+        :param mc_sample_points: Maximum number of random points used to
+                                 estimate the free volume when
+                                 ``species_radii`` is set. The first estimate
+                                 draws this many; later ones draw only enough
+                                 for about 0.5% relative noise at the previous
+                                 free fraction (see :attr:`mc_sample_points`).
         """
         super().__init__()
         self.original_dimensions = np.array(atoms.cell)
@@ -47,6 +59,27 @@ class Cell(BaseCell):
         self.volume = self.cell_volume
         self._rng = np.random.default_rng(seed)
 
+    @property
+    def mc_sample_points(self):
+        """Points the next free-volume estimate draws. Adaptive, at most
+        ``max_sample_points``."""
+        return self._n_samples
+
+    @mc_sample_points.setter
+    def mc_sample_points(self, n):
+        """Set the cap; the next estimate draws the full cap."""
+        self.max_sample_points = self._n_samples = int(n)
+
+    def _adapt_sample_points(self, free_fraction):
+        """Pick the next sample count from the free fraction of the domain
+        just measured: N = (1 - f) / (f * target^2), clamped to the cap."""
+        cap = self.max_sample_points
+        if free_fraction <= 0.0:
+            self._n_samples = cap
+            return
+        n = (1.0 - free_fraction) / (free_fraction * _TARGET_REL_NOISE ** 2)
+        self._n_samples = int(np.clip(np.ceil(n), min(_MIN_SAMPLE_POINTS, cap), cap))
+
     def calculate_volume(self, atoms):
         """Store the free volume for ``atoms`` (see :meth:`free_volume`)."""
         self.volume = self.free_volume(atoms)
@@ -56,23 +89,29 @@ class Cell(BaseCell):
 
         The region volume minus the exclusion spheres of every atom
         (periodic images included), estimated from ``mc_sample_points``
-        uniform points. Exact region volume when nothing can be excluded.
+        uniform points, then adapts that count for the next call. Exact
+        region volume when nothing can be excluded.
         """
         trees = self._exclusion_trees(atoms)
         if not trees:
             return self._region_volume()
+        n_drawn = self.mc_sample_points
         points, domain_volume = self._volume_samples()
         n_free = np.count_nonzero(~self._covered(points, trees))
-        return self._clamp_free_volume(
-            domain_volume * n_free / self.mc_sample_points, domain_volume)
+        volume = self._clamp_free_volume(domain_volume * n_free / n_drawn, domain_volume)
+        self._adapt_sample_points(n_free / n_drawn)
+        return volume
 
     def get_random_free_point(self, atoms, clearance=None):
         """A point uniform over the free volume of ``atoms``.
 
         Redraws :meth:`get_random_point` until the point is outside every
         exclusion sphere, the same test :meth:`free_volume` counts with.
-        Returns ``None`` when ``_MAX_INSERT_ATTEMPTS`` draws all land in
-        excluded volume (region effectively full).
+        After ``_MAX_INSERT_ATTEMPTS`` misses it takes the first free point
+        of one batch of free-volume samples (still uniform over the free
+        volume). Returns ``None``, with a warning, when that batch misses too.
+        Giving up silently would thin insertions but not deletions in a
+        nearly full region.
 
         With ``clearance`` the point only keeps ``clearance`` from every
         atom instead, a seed for a relaxed trial whose acceptance still uses
@@ -83,6 +122,14 @@ class Cell(BaseCell):
             point = self.get_random_point()
             if not trees or not self._covered(point[None, :], trees)[0]:
                 return point
+        points, _ = self._volume_samples()
+        free = np.flatnonzero(~self._covered(points, trees))
+        if len(free):
+            return points[free[0]]
+        logger.warning(
+            'No free insertion point in %d + %d draws: the region is '
+            'effectively full and this insertion is lost.',
+            _MAX_INSERT_ATTEMPTS, len(points))
         return None
 
     def get_random_point(self):
@@ -101,8 +148,12 @@ class Cell(BaseCell):
     def _volume_samples(self):
         """``mc_sample_points`` uniform draws over a domain that contains the
         region, keeping only the ones inside the region, and the domain
-        volume. The free volume is ``domain_volume * n_free / n_drawn``."""
-        frac = self._rng.random((self.mc_sample_points, 3))
+        volume. The free volume is ``domain_volume * n_free / n_drawn``.
+
+        Draws the full cap and keeps the first ``mc_sample_points``: the
+        adaptive count follows GPU-noisy positions, and a count-sized draw
+        would shift the seeded stream that later insertion points use."""
+        frac = self._rng.random((self.max_sample_points, 3))[:self.mc_sample_points]
         return frac @ self.dimensions + self.offset, self.cell_volume
 
     def _bounds(self):

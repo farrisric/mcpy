@@ -24,31 +24,43 @@ def molecule_com(atoms, members):
     wrapped back into the box so region-cell inside tests see a point in
     the primary cell.
     """
-    pos = atoms.positions[members]
-    ref = pos[0]
+    return _coms(atoms, [np.asarray(members)])[0]
+
+
+def _coms(atoms, groups):
+    """Centers of mass of several index groups in one vectorized pass
+    (one ``find_mic`` and one ``wrap_positions`` for all groups)."""
+    if not groups:
+        return np.empty((0, 3))
+    idx = np.concatenate(groups)
+    sizes = np.fromiter((len(g) for g in groups), dtype=int, count=len(groups))
+    starts = np.concatenate(([0], np.cumsum(sizes)[:-1]))
+    pos = atoms.positions[idx]
+    ref = np.repeat(pos[starts], sizes, axis=0)
     diff = pos - ref
     use_mic = bool(np.any(np.asarray(atoms.pbc)))
     if use_mic:
         diff = find_mic(diff, atoms.cell, pbc=atoms.pbc)[0]
-    masses = atoms.get_masses()[members]
-    com = ref + (diff * masses[:, None]).sum(axis=0) / masses.sum()
+    masses = atoms.get_masses()[idx]
+    total = np.add.reduceat(masses, starts)
+    com = pos[starts] + np.add.reduceat(diff * masses[:, None], starts) / total[:, None]
     if use_mic:
-        com = wrap_positions([com], atoms.cell, pbc=atoms.pbc)[0]
+        com = wrap_positions(com, atoms.cell, pbc=atoms.pbc)
     return com
 
 
-def exchangeable_predicate(cell):
-    """The cell's exchangeable-region point predicate.
+def molecule_groups(atoms):
+    """``{id: member indices}`` for every molecule id >= 0, in id order."""
+    ids = atoms.arrays.get('molecule_id')
+    if ids is None:
+        return {}
+    order = np.argsort(ids, kind='stable')
+    uniq, starts = np.unique(ids[order], return_index=True)
+    return {int(mid): members for mid, members
+            in zip(uniq, np.split(order, starts[1:])) if mid >= 0}
 
-    Falls back to ``is_point_inside`` for user cells written against the
-    original single-predicate duck-type contract (pre-1.4.0), which
-    ``BaseCell`` subclasses inherit as a default but plain duck-typed cells
-    do not.
-    """
-    return getattr(cell, 'is_point_exchangeable', None) or cell.is_point_inside
 
-
-def find_molecules(atoms, template_symbols, cell=None):
+def find_molecules(atoms, template_symbols, cell=None, proposal_region=False):
     """Index groups of whole molecules matching ``template_symbols``.
 
     ``template_symbols`` is the sorted list of the template's chemical
@@ -57,32 +69,30 @@ def find_molecules(atoms, template_symbols, cell=None):
     returned; ``None`` skips the spatial filter (used by the grand-potential
     bookkeeping). The exchangeable region is not always the proposal region:
     see :meth:`mcpy.cell.BaseCell.is_point_exchangeable`.
+    ``proposal_region=True`` tests ``cell.is_point_inside`` instead, the
+    region displacement moves keep molecules in.
     """
-    ids = atoms.arrays.get('molecule_id')
-    if ids is None:
-        return []
-    predicate = None if cell is None else exchangeable_predicate(cell)
     symbols = np.asarray(atoms.get_chemical_symbols())
-    groups = []
-    for mid in np.unique(ids):
-        if mid < 0:
-            continue
-        members = np.where(ids == mid)[0]
-        if sorted(symbols[members]) != list(template_symbols):
-            continue
-        if predicate is not None and not predicate(molecule_com(atoms, members)):
-            continue
-        groups.append(members)
-    return groups
+    template = list(template_symbols)
+    groups = [m for m in molecule_groups(atoms).values()
+              if sorted(symbols[m]) == template]
+    if cell is None or not groups:
+        return groups
+    predicate = cell.is_point_inside if proposal_region else cell.is_point_exchangeable
+    return [m for m, com in zip(groups, _coms(atoms, groups)) if predicate(com)]
+
+
+def quaternion_matrix(w, x, y, z):
+    """Rotation matrix of the unit quaternion ``(w, x, y, z)``."""
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+    ])
 
 
 def random_rotation_matrix(rng):
     """Uniform random 3x3 rotation matrix (normalized 4-Gaussian quaternion)."""
     q = np.array([rng.get_gaussian() for _ in range(4)])
     q /= np.linalg.norm(q)
-    w, x, y, z = q
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
-        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
-        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
-    ])
+    return quaternion_matrix(*q)

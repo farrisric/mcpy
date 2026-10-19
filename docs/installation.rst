@@ -53,9 +53,10 @@ NVIDIA Alchemi backend (optional)
 
 ``AlchemiCalculator`` and ``AlchemiFCalculator`` evaluate MACE on the GPU
 through `nvalchemi-toolkit <https://github.com/NVIDIA/nvalchemi-toolkit>`_,
-and ``AlchemiFCalculator`` also relaxes each trial with a GPU-native FIRE
-optimizer.
-They are the backend of ``examples/03`` and ``examples/04``.
+and ``AlchemiFCalculator`` also relaxes each trial with a GPU-native
+optimizer: FIRE by default, or FIRE2 or LBFGS with ``optimizer=``
+(LBFGS needs nvalchemi newer than 0.2.0).
+They are the backend of ``examples/03``, ``examples/04`` and ``examples/05``.
 Install them with the ``alchemi`` extra:
 
 .. code-block:: bash
@@ -105,8 +106,9 @@ example four ranks for four temperatures:
 
 .. code-block:: bash
 
-   mpirun -n 4 python re_lj.py
+   mpirun -n 4 python -m mpi4py re_lj.py
 
+``python -m mpi4py`` makes an uncaught exception on one rank abort all ranks.
 :doc:`examples/replica_exchange` gives a complete ``re_lj.py``.
 On a single GPU, ``BatchedReplicaExchange`` is the better choice: it needs no
 MPI and runs as a plain Python process

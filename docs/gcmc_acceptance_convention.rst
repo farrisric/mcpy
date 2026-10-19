@@ -37,8 +37,9 @@ Two conventions for ``N``
 
 total atom count (the convention mcpy uses)
     ``N = len(atoms)`` before the move: every atom of every species, including
-    the fixed substrate. This is what ``do_gcmc_step`` and
-    ``BatchedReplicaExchange`` pass today (``self.n_atoms`` / ``r.n_atoms``).
+    the fixed substrate. This is what ``_commit_or_rollback`` passes today
+    (``self.n_atoms``). ``GrandCanonicalEnsemble`` and
+    ``BatchedReplicaExchange`` both score their trials with it.
 
 per-species exchangeable count (textbook)
     ``N`` = number of atoms *of the exchanged species* inside the insertion
@@ -111,26 +112,113 @@ With it, the proposal keeps ``min_insert`` from every atom, inside the
 ``species_radii`` spheres too, and the acceptance still uses the
 ``species_radii`` free volume.
 The relaxation moves the seed into that free volume.
-Under unrelaxed trials this mismatch is a bias, so leave ``min_insert``
-unset when the calculator does not relax.
+Under unrelaxed trials this mismatch is a bias: it shifts :math:`\mu` by
+:math:`k_BT \ln(V_\mathrm{free}/V_\mathrm{seed})`.
+Leave ``min_insert`` unset when the calculator does not relax.
+``GrandCanonicalEnsemble`` warns (``UserWarning``) when a move sets
+``min_insert`` and the calculator has no relaxation steps.
 
 Remaining limits:
 
-- ``V`` is a Monte Carlo estimate with ``mc_sample_points`` points.
+- ``V`` is a Monte Carlo estimate from ``n`` uniform points.
   Its relative noise is about :math:`\sqrt{(1-f)/(f\,n)}` for a free
   fraction ``f``.
+  ``mc_sample_points`` is the maximum ``n``.
+  The first estimate uses all of them, and each later estimate picks ``n``
+  from the previous ``f`` so that the noise is about 0.5%.
 - The rule is a hard core only for proposals.
   A displacement or a relaxation can move a particle into an exclusion
   sphere.
   A deletion can leave such a state, but an insertion cannot enter it.
   The sampling is exact only when the exclusion radii are also hard cores
   of the potential.
-  With a relaxing calculator the sampling is already basin-level (ADR 0002).
+  For molecules the rule tests the center of mass only.
+  An insertion can put an atom of molecule B within ``r`` of the center of
+  mass of molecule A, and then the deletion of A has no reverse insertion.
+  So for molecules the potential must forbid any atom within ``r`` of the
+  center of mass of another molecule.
+  Between atoms, that is a hard core of ``r`` plus the largest distance of a
+  member atom from its center of mass.
+  This holds even without displacement moves or relaxation.
+- With a relaxing calculator the sampling is basin-level (ADR 0002), and
+  the effective chemical potential differs from ``mu``: see
+  `Relaxed trials shift the effective mu`_.
 - Periodic images are taken one box length in each direction, so every
   radius must be shorter than the box.
 
 Decision records: ``docs/adr/0003-insertion-proposal-matches-free-volume.md``
 and ``docs/adr/0004-min-insert-is-a-relaxation-seed-clearance.md``.
+
+
+Relaxed trials shift the effective mu
+-------------------------------------
+
+With relaxed trials (ADR 0002), every insertion point in the catchment of
+a basin ``j`` relaxes into that basin.
+The catchment volume :math:`v_j` is the part of the free volume ``V``
+whose points relax into ``j``.
+Assume that a deletion from :math:`S+j` relaxes back to :math:`S`.
+Detailed balance between the two states then gives
+
+.. math::
+
+   \frac{\pi(S+j)}{\pi(S)} =
+   \frac{v_j\,(N_s+1)}{(N+1)\,\Lambda^3}\;
+   e^{\beta(\mu - \varepsilon_j)},
+   \qquad
+   \varepsilon_j = E(S+j) - E(S).
+
+:math:`N_s` is the number of deletion candidates of the species in
+:math:`S`, and ``N`` is the count of the acceptance rule.
+For atoms ``N`` is the total atom count; for molecules :math:`N = N_s`,
+and the two counts cancel.
+``V`` cancels too: the proposal density :math:`1/V` and the acceptance
+factor ``V`` remove each other.
+
+A phase diagram or a computational hydrogen electrode (CHE) analysis gives
+each state the weight :math:`e^{\beta(\mu - \varepsilon_j)}` instead.
+Relative to that axis, the run samples at :math:`\mu + \delta` with
+
+.. math::
+
+   \delta = k_BT \ln\frac{v_j}{\Lambda^3}
+           + k_BT \ln\frac{N_s+1}{N+1}.
+
+The first term is positive for any catchment larger than :math:`\Lambda^3`.
+The second term is negative with the total atom count, and zero for
+molecules.
+
+Worked numbers, for O on the Ag(111) slab of :doc:`getting_started`
+(4x4x3 slab, a 5 Å ``CustomCell`` that starts 0.5 Å above the top layer,
+radii Ag 2.14 Å and O 0.5 Å, 500 K):
+
+- ``V`` is about 442 Å\ :sup:`3`.
+  If the 32 hollow sites (fcc and hcp) share it equally,
+  :math:`v_j \approx 14` Å\ :sup:`3`.
+- :math:`\Lambda_\mathrm{O} = 0.195` Å, so the volume term is +0.32 eV.
+- With ``N`` = 48 + :math:`N_\mathrm{O}`, the count term is -0.17 eV at
+  :math:`N_\mathrm{O} = 0`, -0.08 eV at 8 and -0.06 eV at 16.
+- So :math:`\delta` is +0.16 eV on the clean slab, +0.24 eV at 8 O and
+  +0.27 eV at 16 O.
+
+For H on the Pt\ :sub:`55` particle of ``examples/05_pt_nanoparticle_h_che.py``
+at 300 K, :math:`\Lambda_\mathrm{H} = 1.0` Å.
+The volume term is then small (+0.04 eV for :math:`v_j = 5` Å\ :sup:`3`),
+and the count term is -0.10 eV on the bare particle.
+
+:math:`\delta` is not a constant.
+It depends on the cell height and ``species_radii`` (through :math:`v_j`),
+on the temperature (through :math:`k_BT` and :math:`\Lambda`), and on the
+optimizer and its settings (which seeds reach which basin).
+With the total atom count it also depends on the coverage and on the size
+of the substrate.
+
+Thus the :math:`\Delta\mu` (or the electrode potential ``U``) of a run or
+of a replica-exchange rung is a nominal value.
+Do not read a phase boundary from the rung where the coverage jumps.
+Read it from ``plot_phase_diagram`` (:doc:`phase_diagrams`), which
+computes the free energy of each frame from its energy and composition
+only, on the :math:`e^{\beta(\mu - \varepsilon)}` axis.
 
 
 Why mcpy keeps the total atom count
@@ -191,10 +279,10 @@ Change history
 Where this lives in the code and tests
 --------------------------------------
 
-- ``mcpy/ensembles/grand_canonical_ensemble.py`` - ``do_gcmc_step`` passes
-  ``self.n_atoms`` to ``_acceptance_condition``.
+- ``mcpy/ensembles/grand_canonical_ensemble.py`` - ``_commit_or_rollback``
+  passes ``self.n_atoms`` to ``_acceptance_condition`` for atomic moves.
 - ``mcpy/ensembles/batched_replica_exchange.py`` - ``_batched_single_move``
-  passes ``r.n_atoms``.
+  calls the same ``_commit_or_rollback`` on each replica.
 - ``tests/test_acceptance.py`` - ``test_do_gcmc_step_feeds_total_atom_count``
   guards the convention; ``test_total_vs_perspecies_count_shifts_effective_mu``
   and ``test_perspecies_count_inserts_where_total_rejects`` quantify the gap.
@@ -218,10 +306,27 @@ the move's cell, reported by the move itself through
 total molecular mass, and ``delta_particles`` remains :math:`\pm 1` (one
 molecule per move).
 
-Orientations are sampled uniformly, so the rotational partition function is
-absorbed into :math:`\mu`: the chemical potential passed for a molecular
-species must be the **full** molecular chemical potential (translational,
-rotational, and internal contributions of the reference reservoir included).
+The acceptance has no rotational factor, and orientations are drawn
+uniformly.
+Uniform orientations do not supply the rotational partition function
+:math:`q_\mathrm{rot}` of the reservoir.
+Which :math:`\mu` to pass depends on the trial energies:
+
+- **Relaxed trials** (the default): pass the full thermochemical chemical
+  potential, :math:`\mu = E_\mathrm{mol} + \Delta\mu(T, p)`, with the
+  translational, rotational and internal terms of the gas.
+  The relaxation moves each seed into a basin, so the orientation of the
+  seed matters little, and the full :math:`\mu` is a good approximation for
+  adsorbates.
+  It is an approximation, not an exact rule (see
+  `Relaxed trials shift the effective mu`_).
+- **Single-point trials** (``steps=0`` or a calculator that does not
+  relax): pass
+  :math:`\mu = E_\mathrm{mol} + k_BT \ln(p\,\Lambda^3 / k_BT)`, with
+  :math:`\Lambda` from the total molecular mass and no :math:`q_\mathrm{rot}`.
+  This is the convention of LAMMPS ``fix gcmc``.
+  The full thermochemical :math:`\mu` would be too low by
+  :math:`k_BT \ln q_\mathrm{rot}`.
 
 Atomic moves are unaffected: for them ``get_exchange_count()`` returns
 ``None`` and the ensembles fall back to the total-atom count documented
@@ -234,13 +339,16 @@ the counted region undercounts ``N`` and inflates
 ``cell.is_point_exchangeable(com)``, not ``cell.is_point_inside(com)``. The
 two differ for :class:`mcpy.cell.CustomCell`, whose exchangeable region drops
 the z upper bound exactly as ``get_atoms_specie_inside_cell`` already does for
-single atoms, so a molecule that desorbs above the cell top stays both
-countable and deletable. The floor exclusion is kept on both paths: molecules
+single atoms, so a molecule that relaxation pushes above the cell top stays
+both countable and deletable. The floor exclusion is kept on both paths: molecules
 that sink below ``bottom_z`` remain excluded, and the buried-species
 irreversibility noted above applies to them unchanged.
-:class:`mcpy.moves.MoleculeDisplacementMove` tests the same predicate for its
-one-way-door guard, so the candidacy region and the region a molecule may be
-displaced within always agree.
+:class:`mcpy.moves.MoleculeDisplacementMove` picks its candidates with
+``cell.is_point_inside(com)`` and rejects a displacement whose new center of
+mass fails the same test.
+So the region it picks from and the region it moves within agree, and for a
+``CustomCell`` the top is a hard wall: no insertion can put a molecule
+above it.
 
 ``V`` in the molecular acceptance is the cell *free* volume, not the full
 cell volume.

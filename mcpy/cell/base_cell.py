@@ -75,7 +75,8 @@ class BaseCell(ABC):
 
     def is_point_exchangeable(self, point):
         """Whether a molecule whose center of mass sits at ``point`` may be
-        exchanged with the reservoir (counted, deleted, displaced).
+        exchanged with the reservoir (counted, deleted). Displacement moves
+        test :meth:`is_point_inside` instead.
 
         The point counterpart of ``get_atoms_specie_inside_cell``, and the
         predicate the molecule moves use. It is separate from

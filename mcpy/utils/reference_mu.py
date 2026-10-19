@@ -9,6 +9,7 @@ import logging
 
 import numpy as np
 from ase.build import bulk, molecule
+from ase.eos import EquationOfState
 from ase.units import kB
 
 logger = logging.getLogger(__name__)
@@ -76,26 +77,30 @@ def derive_mu_bulk(calculator, symbol: str = 'Ag',
                    scan: float = 0.04, n_points: int = 7) -> float:
     """Bulk energy per atom at the potential's own lattice constant.
 
-    Scans ``n_points`` lattice constants in ``a * [1-scan, 1+scan]``,
-    fits a parabola and evaluates its minimum, so the reference does not
-    inherit the lattice constant of whatever potential ``a`` came from.
+    Scans ``n_points`` lattice constants in ``a * [1-scan, 1+scan]`` and
+    fits an equation of state (``ase.eos``, SJEOS) to E(V), so the reference
+    does not inherit the lattice constant of whatever potential ``a`` came
+    from. The cell is the cubic conventional cell, so ``crystalstructure``
+    must be cubic (fcc, bcc, sc, diamond, ...); hcp is not supported.
     """
     scales = np.linspace(1.0 - scan, 1.0 + scan, n_points)
-    energies = []
+    volumes, energies = [], []
     for s in scales:
         atoms = bulk(symbol, crystalstructure, a=a * s, cubic=True)
+        volumes.append(atoms.get_volume() / len(atoms))
         energies.append(float(calculator.get_potential_energy(atoms)) / len(atoms))
-    coeffs = np.polyfit(scales, energies, 2)
-    s_min = -coeffs[1] / (2.0 * coeffs[0])
-    if coeffs[0] <= 0.0 or not scales[0] <= s_min <= scales[-1]:
+    try:
+        v0, mu, _ = EquationOfState(volumes, energies).fit()
+    except ValueError:  # SJEOS: no minimum
+        v0 = np.nan
+    if not min(volumes) <= v0 <= max(volumes):
         logger.warning(
             'Bulk %s energy minimum fell outside the scanned lattice '
-            'constants %.3f-%.3f A (fit minimum at scale %.3f); using the '
-            'lowest sampled point. Pass a closer ``a``.',
-            symbol, a * scales[0], a * scales[-1], s_min)
+            'constants %.3f-%.3f A; using the lowest sampled point. '
+            'Pass a closer ``a``.', symbol, a * scales[0], a * scales[-1])
         mu = float(np.min(energies))
     else:
-        mu = float(np.polyval(coeffs, s_min))
+        mu = float(mu)
         logger.info('Derived mu(%s) = %.4f eV at a = %.4f A from the potential',
-                    symbol, mu, a * s_min)
+                    symbol, mu, a * (v0 / volumes[0]) ** (1 / 3) * scales[0])
     return mu

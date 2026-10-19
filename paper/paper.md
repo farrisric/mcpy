@@ -199,8 +199,10 @@ so that the published workflows can be reproduced and extended by other groups.
 ![(a) Hydrogenation phase diagram of a 201-atom palladium–silver nanoparticle
 (Pd$_{151}$Ag$_{50}$) obtained with replica-exchange GCMC in `mcpy`, driven by
 the small AGNESI MACE potential [@mace_foundation]. The free energy of formation $\Delta G$ (in eV) is
-shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$
-(equivalently $\log_{10}(p_\mathrm{H}/p_0)$ at $T = 300$ K); the insets show some of 
+shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$.
+The top axis converts $\Delta\mu_\mathrm{H}$ into $\log_{10}(p_{\mathrm{H}_2}/p_0)$ at $T = 300$ K with $p = p_0$ at $\Delta\mu_\mathrm{H} = 0$.
+This neglects the standard chemical potential of H$_2$ at 300 K ($-0.16$ eV per H) and the H$_2$ zero-point energy ($+0.14$ eV per H), so the true pressures are about 0.8 decades higher than the axis shows.
+The insets show some of
 the most stable Pd$_{151}$Ag$_{50}$H$_z$ structures sampled for different
 chemical-potential windows, from the bare particle at low $\mu_\mathrm{H}$ to a
 hydrogen-loaded Pd$_{151}$Ag$_{50}$H$_{123}$ at high pressure, highlighting the change in chemical ordering induced by the increase in hydrogen coverage. The chemical

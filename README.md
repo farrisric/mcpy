@@ -19,7 +19,7 @@ Documentation: <https://mc-py.readthedocs.io>
 - **Replica exchange** along a temperature or chemical-potential ladder, over MPI or in one process on one GPU with batched energy evaluation.
 - **Relaxed trial energies** (the hybrid GCMC scheme of Senftle et al.): each trial can be relaxed before the acceptance test, which makes GCMC workable on dense metal surfaces.
 - **Canonical Monte Carlo and basin hopping**: permutation, displacement, shake and Brownian moves, and a running file of the lowest-energy configurations.
-- **Optional GPU backend**: MACE evaluation and FIRE relaxation through NVIDIA's `nvalchemi-toolkit`.
+- **Optional GPU backend**: MACE evaluation and relaxation (FIRE by default, `optimizer=` for FIRE2 or LBFGS) through NVIDIA's `nvalchemi-toolkit`.
 - **Phase diagrams**: post-processing of a chemical-potential sweep into surface and nanoparticle phase diagrams.
 
 ## Validation

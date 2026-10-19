@@ -3,17 +3,18 @@ from ase import Atoms
 from ase.geometry import find_mic, wrap_positions
 
 from .base_move import PROPOSAL_REJECTED, BaseMove
-from .molecule_utils import (exchangeable_predicate, find_molecules,
-                             molecule_com, random_rotation_matrix)
+from .molecule_utils import (find_molecules, molecule_com,
+                             quaternion_matrix, random_rotation_matrix)
 from ..cell import Cell
 
 
 class MoleculeDisplacementMove(BaseMove):
     """Rigid-body displacement of one molecule.
 
-    Picks a molecule of this species (center of mass inside the cell)
-    uniformly, translates its center of mass by a random vector drawn
-    uniformly from a sphere of radius ``max_displacement``, and applies a
+    Picks a molecule of this species (center of mass inside the cell's
+    proposal region, ``cell.is_point_inside``) uniformly, translates its
+    center of mass by a random vector drawn uniformly from a sphere of
+    radius ``max_displacement``, and applies a
     uniform random rotation about the (displaced) center of mass. Both parts
     of the proposal are symmetric, so the move enters the standard Metropolis
     branch (``delta_N = 0``); the ensemble rolls back on rejection via its
@@ -32,7 +33,7 @@ class MoleculeDisplacementMove(BaseMove):
                  max_displacement: float = 0.5,
                  max_angle: float = None) -> None:
         """``max_angle`` (radians) caps the rotation per trial: a uniform
-        random axis with a uniform angle in [0, max_angle] — still a
+        random axis with a uniform angle in [0, max_angle], still a
         symmetric proposal. ``None`` keeps the full uniform SO(3) rotation,
         which is too aggressive for strongly anchored adsorbates (measured
         ~5% acceptance for CO on CuPd vs ~60% for physisorbed H2O)."""
@@ -47,7 +48,8 @@ class MoleculeDisplacementMove(BaseMove):
         ``atoms`` (mutated), 0, name; ``(False, 0, name)`` if the cell holds
         no molecule of this species; ``(PROPOSAL_REJECTED, 0, name)`` with
         ``atoms`` untouched if the displacement would leave the region."""
-        groups = find_molecules(atoms, self._template_symbols, self.cell)
+        groups = find_molecules(atoms, self._template_symbols, self.cell,
+                                proposal_region=True)
         if len(groups) == 0:
             return False, 0, self.name
         members = self.rng.random.choice(groups)
@@ -64,13 +66,14 @@ class MoleculeDisplacementMove(BaseMove):
         # reverse proposal would have zero probability (the molecule stops
         # being a candidate), so crossing would be a one-way door that
         # strands molecules outside the grand-canonical bookkeeping. The
-        # region tested is the exchangeable one -- the same predicate that
-        # decides candidacy in ``find_molecules`` -- so the door stays
-        # two-way for every cell type.
+        # region tested is the proposal region (``is_point_inside``), the
+        # same predicate that picks the candidates, so the door stays
+        # two-way. The exchangeable region would let a molecule climb above
+        # a CustomCell top, where no insertion can put one back.
         new_com = com + shift
         if np.any(np.asarray(atoms.pbc)):
             new_com = wrap_positions([new_com], atoms.cell, pbc=atoms.pbc)[0]
-        if not exchangeable_predicate(self.cell)(new_com):
+        if not self.cell.is_point_inside(new_com):
             # A proposed move with zero acceptance: a rejection, not a
             # failure to propose, so it lowers the reported acceptance.
             return PROPOSAL_REJECTED, 0, self.name
@@ -101,10 +104,4 @@ class MoleculeDisplacementMove(BaseMove):
                 break
         axis /= norm
         angle = self.rng.get_uniform() * self.max_angle
-        w = np.cos(angle / 2.0)
-        x, y, z = np.sin(angle / 2.0) * axis
-        return np.array([
-            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
-            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
-            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
-        ])
+        return quaternion_matrix(np.cos(angle / 2.0), *(np.sin(angle / 2.0) * axis))

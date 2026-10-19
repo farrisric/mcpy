@@ -1,6 +1,6 @@
 from ase import Atoms
 
-from .base_move import BaseMove
+from .base_move import BaseMove, free_atom_count
 from ..cell import Cell
 
 
@@ -16,7 +16,12 @@ class InsertionMove(BaseMove):
     is ``1 / V`` for the free volume ``V`` the acceptance uses. With
     ``min_insert`` the position only keeps ``min_insert`` from every atom:
     a seed that the relaxation moves into the ``species_radii`` free volume
-    the acceptance uses (ADR 0004).
+    the acceptance uses (ADR 0004). Use ``min_insert`` only with a relaxing
+    calculator: with single-point energies it shifts mu by
+    ``kT ln(V_free / V_seed)``.
+
+    ``max_atoms`` caps the free atoms (``molecule_id < 0``) of the chosen
+    species in the whole system, substrate included.
     """
     def __init__(self,
                  cell: Cell,
@@ -37,8 +42,7 @@ class InsertionMove(BaseMove):
         selected_species = self.rng.random.choice(self.species)
 
         if self.max_atoms is not None:
-            n_species = atoms.get_chemical_symbols().count(selected_species)
-            if n_species >= self.max_atoms:
+            if free_atom_count(atoms, selected_species) >= self.max_atoms:
                 return False, 1, selected_species
 
         insert_position = self.cell.get_random_free_point(atoms, self.min_insert)

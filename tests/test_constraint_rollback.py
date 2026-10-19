@@ -59,7 +59,8 @@ def _gcmc(atoms, move, accept):
     e._acceptance_condition = lambda *a, **k: accept
     e._wrap_on_accept = False
     e.calculate_cells_volume = lambda a: None
-    e._record_minimum = lambda a, en: None
+    e._record_minimum = lambda *a, **k: None
+    e._step = 0
     e.logger = types.SimpleNamespace(debug=lambda *a, **k: None)
     return e
 
