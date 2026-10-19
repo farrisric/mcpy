@@ -19,7 +19,9 @@ import pytest
 from ase import Atoms
 from ase.build import bulk, fcc111
 from ase.calculators.emt import EMT
+from ase.cluster import Octahedron
 from ase.constraints import FixAtoms, FixCartesian
+from ase.io import read
 
 from mcpy.calculators import BaseCalculator
 
@@ -224,6 +226,40 @@ def test_energy_only_defaults(alchemi, energy_calc, relax_calc):
     shared = alchemi.AlchemiCalculator(relax_calc.model, device='cuda')
     assert shared.energy_only is False
     assert 'forces' in relax_calc.model.model_config.active_outputs
+
+
+@gpu
+def test_run_md_does_not_drift_the_center_of_mass(relax_calc):
+    # Before the per-step COM removal, the Langevin noise shifted this
+    # 79-atom cluster by about 0.17 A per 100-step run at 2000 K.
+    atoms = Octahedron('Cu', 5, 1)
+    atoms.center(vacuum=8.0)
+    atoms.pbc = True
+    com_before = atoms.get_center_of_mass()
+    relax_calc.run_md(atoms, temperature=2000.0, steps=100, dt=2.0, seed=3)
+    assert np.linalg.norm(atoms.get_center_of_mass() - com_before) < 0.02
+
+
+@gpu
+def test_alchemi_brownian_writes_every_md_frame(relax_calc, tmp_path):
+    from mcpy.moves import AlchemiBrownianMove
+    path = tmp_path / 'md.xyz'
+    atoms = Octahedron('Cu', 5, 1)
+    atoms.center(vacuum=8.0)
+    atoms.pbc = True
+    move = AlchemiBrownianMove(relax_calc, temperature=2000.0, steps=5, dt=2.0,
+                               seed=1, trajectory_file=str(path))
+    move.do_trial_move(atoms)
+    move.do_trial_move(atoms)
+    frames = read(path, index=':')
+    assert [f.info['md_run'] for f in frames] == [1] * 6 + [2] * 6
+    assert [f.info['md_step'] for f in frames] == list(range(6)) * 2
+    # initialize_velocities rescales to the target T, so a wrong velocity
+    # unit would show up here as a T off by a factor of ~100.
+    assert frames[0].info['T_K'] == pytest.approx(2000.0, rel=0.05)
+    assert frames[-1].info['time_fs'] == pytest.approx(10.0)
+    np.testing.assert_allclose(frames[-1].positions, atoms.positions, atol=1e-4)
+    assert np.isfinite(frames[-1].get_forces()).all()
 
 
 def _fake_mace(edge, first_edge, flag=None, node='512x0e'):

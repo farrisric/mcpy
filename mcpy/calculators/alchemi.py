@@ -26,6 +26,7 @@ from nvalchemi.data.batch import Batch
 from nvalchemi.dynamics import (FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2,
                                 ConvergenceHook, NVTLangevin,
                                 initialize_velocities)
+from nvalchemi.dynamics._ops.thermostat_utils import remove_com_motion
 from nvalchemi.dynamics.base import DynamicsStage
 from nvalchemi.dynamics.hooks import FreezeAtomsHook, NaNDetectorHook
 from nvalchemi.hooks import DynamicsContext
@@ -33,6 +34,7 @@ from nvalchemi.hooks.neighbor_list import NeighborListHook
 from nvalchemi.models.mace import MACEWrapper
 
 from ..utils.chunking import chunk_ranges
+from ..utils.md_trajectory import write_md_frame
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +278,56 @@ def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
     return [FreezeAtomsHook()]
 
 
+class _RemoveCOMMotionHook:
+    """Zero each graph's center-of-mass velocity after every MD step.
+
+    The Langevin random force kicks the center of mass at every step, so a
+    free particle drifts even when its initial velocities have no net
+    momentum. Without this, repeated MD proposals shift the particle as a
+    random walk.
+    """
+
+    frequency = 1
+    stage = DynamicsStage.AFTER_POST_UPDATE
+
+    def __call__(self, ctx: DynamicsContext, stage) -> None:
+        batch = ctx.batch
+        with torch.no_grad():
+            remove_com_motion(batch.velocities, batch.atomic_masses,
+                              batch.batch_idx.int(), batch.num_graphs)
+
+
+class _TrajectoryHook:
+    """Append the state after every MD step to an extended-XYZ file.
+
+    Fires at ``AFTER_STEP``, so the frozen-atom and center-of-mass hooks
+    have already run and the frame shows the state the next step starts from.
+    nvalchemi velocities are in A per ASE time unit, so they pass through.
+    """
+
+    frequency = 1
+    stage = DynamicsStage.AFTER_STEP
+
+    def __init__(self, path: str, atoms: Atoms, **frame_kw) -> None:
+        self.path = path
+        self.atoms = atoms
+        self.frame_kw = frame_kw
+
+    def write(self, batch: Batch, md_step: int) -> None:
+        with torch.no_grad():
+            write_md_frame(
+                self.path, self.atoms,
+                batch.positions.detach().cpu().numpy().astype(np.float64),
+                batch.velocities.detach().cpu().numpy().astype(np.float64),
+                float(batch.energy.detach().sum()),
+                batch.forces.detach().cpu().numpy().astype(np.float64),
+                md_step=md_step, **self.frame_kw)
+
+    def __call__(self, ctx: DynamicsContext, stage) -> None:
+        # step_count is incremented after AFTER_STEP, so it is 0 on step 1.
+        self.write(ctx.batch, ctx.step_count + 1)
+
+
 def _write_back_positions(atoms: Atoms, batch: Batch) -> None:
     """Copy positions from batch back to atoms, restoring FixAtoms rows."""
     # float64: the batch is float32, and assigning the float64 frozen rows
@@ -433,6 +485,8 @@ class _AlchemiBase:
         dt: float = 2.0,
         steps: int = 100,
         seed: int = 42,
+        trajectory_file: str | None = None,
+        md_run: int = 0,
     ) -> None:
         """Run NVT Langevin (BAOAB) MD in place on ``atoms``.
 
@@ -440,7 +494,13 @@ class _AlchemiBase:
         Reuses this calculator's model and neighbour-list config, so no second
         model is loaded. ``friction`` is in 1/fs, ``dt`` in fs, ``temperature``
         in K (the integrator converts to internal units). ``FixAtoms``
-        constraints are held every step and restored on write-back.
+        constraints are held every step and restored on write-back. Without
+        ``FixAtoms``, the center-of-mass velocity is zeroed every step so the
+        particle does not drift; with them, the fixed atoms anchor the system.
+
+        ``trajectory_file`` (debug) appends the start state and every MD step
+        as extended-XYZ frames, tagged with ``md_run``. It copies the batch to
+        the CPU every step, so it slows the MD down.
         """
         batch = self._batch(atoms)
         self._prepare(batch, 1)
@@ -454,6 +514,10 @@ class _AlchemiBase:
 
         fixed = _fixed_indices(atoms)
         freeze_hooks = _freeze_hook_for(batch, fixed)
+        com_hooks = [] if fixed else [_RemoveCOMMotionHook()]
+        traj_hooks = [] if trajectory_file is None else [_TrajectoryHook(
+            trajectory_file, atoms, md_run=md_run, dt=dt,
+            temperature=temperature)]
         nl_hook = self._nl_hook()
         opt = NVTLangevin(
             model=self.model,
@@ -465,10 +529,13 @@ class _AlchemiBase:
             # NaN forces/energy would otherwise propagate silently into the
             # proposal the ensemble scores; the hook raises at the offending
             # step.
-            hooks=(freeze_hooks or []) + [NaNDetectorHook()],
+            hooks=(freeze_hooks or []) + com_hooks + traj_hooks
+            + [NaNDetectorHook()],
         )
         opt.register_hook(nl_hook, stage=DynamicsStage.BEFORE_COMPUTE)
         self._bootstrap(opt, batch, nl_hook, fixed)
+        for hook in traj_hooks:
+            hook.write(batch, 0)
         opt.run(batch)
         _write_back_positions(atoms, batch)
 

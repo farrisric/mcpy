@@ -47,10 +47,16 @@ class AlchemiBrownianMove(BaseMove):
     seed : int
         Base RNG seed; a fresh per-call seed is derived for the stochastic
         Langevin step so repeated calls explore different trajectories.
+    trajectory_file : str | None
+        Debug option. When set, every MD step of every call (accepted or
+        rejected later) is appended to it as an extended-XYZ frame with
+        velocities, forces, temperature and energies. ``md_run`` in the info
+        line counts the calls of this move. Slows the MD down.
     """
 
     def __init__(self, calculator, temperature: float, friction: float = 0.01,
-                 steps: int = 100, dt: float = 2.0, seed: int = 0) -> None:
+                 steps: int = 100, dt: float = 2.0, seed: int = 0,
+                 trajectory_file: str | None = None) -> None:
         super().__init__(NullCell(), species=['X'], seed=seed)
         self.calculator = calculator
         self.temperature = temperature
@@ -58,6 +64,8 @@ class AlchemiBrownianMove(BaseMove):
         self.steps = steps
         self.dt = dt
         self.name = 'AlchemiBrownian'
+        self.trajectory_file = trajectory_file
+        self._md_run = 0
 
     def do_trial_move(self, atoms: Atoms):
         # Mutates ``atoms`` in place, like every GCMC move: the ensemble
@@ -65,6 +73,10 @@ class AlchemiBrownianMove(BaseMove):
         # snapshot on rejection. Running the MD on a copy would leave the
         # ensemble's atoms untouched and turn the move into a silent no-op.
         md_seed = self.rng.random.randrange(2 ** 31)
+        traj_kw = {}
+        if self.trajectory_file is not None:
+            self._md_run += 1
+            traj_kw = dict(trajectory_file=self.trajectory_file, md_run=self._md_run)
         self.calculator.run_md(
             atoms,
             temperature=self.temperature,
@@ -72,5 +84,6 @@ class AlchemiBrownianMove(BaseMove):
             dt=self.dt,
             steps=self.steps,
             seed=md_seed,
+            **traj_kw,
         )
         return atoms, 0, 'X'

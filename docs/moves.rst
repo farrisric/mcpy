@@ -110,6 +110,14 @@ Alchemi calculator, so no second model is loaded. The MD needs forces: pass an
 ``AlchemiFCalculator``, or an ``AlchemiCalculator`` built with ``energy_only=False``
 (an ``AlchemiCalculator`` that loads its own model is energy-only by default).
 
+Both MD moves take a debug option, ``trajectory_file``.
+When you set it, the move appends every MD step of every call to that file as an extended-XYZ frame.
+The move writes the frames before the acceptance test, so the file also contains the rejected runs.
+Each frame holds the positions, the velocities (as ``momenta``) and the forces.
+The info line holds ``md_run`` (the call count of the move), ``md_step``, ``time_fs``,
+``T_target_K``, the instantaneous ``T_K``, and ``epot``, ``ekin`` and ``etot`` in eV.
+Use it on short runs only, because it writes one frame per MD step.
+
 .. warning::
 
    `BrownianMove` and `AlchemiBrownianMove` do not satisfy exact detailed balance.
