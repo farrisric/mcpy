@@ -26,8 +26,9 @@ import time
 
 import numpy as np
 
-# 4-layer Ag(111) slabs: nx * nx * 4 atoms, 64 to 4096.
-SIZES = (4, 6, 8, 11, 16, 23, 32)
+# 4-layer Ag(111) slabs: nx * nx * 4 atoms, 64 to 65536. The run stops at
+# the first size that does not fit in GPU memory and records it.
+SIZES = (4, 6, 8, 11, 16, 23, 32, 45, 64, 90, 128)
 WARMUP_NX = 5  # 100 atoms per structure, not one of SIZES
 
 
@@ -93,6 +94,11 @@ def main():
     p.add_argument('--out', required=True, help='JSON record to write')
     p.add_argument('--compare', help='earlier JSON record to compare with')
     args = p.parse_args()
+    sizes = [nx for nx in SIZES
+             if not args.max_atoms or nx * nx * 4 * args.batch <= args.max_atoms]
+    if len(sizes) < 2:
+        p.error(f'--max-atoms {args.max_atoms} with --batch {args.batch} leaves '
+                f'{len(sizes)} size(s); the a + b N fit needs at least 2')
 
     from mcpy.calculators import AlchemiFCalculator
     calc = AlchemiFCalculator(args.checkpoint, head=args.head, device='cuda',
@@ -102,17 +108,33 @@ def main():
     # and with the batch's graph count, so no timed row starts warm.
     time_calls(calc, [slab(WARMUP_NX, k) for k in range(args.batch)], 3)
 
-    rows = []
-    for nx in SIZES:
-        if args.max_atoms and nx * nx * 4 * args.batch > args.max_atoms:
-            continue
+    import torch
+    rows, oom_at = [], None
+    for nx in sizes:
+        n = nx * nx * 4 * args.batch
         atoms = [slab(nx, k) for k in range(args.batch)]
-        first, med, epa = time_calls(calc, atoms, args.repeats)
-        n = sum(len(a) for a in atoms)
+        try:
+            first, med, epa = time_calls(calc, atoms, args.repeats)
+        except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
+            # TorchScript re-raises a CUDA OOM as a plain RuntimeError.
+            if 'out of memory' not in str(exc):
+                raise
+            oom_at = n
+            print(f'{n:7d} atoms  out of GPU memory: stop', flush=True)
+            break
+        finally:
+            torch.cuda.empty_cache()
         rows.append(dict(n_atoms=n, first_ms=first, ms=med, e_per_atom=epa))
         print(f'{n:7d} atoms  {med:8.2f} ms  (first call {first:8.1f} ms)  '
               f'{med * 1e3 / n:7.2f} us/atom', flush=True)
 
+    common = dict(environment(args), rows=rows, oom_at=oom_at,
+                  peak_mem_gb=torch.cuda.max_memory_allocated() / 2**30)
+    if len(rows) < 2:  # out of memory too early for a line
+        with open(args.out, 'w') as f:
+            json.dump(dict(common, fit=None), f, indent=1)
+        raise SystemExit(f'only {len(rows)} size(s) fit in GPU memory: no a + b N fit; '
+                         f'rows written to {args.out}')
     n = np.array([r['n_atoms'] for r in rows], float)
     t = np.array([r['ms'] for r in rows])
     b, a = np.polyfit(n, t, 1)
@@ -120,7 +142,7 @@ def main():
                max_rel_residual=float(np.max(np.abs(a + b * n - t) / t)))
     print(f'\nfit t(N) = a + b N:  a = {a:.2f} ms,  b = {b * 1e3:.3f} us/atom  '
           f'(max residual {fit["max_rel_residual"]:.0%})')
-    record = dict(environment(args), rows=rows, fit=fit)
+    record = dict(common, fit=fit, max_fitting_atoms=int(n.max()))
     with open(args.out, 'w') as f:
         json.dump(record, f, indent=1)
 
@@ -128,8 +150,9 @@ def main():
         with open(args.compare) as f:
             ref = json.load(f)
         print(f'\nvs {args.compare} ({ref["git"]}, {ref["date"]}):')
-        print(f'  a  {ref["fit"]["a_ms"]:7.2f} -> {a:7.2f} ms')
-        print(f'  b  {ref["fit"]["b_us_per_atom"]:7.3f} -> {b * 1e3:7.3f} us/atom')
+        if ref.get('fit'):
+            print(f'  a  {ref["fit"]["a_ms"]:7.2f} -> {a:7.2f} ms')
+            print(f'  b  {ref["fit"]["b_us_per_atom"]:7.3f} -> {b * 1e3:7.3f} us/atom')
         by_n = {r['n_atoms']: r for r in ref['rows']}
         for r in rows:
             old = by_n.get(r['n_atoms'])
