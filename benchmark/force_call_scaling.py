@@ -92,7 +92,13 @@ def time_calls(calc, atoms_list, repeats):
 
 
 def metrics(rows):
-    """Floor, saturated slope and crossover from the timed rows."""
+    """Floor, saturated slope and crossover from the timed rows.
+
+    ``floor_reached`` is False when fewer than two sizes lie within 20% of
+    the lowest time: the flat part was not measured, so floor and crossover
+    are upper bounds. A slope that is not positive (flat or noisy sizes) is
+    reported as None, and so is the crossover.
+    """
     n = np.array([r['n_atoms'] for r in rows], float)
     t = np.array([r['ms'] for r in rows])
     floor = float(t.min())
@@ -101,15 +107,28 @@ def metrics(rows):
     if not saturated:  # the GPU never filled up: use the two largest sizes
         sat = n >= np.sort(n)[-2]
     slope, _ = np.polyfit(n[sat], t[sat], 1)
+    slope = float(slope * 1e3) if slope > 0 else None
     return dict(floor_ms=floor, floor_at_atoms=int(n[t.argmin()]),
-                slope_us_per_atom=float(slope * 1e3), slope_sizes=n[sat].astype(int).tolist(),
-                saturated=saturated, crossover_atoms=float(floor / slope))
+                floor_reached=int((t <= 1.2 * floor).sum()) >= 2,
+                slope_us_per_atom=slope, slope_sizes=n[sat].astype(int).tolist(),
+                saturated=saturated,
+                crossover_atoms=floor / slope * 1e3 if slope else None)
 
 
 def describe(m):
-    note = '' if m['saturated'] else '  (GPU not full at any size: slope is a lower bound)'
-    return (f"floor {m['floor_ms']:.2f} ms, slope {m['slope_us_per_atom']:.3f} us/atom, "
-            f"crossover {m['crossover_atoms']:.0f} atoms{note}")
+    notes = []
+    if m['slope_us_per_atom'] is None:
+        notes.append('no growth over the measured sizes: no slope, no crossover')
+    elif not m['saturated']:
+        notes.append('GPU not full at any size: slope is a lower bound')
+    if not m['floor_reached']:
+        notes.append('flat part not measured: floor and crossover are upper bounds')
+    slope = ('n/a' if m['slope_us_per_atom'] is None
+             else f"{m['slope_us_per_atom']:.3f} us/atom")
+    cross = ('n/a' if m['crossover_atoms'] is None
+             else f"{m['crossover_atoms']:.0f} atoms")
+    text = f"floor {m['floor_ms']:.2f} ms, slope {slope}, crossover {cross}"
+    return text + ''.join(f'\n  note: {x}' for x in notes)
 
 
 def main():
@@ -198,7 +217,10 @@ def main():
         if old_m:
             for key, unit in (('floor_ms', 'ms'), ('slope_us_per_atom', 'us/atom'),
                               ('crossover_atoms', 'atoms')):
-                print(f'  {key:18s} {old_m[key]:10.3f} -> {m[key]:10.3f} {unit}')
+                if old_m.get(key) is None or m[key] is None:
+                    print(f'  {key:18s} not available in one of the records')
+                else:
+                    print(f'  {key:18s} {old_m[key]:10.3f} -> {m[key]:10.3f} {unit}')
         by_n = {r['n_atoms']: r for r in ref['rows']}
         for r in rows:
             old = by_n.get(r['n_atoms'])
