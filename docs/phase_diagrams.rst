@@ -46,10 +46,16 @@ so nothing is re-evaluated.
 If the runs also exchange metal atoms, pass ``mu_metal`` (see below).
 Without it, the function raises an error when the frames hold different
 metal counts.
-The returned dict carries the grid (``dmu_grid``), the per-frame lines
-(``free``), the envelope (``min_gamma``), the winning frame indices
-(``stable_idx``, ``phase_order``), and the boundary positions
-(``transitions``).
+``adsorbate``, ``metal_symbols`` and ``mu_ref`` have no default values.
+Give them as keyword arguments.
+Frames without a finite energy are skipped.
+The returned dict carries the grid (``dmu_grid``), one line per adsorbate
+count (``free``, a row for each entry of ``stoich``), the envelope
+(``min_gamma``), and the boundary positions (``transitions``).
+``stable_idx`` (per grid point) and ``phase_order`` (per stable phase, from
+left to right) index ``stoich``, not ``frames``.
+For example, ``[results['stoich'][i] for i in results['phase_order']]``
+gives the adsorbate counts of the stable phases.
 
 .. figure:: _static/fig_phase_diagram_ag_o.png
    :alt: Surface phase diagram of O on Ag(111).
@@ -72,9 +78,13 @@ The returned dict carries the grid (``dmu_grid``), the per-frame lines
    Ag\ :sub:`2`\ O is more stable than any surface phase.
    The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
    pressure.
-   It reads :math:`p = p^0` at
+   The function now puts :math:`p = p^0` at
    :math:`\Delta\mu_{\mathrm{O}} = \Delta\mu^0_{\mathrm{O}}(T)`, which is
    -0.50 eV at 500 K.
+   This figure is from an older version, which put :math:`p = p^0` at
+   :math:`\Delta\mu_{\mathrm{O}} = 0`: the true pressures are 10 decades
+   higher than its top axis shows.
+   The axis is correct when the notebook runs again.
    The notebook writes this figure with one ``plot_phase_diagram`` call.
 
 
@@ -175,6 +185,12 @@ Key parameters
    n = 0, 1, 2, 3, 5 and 6; phases 2 and 4 are narrow (0.009 and 0.02 eV),
    so their numbers sit on a second row.
    The run is not converged above -1.45 eV (phase 6).
+   The top axis of this figure is from an older version: it puts
+   :math:`p = p^0` at :math:`\Delta\mu = 0`.
+   The true pressures are 7.6 decades higher.
+   The notebook now passes ``dmu_standard=-0.600`` (the NIST-JANAF
+   :math:`\Delta\mu^0_{\mathrm{CO}}` at 400 K plus the CO zero-point
+   energy), so the axis is correct when the notebook runs again.
 
 ``analyze_phase_diagram_results(trajectory_path, host_symbol, oxygen_symbol, idx_ref, ...)``
    The older oxidation-specific entry point: reads one concatenated

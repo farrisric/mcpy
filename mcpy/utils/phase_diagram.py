@@ -374,9 +374,10 @@ _THUMBS_PER_ROW = 6
 @_with_mpl_style(_PD_STYLE)
 def plot_phase_diagram(
     frames,
-    adsorbate='H',
-    metal_symbols=('Pd', 'Ag'),
-    mu_ref=-3.05,
+    *,
+    adsorbate,
+    metal_symbols,
+    mu_ref,
     kind='surface',
     T=300.0,
     dmu_range=(-1.0, 0.0),
@@ -417,6 +418,7 @@ def plot_phase_diagram(
     ----------
     frames : list[ase.Atoms] | list[list[ase.Atoms]]
         Frames for one configuration. A list of trajectories is flattened.
+        Frames without a finite energy are skipped.
     adsorbate : str
         Symbol of the species whose count defines the stoichiometry (e.g. "H").
     metal_symbols : tuple[str, ...]
@@ -498,12 +500,14 @@ def plot_phase_diagram(
     """
     if kind not in ('surface', 'nano'):
         raise ValueError(f"kind must be 'surface' or 'nano', got {kind!r}")
+    if not dmu_range[0] < dmu_range[1]:
+        raise ValueError(f'dmu_range must be (min, max) with min < max, got {dmu_range}.')
 
     flat = _flatten_frames(frames)
     data = []
     for at in flat:
         energy = _frame_energy(at)
-        if energy is None:
+        if energy is None or not np.isfinite(energy):
             continue
         if adsorbate_count_fn is not None:
             n_ads = int(adsorbate_count_fn(at))
@@ -513,7 +517,7 @@ def plot_phase_diagram(
         n_m = tuple(syms.count(m) for m in metal_symbols)
         data.append((at, float(energy), n_ads, n_m))
     if not data:
-        raise ValueError('No frames with a retrievable energy were provided.')
+        raise ValueError('No frames with a finite energy were provided.')
 
     mu_m = dict(mu_metal or {})
     unknown = sorted(set(mu_m) - set(metal_symbols))
@@ -539,6 +543,9 @@ def plot_phase_diagram(
     ref_atoms, ref_E = ref[0], ref[1]
 
     n_metal = sum(1 for a in ref_atoms if a.symbol in metal_symbols)
+    if kind == 'nano' and n_metal == 0:
+        raise ValueError(f'kind="nano" normalizes by the metal count, but the reference frame '
+                         f'holds no atoms of metal_symbols {tuple(metal_symbols)}.')
     gamma_scale = 1.0 if gamma_in_ev else 1000.0
     if kind == 'surface':
         c = ref_atoms.get_cell()
@@ -588,12 +595,14 @@ def plot_phase_diagram(
     rows = -(-n_p // _THUMBS_PER_ROW) if show_structures else 0
     cols = min(n_p, _THUMBS_PER_ROW)
     fig = plt.figure(figsize=(8.0, 5.2 + 1.75 * rows))
+    # The gap below the plot holds the x label and legend; the thumbnail rows
+    # get their own, tighter grid so the rows do not drift apart.
     gs = GridSpec(
-        1 + rows, max(cols, 1), figure=fig, height_ratios=[3.4] + [1.25] * rows,
-        hspace=0.55, wspace=0.08, top=0.88, bottom=0.03 if rows else 0.2,
+        1 + bool(rows), 1, figure=fig, height_ratios=[3.4] + [1.25 * rows] * bool(rows),
+        hspace=2.56 / (3.4 + 1.25 * rows), top=0.88, bottom=0.03 if rows else 0.2,
         left=0.11, right=0.97,
     )
-    ax = fig.add_subplot(gs[0, :])
+    ax = fig.add_subplot(gs[0])
 
     for row in free:
         ax.plot(dmu_grid, row, c='0.55', lw=0.6, alpha=0.7, zorder=3)
@@ -655,9 +664,10 @@ def plot_phase_diagram(
     if show_structures:
         from ase.visualize.plot import plot_atoms
 
+        thumbs = gs[1].subgridspec(rows, cols, hspace=0.3, wspace=0.08)
         for i, pidx in enumerate(phase_order):
             r, col = divmod(i, _THUMBS_PER_ROW)
-            axs = fig.add_subplot(gs[1 + r, col])
+            axs = fig.add_subplot(thumbs[r, col])
             n_ads = stoich[pidx]
             atoms = best[n_ads][0]
             plot_atoms(atoms, ax=axs, rotation=rotation, radii=0.9,
@@ -673,11 +683,6 @@ def plot_phase_diagram(
             else:
                 pad = 0.5 * ((yb - ya) / cell_ratio - (xb - xa))
                 axs.set_xlim(xa - pad, xb + pad)
-            axs.set_xticks([])
-            axs.set_yticks([])
-            for sp in axs.spines.values():
-                sp.set_edgecolor(colors[i])
-                sp.set_linewidth(3.0)
             title = ''.join(
                 f'{sym}$_{{{sum(1 for a in atoms if a.symbol == sym)}}}$' for sym in metal_symbols
             )
