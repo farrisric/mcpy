@@ -61,7 +61,7 @@ The returned dict carries the grid (``dmu_grid``), the per-frame lines
    The y axis is the surface free energy :math:`\gamma` in meV/Å².
    Grey lines are the lowest-energy frames of the other O counts, the thick
    black line is the stable envelope, and the numbered regions are the
-   stable phases (0 to 5 O atoms, shown in the thumbnails).
+   stable phases (0 to 4 O atoms, shown in the thumbnails).
    Only rungs with :math:`\Delta\mu_{\mathrm{O}} \le -0.30` eV, which
    reached a coverage plateau, enter the diagram.
    Above that the slab keeps oxidising, so those frames are not
