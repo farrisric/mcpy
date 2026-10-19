@@ -93,6 +93,9 @@ class _FakeComm:
     def Get_rank(self):
         return self.rank
 
+    def allgather(self, obj):
+        return [obj] * self.size
+
     def Get_size(self):
         return self.size
 
@@ -205,7 +208,7 @@ def test_species_count_skips_atoms_inside_molecules():
     g = GrandCanonicalEnsemble(
         atoms=atoms, cells=[NullCell()], units_type='metal',
         calculator=SimpleNamespace(get_potential_energy=lambda a: 0.0),
-        mu={'O': -1.0}, species=['O'], temperature=300.0,
+        mu={'O': -1.0}, species=['O'], temperature=300.0, molecules={'CO': Atoms('CO')},
         move_selector=MoveSelector([1], [DisplacementMove(species=['O'], seed=1)]),
         random_seed=1, traj_file=None, outfile=None)
     assert g._species_count(atoms, 'O') == 1

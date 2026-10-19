@@ -1,4 +1,3 @@
-import logging
 import time
 
 import numpy as np
@@ -6,8 +5,6 @@ from ase.units import kB as boltzmann_constant
 
 from .base_ensemble import BaseEnsemble
 from ..utils.random_number_generator import RandomNumberGenerator
-
-logger = logging.getLogger(__name__)
 
 
 class CanonicalEnsemble(BaseEnsemble):
@@ -42,6 +39,8 @@ class CanonicalEnsemble(BaseEnsemble):
                  trajectory_write_interval: int = 1,
                  minima_file: str = None,
                  minima_mode: str = 'a') -> None:
+        if not (np.isfinite(temperature) and temperature >= 0):
+            raise ValueError(f'temperature must be finite and >= 0, got {temperature}')
         super().__init__(atoms=atoms,
                          cells=cells if cells is not None else [],
                          calculator=calculator,
@@ -63,6 +62,10 @@ class CanonicalEnsemble(BaseEnsemble):
         self._current_energy = None
         self.atoms = atoms
         self.constraints = constraints
+        # On the atoms themselves, so the initial relaxation honors them too;
+        # every trial copy inherits them.
+        if constraints is not None:
+            atoms.set_constraint(constraints)
         self._temperature = temperature
         self._optimizer = optimizer
         self._fmax = fmax
@@ -106,6 +109,7 @@ class CanonicalEnsemble(BaseEnsemble):
             'exchange_attempts', self.exchange_attempts)
         self.exchange_successes = state.get(
             'exchange_successes', self.exchange_successes)
+        self._record_minimum(self.atoms, self._current_energy)
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:
@@ -129,8 +133,6 @@ class CanonicalEnsemble(BaseEnsemble):
         mutated = result[0] if isinstance(result, tuple) else result
         if mutated is False or mutated is None:
             return None
-        if self.constraints:
-            mutated.set_constraint(self.constraints)
         return mutated
 
     def trial_step(self):
@@ -145,7 +147,7 @@ class CanonicalEnsemble(BaseEnsemble):
             self.atoms = new_atoms
             self._current_energy = potential_f
             self.move_selector.acceptance_counter()
-            self._record_minimum(self.atoms, self._current_energy)
+            self._record_minimum(self.atoms, self._current_energy, self._step + 1)
             return 1
         return 0
 
@@ -161,6 +163,16 @@ class CanonicalEnsemble(BaseEnsemble):
         self.write_coordinates(self.atoms, self._current_energy)
         self.write_outfile(self._step, self._current_energy)
         self._record_minimum(self.atoms, self._current_energy)
+
+    def finalize_run(self) -> None:
+        if not self._initialized:
+            return
+        # The last row and frame, whatever the write-interval alignment
+        # (none when the setup failed before the first energy).
+        if self._current_energy is not None:
+            self.write_outfile(self._step, self._current_energy)
+            self.write_coordinates(self.atoms, self._current_energy)
+        super().finalize_run()
 
     def _run(self) -> None:
         t0 = time.perf_counter()

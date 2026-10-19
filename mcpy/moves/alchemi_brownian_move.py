@@ -1,5 +1,5 @@
 from ase import Atoms
-from .base_move import BaseMove
+from .base_move import BaseMove, fixed_mask
 from ..cell import NullCell
 
 
@@ -23,11 +23,11 @@ class AlchemiBrownianMove(BaseMove):
     This move is pure Python; the nvalchemi dependency enters only through
     ``calculator.run_md`` at call time.
 
-    Positions are not wrapped back into the box after the MD trajectory.
-    This is safe: the periodic ``Cell`` selects deletion candidates by
-    species only (no position test), MACE handles PBC through neighbor-list
-    shifts, and region cells (DomeCell, CustomCell) treat out-of-region
-    drift exactly as they do for any displacement move.
+    Positions are not wrapped back into the box after the MD trajectory;
+    the ensemble wraps them on acceptance. MD can carry exchanged atoms out
+    of a region cell. ``GrandCanonicalEnsemble`` rejects a trial that moves
+    an exchanged atom across a SphericalCell or DomeCell ball surface or a
+    CustomCell top; the floors are not guarded (see docs/cells.rst).
 
     Parameters
     ----------
@@ -72,6 +72,8 @@ class AlchemiBrownianMove(BaseMove):
         # scores the object it passed in and rolls back from its arrays
         # snapshot on rejection. Running the MD on a copy would leave the
         # ensemble's atoms untouched and turn the move into a silent no-op.
+        if fixed_mask(atoms).all():
+            return False, 0, 'X'
         md_seed = self.rng.random.randrange(2 ** 31)
         traj_kw = {}
         if self.trajectory_file is not None:

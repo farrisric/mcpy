@@ -15,7 +15,7 @@ class PermutationMove(BaseMove):
 
     ``n_swaps > 1`` turns the trial into a single compound perturbation:
     ``n_swaps`` independent pair swaps are applied before the energy is
-    evaluated — useful for basin-hopping where a single swap typically falls
+    evaluated, useful for basin-hopping where a single swap typically falls
     back into the same basin after relaxation.
     """
     def __init__(self,

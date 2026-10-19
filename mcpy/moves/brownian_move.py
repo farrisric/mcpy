@@ -3,7 +3,7 @@ from ase import Atoms, units
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
 from ase.md.verlet import VelocityVerlet
 
-from .base_move import BaseMove
+from .base_move import BaseMove, fixed_mask
 from ..cell import NullCell
 from ..utils.md_trajectory import write_md_frame
 
@@ -51,8 +51,12 @@ class BrownianMove(BaseMove):
         """
         Run a short MD trajectory in place from a Maxwell-Boltzmann velocity
         sample at ``self.temperature``. The atoms keep their own calculator
-        and get no ``momenta`` array from the move.
+        and get no ``momenta`` array from the move. A failed proposal when
+        no atom is free to move.
         """
+        fixed = fixed_mask(atoms)
+        if fixed.all():
+            return False, 0, 'X'
         previous_calc = atoms.calc
         previous_momenta = atoms.arrays.get('momenta')
         try:
@@ -60,7 +64,11 @@ class BrownianMove(BaseMove):
                                          rng=self._np_rng)
             # Zero the net momentum: otherwise each accepted move shifts the
             # whole particle a little, and the shifts add up as a random walk.
-            Stationary(atoms)
+            # Not with FixAtoms (the fixed atoms anchor the system, as in
+            # run_md), and without rescaling: with one free atom that would
+            # divide by zero kinetic energy.
+            if not fixed.any():
+                Stationary(atoms, preserve_temperature=False)
             atoms.calc = self.calculator
             dyn = VelocityVerlet(atoms, self.d_t * units.fs, logfile=None)
             if self.trajectory_file is not None:

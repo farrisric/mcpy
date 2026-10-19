@@ -73,11 +73,15 @@ def test_displacement_invalid_n_steps():
         DisplacementMove(species=['Au', 'Pt'], seed=1, n_steps=0)
 
 
-def test_displacement_n_steps_exceeds_movable_raises():
+def test_displacement_n_steps_above_movable_moves_all():
+    """Fewer movable atoms than n_steps: all of them move (GCMC changes the
+    movable count every exchange, so this must not raise)."""
     atoms = Atoms('Au2', positions=[[0, 0, 0], [1, 0, 0]])
+    before = atoms.positions.copy()
     move = DisplacementMove(species=['Au'], seed=1, n_steps=5)
-    with pytest.raises(ValueError):
-        move.do_trial_move(atoms)
+    result, _, _ = move.do_trial_move(atoms)
+    assert result is atoms
+    assert np.all(np.any(atoms.positions != before, axis=1))
 
 
 # --------------------------------------------------------------------------
