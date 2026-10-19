@@ -79,11 +79,16 @@ four-rung temperature ladder.
    ReplicaExchange(gcmc_factory, temperatures=TEMPERATURES, gcmc_steps=2000,
                    exchange_interval=50, seed=7).run()
 
+Every seed in the factory adds ``rank``, so each rank gets its own random
+streams.
+``ReplicaExchange`` raises ``ValueError`` on every rank when two ranks share
+a random stream, because common random numbers bias the swap rule.
+
 Launch it with one rank per temperature:
 
 .. code-block:: bash
 
-   mpirun -n 4 python re_lj.py
+   mpirun -n 4 python -m mpi4py re_lj.py
 
 Rank 0 writes ``replica_exchange.log`` and, at the end, ``global_minimum.xyz``.
 An error on any rank aborts the whole job instead of leaving the other ranks

@@ -38,9 +38,11 @@ from mcpy.utils.logging import configure as configure_logging
 BOX = 9.0          # box side, in sigma
 CUTOFF = 3.0       # pair cutoff, in sigma
 TEMPERATURE = 2.0  # reduced temperature
-# mu is the chemical potential of the WHOLE molecule: the energy of one
-# molecule in the reservoir plus its translational, rotational and pressure
-# contributions. It is not the per-atom value.
+# mu is the chemical potential of the WHOLE molecule, not the per-atom value.
+# The trial energies here are single points, so mu has no rotational term:
+# mu = E(molecule) + kT ln(p Lambda^3 / kT), the LAMMPS fix gcmc convention
+# (Lambda = 1 in LJ units). With relaxed trials, pass the full thermochemical
+# mu instead (docs/molecular_adsorbates.rst).
 MU = -6.0
 STEPS = 4000       # N_mol plateaus after ~2000 steps; the second half is averaged
 # Stage 2 of benchmark/README.md: LAMMPS fix gcmc mol at this box, T and mu.

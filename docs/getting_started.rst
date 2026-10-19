@@ -138,10 +138,16 @@ redrawing points that land inside an atom's exclusion sphere (the cell's
 Together they let the oxygen count fluctuate, which is the defining feature
 of the grand-canonical ensemble.
 
-``MoveSelector`` draws one move per step.
+``MoveSelector`` draws one move per trial.
 The weights are relative frequencies, so ``[1, 1]`` attempts insertions and
 deletions equally often, and the selector reports a separate acceptance ratio
 for each move in the log.
+One step runs ``round(sum(weights))`` trials by default, so here a step is two
+trials.
+The acceptance rule needs equal insertion and deletion probabilities for each
+species.
+If the weights make them differ, ``GrandCanonicalEnsemble`` raises
+``ValueError``.
 
 Each move and the selector take their seed from section 2.
 
@@ -228,8 +234,8 @@ Assemble and run
 ~~~~~~~~~~~~~~~~
 
 ``GrandCanonicalEnsemble`` ties every ingredient together.
-It draws a move from the selector each step, evaluates the relaxed trial
-energy, applies the grand-canonical acceptance rule at the given ``mu`` and
+In each step it runs the selector's trials: each trial draws a move,
+evaluates the relaxed trial energy, applies the grand-canonical acceptance rule at the given ``mu`` and
 ``temperature``, and commits or rolls back the configuration.
 
 The write intervals control the two output files.
@@ -269,6 +275,8 @@ Read the outputs
 ~~~~~~~~~~~~~~~~
 
 The log tracks particle count, energy, and acceptance ratios.
+Its header lists the run parameters, including the mcpy version (plus the
+``git describe`` output when mcpy runs from a git checkout).
 Each line carries the step index, the current atom count, the current
 energy, and the acceptance ratio of every move since the previous line, in
 the move order spelled out in the header.
@@ -392,19 +400,29 @@ Frame 0 is the starting configuration, the clean slab.
 Draw the diagram
 ~~~~~~~~~~~~~~~~
 
-``plot_phase_diagram`` computes the surface formation energy per frame.
-For every frame it evaluates the formation energy as a function of
-:math:`\Delta\mu` from the frame's energy and oxygen count, normalised by
-the surface area.
+``plot_phase_diagram`` computes one surface formation energy line per
+oxygen count.
+For each O count it keeps the lowest-energy frame.
+The line of that frame gives the formation energy as a function of
+:math:`\Delta\mu`, normalised by the surface area.
 
 The lower envelope marks the stable phases.
-At each :math:`\Delta\mu` the frame with the lowest formation energy wins,
+At each :math:`\Delta\mu` the O count with the lowest formation energy wins,
 and the winning stretches partition the axis into the stable coverages.
+``results['phase_order']`` lists the winners from left to right as indices
+into ``results['stoich']`` (the O counts), not into ``frames``.
 
 The ``transitions`` array locates the phase boundaries.
 Each entry is the :math:`\Delta\mu` where the envelope switches from one
-structure to the next, and a twin axis converts the range into O\ :sub:`2`
-pressures at the given temperature.
+structure to the next.
+A twin axis converts the range into O\ :sub:`2` pressures at the given
+temperature.
+It reads :math:`p = p^0` at the standard chemical potential
+:math:`\Delta\mu^0_{\mathrm{O}}(T)`, not at :math:`\Delta\mu = 0`.
+At 500 K, :math:`\Delta\mu^0_{\mathrm{O}}` is -0.50 eV, so
+:math:`\Delta\mu_{\mathrm{O}} = 0` is about 10 decades above :math:`p^0`.
+For O and H the function takes :math:`\Delta\mu^0(T)` from built-in
+NIST-JANAF tables; for other gases, give it with ``dmu_standard``.
 
 Thumbnails show one structure per stable phase.
 The figure renders the winning configuration of each stretch above the
@@ -453,13 +471,15 @@ normalisation and molecular adsorbates.
    without limit.
    The figure therefore shows how to read the diagram, not the physics of O
    on Ag.
-   Grey lines are individual frames, the thick line is the stable envelope,
+   Grey lines are the other O counts (the lowest-energy frame of each),
+   the thick line is the stable envelope,
    and the shading marks the stable phases, numbered like their structure
    thumbnails: the clean slab below
    :math:`\Delta\mu_{\mathrm{O}} \approx -0.47` eV, the capped
    monolayer above -0.455 eV, and between them a narrow O\ :sub:`8` phase.
    The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
-   pressure at 500 K.
+   pressure at 500 K, with :math:`p = p^0` at
+   :math:`\Delta\mu_{\mathrm{O}} = -0.50` eV.
    For a MACE diagram see :doc:`phase_diagrams`.
 
 
