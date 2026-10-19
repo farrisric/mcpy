@@ -67,7 +67,7 @@ gives the adsorbate counts of the stable phases.
    The y axis is the surface free energy :math:`\gamma` in meV/Å².
    Grey lines are the lowest-energy frames of the other O counts, the thick
    black line is the stable envelope, and the numbered regions are the
-   stable phases (0 to 5 O atoms, shown in the thumbnails).
+   stable phases (0 to 4 O atoms, shown in the thumbnails).
    Only rungs with :math:`\Delta\mu_{\mathrm{O}} \le -0.30` eV, which
    reached a coverage plateau, enter the diagram.
    Above that the slab keeps oxidising, so those frames are not
@@ -78,13 +78,9 @@ gives the adsorbate counts of the stable phases.
    Ag\ :sub:`2`\ O is more stable than any surface phase.
    The top axis converts :math:`\Delta\mu_{\mathrm{O}}` into O\ :sub:`2`
    pressure.
-   The function now puts :math:`p = p^0` at
+   It puts :math:`p = p^0` at
    :math:`\Delta\mu_{\mathrm{O}} = \Delta\mu^0_{\mathrm{O}}(T)`, which is
    -0.50 eV at 500 K.
-   This figure is from an older version, which put :math:`p = p^0` at
-   :math:`\Delta\mu_{\mathrm{O}} = 0`: the true pressures are 10 decades
-   higher than its top axis shows.
-   The axis is correct when the notebook runs again.
    The notebook writes this figure with one ``plot_phase_diagram`` call.
 
 
