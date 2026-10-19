@@ -279,25 +279,25 @@ def _bare_mpi_re():
     return re
 
 
-def test_mpi_exchange_prob_T_rejects_nan(caplog):
+def test_mpi_exchange_prob_rejects_nan(caplog):
     re = _bare_mpi_re()
     s1 = {'beta': 1.0, 'energy': float('nan'), 'mu': None, 'atoms': Atoms('Ag')}
     s2 = {'beta': 0.5, 'energy': 1.0, 'mu': None, 'atoms': Atoms('Ag')}
     with caplog.at_level(logging.WARNING, logger='test'):
-        assert re._exchange_prob_T(s1, s2) == 0.0
+        assert re._exchange_prob(s1, s2) == 0.0
     assert 'non-finite' in caplog.text
 
 
-def test_mpi_exchange_prob_T_debug_is_lazy(caplog):
+def test_mpi_exchange_prob_debug_is_lazy(caplog):
     re = _bare_mpi_re()
     s = {'beta': 1.0, 'energy': 1.0, 'mu': None, 'atoms': Atoms('Ag')}
     with caplog.at_level(logging.DEBUG, logger='test'):
-        re._exchange_prob_T(s, dict(s))
+        re._exchange_prob(s, dict(s))
     rec = caplog.records[-1]
     assert rec.args, 'debug message was pre-formatted (f-string)'
 
 
-def test_mpi_exchange_prob_T_de_broglie_cross_term():
+def test_mpi_exchange_prob_de_broglie_cross_term():
     """3 (N1 - N2) ln(L1 / L2) on top of (b2 - b1)(Phi2 - Phi1)."""
     re = _bare_mpi_re()
     s1 = {'beta': 1.0, 'energy': 10.0, 'mu': {'Ag': 1.0}, 'atoms': Atoms('Ag5'),
@@ -306,7 +306,7 @@ def test_mpi_exchange_prob_T_de_broglie_cross_term():
           'lambda_dbs': {'Ag': 1.0}}
     # Phi1 = 5, Phi2 = 2 -> 1.5; cross = 3 * (5 - 18) * ln 2
     expected = np.exp(1.5 + 3 * (5 - 18) * np.log(2.0))
-    assert re._exchange_prob_T(s1, s2) == pytest.approx(expected, rel=1e-12)
+    assert re._exchange_prob(s1, s2) == pytest.approx(expected, rel=1e-12)
 
 
 def test_mpi_global_minimum_one_frame_per_rung_on_mu_ladder(tmp_path):

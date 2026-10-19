@@ -279,10 +279,11 @@ def write_global_minimum(path, bests, per_rung, logger):
     ``bests`` holds one ``(score, energy, atoms)`` per replica, or ``None``
     for a replica that recorded no minimum. Scores are grand potentials
     Omega = E - sum mu N under each replica's own mu, so they are comparable
-    only when all replicas share mu (a temperature ladder): then the single
-    lowest-score frame is written. On a mu ladder (``per_rung=True``) no
-    common score exists, so one frame per rung is written in rung order,
-    each tagged with its ``rank`` and own-mu score.
+    only when all replicas share mu: then the single lowest-score frame is
+    written. When their mu differ (``per_rung=True``: a mu ladder, or a T
+    ladder whose factory sets mu per rung) no common score exists, so one
+    frame per rung is written in rung order, each tagged with its ``rank``
+    and own-mu score.
 
     Shared by ``ReplicaExchange`` (which gathers over MPI ranks) and
     ``BatchedReplicaExchange`` (which reads its in-process replicas).

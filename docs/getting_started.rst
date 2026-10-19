@@ -76,7 +76,7 @@ Insertions are drawn from the same free volume.
 The radii come from a calibration.
 The Ag radius, 2.14 Å, is the relaxed O-Ag bond of O in the fcc hollow of
 Ag(111) with MACE-MPA-0, the potential of section 4.
-:doc:`species_radii` shows how to measure it for your own potential.
+:doc:`species_radii` shows how to measure the radius for your own potential: the most frequent O-Ag distance after relaxed insertions.
 The O radius, 0.5 Å, only stops an insertion on top of an existing O atom.
 A radius is the clearance that an incoming atom needs from an atom of that
 species, so it depends on the incoming species too: an incoming Ag needs

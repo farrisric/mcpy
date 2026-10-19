@@ -134,6 +134,8 @@ def main():
         kde = gaussian_kde(distances[:, 1])
         ax.plot(x, kde(x), lw=2, c=color)
 
+        # r_relax: the most frequent relaxed distance, the centre of the
+        # tallest bin (docs/species_radii.rst).
         relax_dist = bins[1][np.argmax(bins[0])] + (bins[1][2] - bins[1][1]) / 2
 
         ax.axvline(

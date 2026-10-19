@@ -57,6 +57,13 @@ def re_banner(gcmc_steps, exchange_interval, atom_count, temperatures, mus,
     return lines
 
 
+def mus_differ(mus):
+    """True when the replicas' chemical potentials (one dict or None each)
+    are not all equal. Their own-mu scores Omega are then not comparable, so
+    the global minimum is written per rung. Shared by both drivers."""
+    return len({tuple(sorted((mu or {}).items())) for mu in mus}) > 1
+
+
 class ReplicaExchange:
     def __init__(self,
                  gcmc_factory,
@@ -77,9 +84,8 @@ class ReplicaExchange:
         if temperatures is None and mus is None:
             raise ValueError('Provide either temperatures or mus (one per rank).')
         if temperatures is not None and mus is not None:
-            # A joint (T, mu) ladder would need the full exchange criterion
-            # with both the (beta2-beta1)(E2-E1) and the mu*N terms; neither
-            # implemented rule covers it.
+            # The factory takes T or mu, not both. The swap rule itself
+            # (_exchange_prob) is right for any mix of per-rank T and mu.
             raise ValueError('Pass temperatures OR mus, not both.')
 
         if MPI is None:
@@ -105,8 +111,8 @@ class ReplicaExchange:
         if getattr(getattr(self.gcmc, 'units', None), 'molecules', None):
             raise NotImplementedError(
                 'ReplicaExchange (MPI) does not support molecular species: '
-                'its per-species swap bookkeeping (_exchange_prob_T / '
-                '_exchange_prob_mu) counts atoms by symbol via '
+                'its per-species swap bookkeeping (_exchange_prob) counts '
+                'atoms by symbol via '
                 '`atoms.symbols.count(specie)`, which is always 0 for a '
                 "molecular name such as 'H2O'. Use BatchedReplicaExchange "
                 'instead.'
@@ -114,11 +120,6 @@ class ReplicaExchange:
 
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
-
-        # Select the exchange acceptance rule based on which ladder was given.
-        # A mu-ladder shares one temperature, so the T-criterion would reduce to
-        # delta=0 (always accept) and must not be used here.
-        self._exchange_prob = self._exchange_prob_mu if mus else self._exchange_prob_T
 
         self._re_step = 0
 
@@ -136,7 +137,7 @@ class ReplicaExchange:
     def get_partner_rank(self, global_random):
         # Two alternating, symmetric pairings so that A->B implies B->A (else
         # one rank blocks forever on sendrecv). Any rank whose partner falls
-        # outside [0, size) sits the round out — this covers both ends and any
+        # outside [0, size) sits the round out - this covers both ends and any
         # odd-sized ensemble.
         if global_random > 0.5:
             # Odd pairing: (1,2), (3,4), ...
@@ -148,36 +149,44 @@ class ReplicaExchange:
             return None
         return partner
 
-    def _exchange_prob_T(self, state1, state2):
-        energy1 = state1['energy']
-        beta1 = state1['beta']
-        energy2 = state2['energy']
-        beta2 = state2['beta']
+    def _exchange_prob(self, state1, state2):
+        """Swap acceptance for configuration X (``state1``, slot 1) and Y
+        (``state2``, slot 2), on a temperature or a mu ladder.
 
-        # Grand-canonical replicas (fixed mu, fluctuating N) must be compared
-        # through the grand potential Phi = E - sum_s mu_s N_s, not bare energy.
-        # mu rides on each replica's state (a shared-mu T-ladder leaves the
-        # RE-level self.mus None), so read it from there, not from self.mus.
-        mu1, mu2 = state1.get('mu'), state2.get('mu')
-        if mu1 and mu2:
-            for specie in mu1:
-                energy1 -= mu1[specie] * state1['atoms'].symbols.count(specie)
-                energy2 -= mu2[specie] * state2['atoms'].symbols.count(specie)
+        Slot k weights a configuration Z by
+        exp(-beta_k Phi_Z^(k)) prod_s Lambda_s(T_k)^(-3 N_Z,s), with
+        Phi_Z^(k) = E_Z - sum_s mu_s^(k) N_Z,s scored with slot k's own mu.
+        The swap changes the joint weight by
 
-        delta = (beta2 - beta1) * (energy2 - energy1)
+            ln(w'/w) = beta_1 Phi_X^(1) + beta_2 Phi_Y^(2)
+                       - beta_1 Phi_Y^(1) - beta_2 Phi_X^(2)
+                       + 3 sum_s (N_X,s - N_Y,s) ln(Lambda_1,s / Lambda_2,s)
+                     = (beta_2 - beta_1)(E_Y - E_X)
+                       + sum_s (beta_2 mu_2,s - beta_1 mu_1,s)(N_X,s - N_Y,s)
+                       + the same de Broglie term.
 
-        # Grand-canonical weights also carry Lambda_s^(-3 N_s) per exchangeable
-        # species, and Lambda depends on T, so configs with different particle
-        # counts shift the joint weight by a de Broglie cross-term (zero in LJ
-        # units, where Lambda = 1). lambda_dbs rides on each replica's state;
-        # a units-less ensemble (CanonicalEnsemble) has no mu and skips this.
-        l1, l2 = state1.get('lambda_dbs'), state2.get('lambda_dbs')
-        if mu1 and mu2 and l1 and l2:
-            for specie in mu1:
-                dn = (state1['atoms'].symbols.count(specie)
-                      - state2['atoms'].symbols.count(specie))
-                if dn:
-                    delta += 3.0 * dn * np.log(l1[specie] / l2[specie])
+        The code uses the second form. Only count differences enter, so
+        substrate atoms cancel, and on a mu ladder (beta_1 == beta_2) the
+        energies drop out exactly. With a shared mu the rule is
+        (beta_2 - beta_1)(Phi_Y - Phi_X) plus the de Broglie term; with a
+        shared T it is beta sum_s (mu_1,s - mu_2,s)(N_Y,s - N_X,s). The cross
+        terms keep it exact when the factory sets a T-dependent mu per rank.
+        A state without mu (CanonicalEnsemble) scores bare E. Same rule as
+        ``BatchedReplicaExchange._accept_swap``.
+        """
+        beta1, beta2 = state1['beta'], state2['beta']
+        mu1, mu2 = state1.get('mu') or {}, state2.get('mu') or {}
+        delta = (beta2 - beta1) * (state2['energy'] - state1['energy'])
+        for specie in {**mu1, **mu2}:
+            dn = (state1['atoms'].symbols.count(specie)
+                  - state2['atoms'].symbols.count(specie))
+            delta += (beta2 * mu2.get(specie, 0.0)
+                      - beta1 * mu1.get(specie, 0.0)) * dn
+            # Lambda depends on T only, so the de Broglie term is zero on a
+            # mu ladder (and in LJ units, where Lambda = 1).
+            if dn and beta1 != beta2 and specie in mu1:
+                delta += 3.0 * dn * np.log(state1['lambda_dbs'][specie]
+                                           / state2['lambda_dbs'][specie])
         if not np.isfinite(delta):
             # min(1, exp(nan)) is 1: a diverged energy would always swap.
             self.logger.warning(
@@ -187,38 +196,10 @@ class ReplicaExchange:
         # exp() overflows to inf for a large positive delta; short-circuit.
         exchange_prob = 1.0 if delta >= 0.0 else float(np.exp(delta))
         self.logger.debug(
-            'beta1: %.3f, beta2: %.3f, E1: %.3f, E2: %.3f, Delta %.3f, Rank: %d',
-            beta1, beta2, energy1, energy2, delta, self.rank)
-        return exchange_prob
-
-    def _exchange_prob_mu(self, state1, state2):
-        state1['n_atoms_species'] = dict()
-        state2['n_atoms_species'] = dict()
-        exponential_arg = 0
-        deltas = {}
-        for specie in state1['mu']:
-            for state in (state1, state2):
-                state['n_atoms_species'][specie] = state['atoms'].symbols.count(specie)
-
-            delta_specie = state2['n_atoms_species'][specie] - state1['n_atoms_species'][specie]
-            deltas[specie] = delta_specie
-            exponential_arg += (
-                state2['beta'] * state2['mu'][specie] * (-delta_specie)
-            ) + (
-                state1['beta'] * state1['mu'][specie] * delta_specie
-            )
-
-        exponential = np.exp(exponential_arg)
-        exchange_prob = min(1.0, exponential)
-
-        self.logger.info(
-            f"Energy1: {state1['energy']:.3f}, Energy2: {state2['energy']:.3f}, "
-            f'Exponential Arg: {exponential_arg:.3f}, '
-            f'Exponential: {exponential:.3f}, '
-            f'Exchange Prob: {exchange_prob:.3f}, '
-            f"Deltas: {deltas}, N1: {state1['n_atoms']}, N2: {state2['n_atoms']}, "
-            f'Rank: {self.rank}'
-        )
+            'beta1: %.3f, beta2: %.3f, E1: %.3f, E2: %.3f, mu1: %s, mu2: %s, '
+            'delta: %.3f, p: %.3f, Rank: %d',
+            beta1, beta2, state1['energy'], state2['energy'], mu1, mu2, delta,
+            exchange_prob, self.rank)
         return exchange_prob
 
     def do_exchange(self):
@@ -247,16 +228,17 @@ class ReplicaExchange:
             source=partner_rank,
         )
 
-        # Both partners compute the same (symmetric) probability, but the
-        # accept/reject random must be shared: the lower-rank partner draws it
-        # and sends it across so both sides reach an identical decision.
-        # Drawing independently would let the per-rank RNGs (which drift out of
-        # sync) disagree, leaving one config duplicated and the other lost.
-        exchange_prob = self._exchange_prob(rank_state, partner_state)
+        # Both partners must reach an identical decision, or one config is
+        # duplicated and the other lost. So both score the pair in one order
+        # (lower rank first), which makes the probability bit-identical, and
+        # they share one uniform: the lower rank draws it and sends it across.
+        # Per-rank RNGs drift out of sync, so independent draws would disagree.
         if self.rank < partner_rank:
+            exchange_prob = self._exchange_prob(rank_state, partner_state)
             u = self.rng.get_uniform()
             self.comm.send(u, dest=partner_rank)
         else:
+            exchange_prob = self._exchange_prob(partner_state, rank_state)
             u = self.comm.recv(source=partner_rank)
 
         if u < exchange_prob:
@@ -328,8 +310,9 @@ class ReplicaExchange:
 
     def _write_global_minimum(self) -> None:
         """Gather each rank's running best and write them on rank 0: the
-        lowest-score one on a temperature ladder, one frame per rank on a mu
-        ladder (see ``write_global_minimum``). Collective. No-op if disabled
+        lowest-score one when all ranks share mu, one frame per rank when
+        their mu differ (a mu ladder, or a factory that sets mu(T) per
+        rung; see ``write_global_minimum``). Collective. No-op if disabled
         or no replica saw any minimum.
         """
         if self._global_minimum_file is None:
@@ -339,10 +322,12 @@ class ReplicaExchange:
             local = (self.gcmc._best_score, self.gcmc._best_energy,
                      self.gcmc._best_atoms)
         gathered = self.comm.gather(local, root=0)
+        mus = self.comm.gather(getattr(self.gcmc, '_mu', None), root=0)
         if self.rank != 0:
             return
-        write_global_minimum(self._global_minimum_file, gathered,
-                             bool(getattr(self, 'mus', None)), self.logger)
+        per_rung = bool(getattr(self, 'mus', None)) or mus_differ(mus)
+        write_global_minimum(self._global_minimum_file, gathered, per_rung,
+                             self.logger)
 
     def initialize_run(self):
         for line in self._banner():

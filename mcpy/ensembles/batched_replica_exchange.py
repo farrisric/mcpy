@@ -1,5 +1,5 @@
 """
-BatchedReplicaExchange — single-process replica exchange GCMC with batched
+BatchedReplicaExchange - single-process replica exchange GCMC with batched
 energy evaluation across replicas.
 
 Why this exists
@@ -7,7 +7,7 @@ Why this exists
 The MPI ReplicaExchange assumes one process per replica, which on a single GPU
 either oversubscribes or serializes through one CUDA context. This class holds
 all replicas in one process and evaluates every replica's trial-move energy in
-a single batched forward pass — one kernel launch per layer instead of N.
+a single batched forward pass - one kernel launch per layer instead of N.
 
 The MC loop itself stays sequential per replica (moves depend on the previous
 accepted state). The batching is across replicas at the same logical step.
@@ -33,7 +33,7 @@ import numpy as np
 
 from ..utils.random_number_generator import RandomNumberGenerator
 from .base_ensemble import BaseEnsemble, write_global_minimum
-from .replica_exchange import RE_RULE, re_header, re_row
+from .replica_exchange import RE_RULE, mus_differ, re_header, re_row
 
 logger = logging.getLogger(__name__)
 
@@ -184,17 +184,19 @@ class BatchedReplicaExchange:
             self._write_global_minimum()
 
     def _write_global_minimum(self) -> None:
-        """Write the replicas' running bests: the lowest-score one on a
-        temperature ladder, one frame per rung on a mu ladder, where the
-        rungs' grand potentials are not comparable (see
-        ``write_global_minimum``). No-op if disabled or no replica saw any
-        minimum."""
+        """Write the replicas' running bests: the lowest-score one when all
+        replicas share mu, one frame per rung when their mu differ (a mu
+        ladder, or a factory that sets mu(T) per rung), where the rungs'
+        grand potentials are not comparable (see ``write_global_minimum``).
+        No-op if disabled or no replica saw any minimum."""
         if self._global_minimum_file is None:
             return
         bests = [(r._best_score, r._best_energy, r._best_atoms)
                  if r._best_atoms is not None else None for r in self.replicas]
-        write_global_minimum(self._global_minimum_file, bests,
-                             self.mus is not None, self.logger)
+        per_rung = self.mus is not None or mus_differ(
+            [getattr(r, '_mu', None) for r in self.replicas])
+        write_global_minimum(self._global_minimum_file, bests, per_rung,
+                             self.logger)
 
     def _rebatch_initial_energies(self) -> None:
         """Re-evaluate replica energies as one batch so all replicas start
@@ -300,8 +302,9 @@ class BatchedReplicaExchange:
         with a shared μ it collapses to the familiar (β_j - β_i)(Φ_j - Φ_i),
         but on a μ ladder (one shared temperature) that shortened form is
         identically zero and would accept every swap, destroying the ladder.
-        With shared β it reduces to β Σ_s (μ_i,s - μ_j,s)(N_Y,s - N_X,s), the
-        rule ``ReplicaExchange._exchange_prob_mu`` implements for MPI.
+        With shared β it reduces to β Σ_s (μ_i,s - μ_j,s)(N_Y,s - N_X,s).
+        ``ReplicaExchange._exchange_prob`` implements the same general rule
+        for MPI.
 
         At unequal temperatures the grand-canonical weight also carries the
         de Broglie factors Λ_s^(-3 N_s), and Λ depends on T, so swapping

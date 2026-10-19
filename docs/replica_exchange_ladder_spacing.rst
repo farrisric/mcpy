@@ -57,6 +57,8 @@ For a :math:`\mu` ladder at a single temperature the swap exponent is
    \ln \frac{w'}{w} = \beta\,(\mu_i - \mu_j)(N_j - N_i)
                     = -\beta\,\Delta\mu\,\Delta N .
 
+This is the shared-temperature case of the general swap rule in :ref:`replica-exchange-swap`.
+
 :math:`\Delta N` between neighbouring rungs is not a constant: it grows with
 coverage, because :math:`dN/d\mu` does. A spacing chosen where the surface is
 bare is therefore far too coarse once the surface fills. In the run above, at

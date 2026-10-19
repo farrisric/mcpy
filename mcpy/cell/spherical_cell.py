@@ -20,7 +20,8 @@ class SphericalCell(Cell):
 
         :param atoms: ASE Atoms object containing the atomic configuration.
         :param vacuum: Padding added to the bounding radius.
-        :param species_radii: Dict mapping atom symbols to atomic radii.
+        :param species_radii: Dict mapping atom symbols to exclusion radii
+                              (docs/species_radii.rst).
         :param mc_sample_points: Number of random points used to estimate
                                  the free volume.
         :param seed: Optional seed for the cell-local numpy RNG used by

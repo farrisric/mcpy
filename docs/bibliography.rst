@@ -46,8 +46,8 @@ Hukushima, K., Nemoto, K.
 
 The swap acceptance rule of :class:`~mcpy.ensembles.ReplicaExchange` and
 :class:`~mcpy.ensembles.BatchedReplicaExchange` is the parallel-tempering
-(exchange Monte Carlo) criterion of these papers, extended to a
-chemical-potential ladder.
+(exchange Monte Carlo) criterion of these papers, in the general form of
+Yan and de Pablo (below).
 
 Swendsen, R. H., Wang, J.-S.
 *Replica Monte Carlo simulation of spin-glasses.*
@@ -55,6 +55,15 @@ Swendsen, R. H., Wang, J.-S.
 `doi:10.1103/PhysRevLett.57.2607 <https://doi.org/10.1103/PhysRevLett.57.2607>`_.
 
 The original replica Monte Carlo method, a precursor of replica exchange.
+
+Yan, Q., de Pablo, J. J.
+*Hyper-parallel tempering Monte Carlo: Application to the Lennard-Jones fluid and the
+restricted primitive model.*
+**Journal of Chemical Physics**, 111 (21), 9509-9516 (1999).
+`doi:10.1063/1.480282 <https://doi.org/10.1063/1.480282>`_.
+
+The swap rule of both replica-exchange drivers is the hyper-parallel tempering rule of this paper.
+It covers a temperature ladder, a chemical-potential ladder, and a ladder with one mu per temperature rung.
 
 
 Atomic Simulation Environment

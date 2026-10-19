@@ -259,11 +259,12 @@ Both :class:`ReplicaExchange` and :class:`BatchedReplicaExchange` accept a
 configuration is collected; the MPI variant gathers per-rank bests to rank 0, and the
 batched variant reads its in-process replicas.
 
-- On a temperature ladder all replicas share :math:`\mu`, so their scores :math:`\Omega` are
-  comparable. The lowest-score configuration is written as a single XYZ frame.
-- On a :math:`\mu` ladder each score uses its own replica's :math:`\mu`, so no common score
-  exists. The file then holds one frame per rung, in rung order. Each frame is tagged
-  ``rank=<i>`` and carries that rung's own-:math:`\mu` score.
+- If all replicas share one :math:`\mu`, their scores :math:`\Omega` are comparable.
+  The lowest-score configuration is written as a single XYZ frame.
+- If the replicas have different :math:`\mu`, each score uses its own replica's :math:`\mu`, so no common score exists.
+  This is true on a :math:`\mu` ladder, and on a temperature ladder where ``gcmc_factory`` sets a different :math:`\mu` on each rung.
+  The file then holds one frame per rung, in rung order.
+  Each frame is tagged ``rank=<i>`` and carries that rung's own-:math:`\mu` score.
 
 The per-replica ``minima_file`` history is independent of this and continues to live in
 the per-rank outputs (e.g. ``minima_rank_3.xyz``).
@@ -336,17 +337,11 @@ temperatures *or* different chemical potentials, one per MPI rank, and periodica
 attempting to swap their configurations. It requires `mpi4py` and a user-supplied factory
 that constructs the rank-local `GrandCanonicalEnsemble`.
 
-The exchange between two neighbouring replicas in temperature ladders is accepted with the
-standard parallel-tempering criterion
-
-.. math::
-
-   P_{\mathrm{exch}} = \min\!\left(1,\; e^{(\beta_2 - \beta_1)(E_2 - E_1)}\right),
-
-and an analogous expression involving :math:`\beta\mu \Delta N` is used when replicas
-differ in chemical potentials. After acceptance, replicas swap their configurations and
-energies; partner selection alternates between even and odd ranks on consecutive exchange
-attempts to ensure every replica eventually mixes with both neighbours.
+At each exchange attempt, rank 0 draws one random number.
+It selects the even pairing (0-1, 2-3, ...) or the odd pairing (1-2, 3-4, ...), so every replica mixes with both neighbours.
+Each pair accepts or rejects its swap with the rule in :ref:`replica-exchange-swap`.
+After an accepted swap, the two ranks exchange configurations and energies.
+Each rank keeps its own temperature and chemical potentials.
 
 Launch one MPI rank per replica, e.g. ``mpirun -n 4 python my_run.py`` for a four-rung
 ladder; :doc:`examples/replica_exchange` has a complete script.
@@ -362,6 +357,46 @@ Notes:
   ladder. See :ref:`running-minima`;
 - an exception on any rank aborts the whole MPI job (``comm.Abort``), because the other
   ranks would otherwise wait forever in a collective call.
+
+.. _replica-exchange-swap:
+
+Swap rule
+~~~~~~~~~
+
+Slot :math:`k` gives a configuration :math:`Z` the weight
+
+.. math::
+
+   w_k(Z) \propto e^{-\beta_k \Phi_Z^{(k)}} \prod_s \Lambda_s(T_k)^{-3 N_{Z,s}},
+   \qquad
+   \Phi_Z^{(k)} = E_Z - \sum_s \mu_s^{(k)} N_{Z,s}.
+
+:math:`\Phi_Z^{(k)}` is the grand potential of :math:`Z` with the chemical potentials of slot :math:`k`.
+:math:`N_{Z,s}` is the number of particles of species :math:`s` in :math:`Z`.
+A canonical replica has no :math:`\mu` and no de Broglie factors, so it uses :math:`\Phi = E`.
+A swap moves configuration :math:`X` from slot :math:`i` to slot :math:`j`, and configuration :math:`Y` from slot :math:`j` to slot :math:`i`.
+The swap is accepted with :math:`P_{\mathrm{exch}} = \min(1, e^{\Delta})`, where
+
+.. math::
+
+   \Delta = \beta_i \Phi_X^{(i)} + \beta_j \Phi_Y^{(j)}
+          - \beta_i \Phi_Y^{(i)} - \beta_j \Phi_X^{(j)}
+          + 3 \sum_s (N_{X,s} - N_{Y,s}) \ln\frac{\Lambda_s(T_i)}{\Lambda_s(T_j)}.
+
+The last term comes from the de Broglie factors.
+Because :math:`\Lambda \propto T^{-1/2}`, it equals :math:`\tfrac{3}{2} \sum_s (N_{X,s} - N_{Y,s}) \ln(T_j / T_i)`.
+It is zero when the two slots have the same temperature, and in LJ units, where :math:`\Lambda = 1`.
+This is the hyper-parallel tempering rule of Yan and de Pablo (`doi:10.1063/1.480282 <https://doi.org/10.1063/1.480282>`_).
+
+The same rule applies to every ladder:
+
+- On a temperature ladder with one shared :math:`\mu`, the rule becomes :math:`\Delta = (\beta_j - \beta_i)(\Phi_Y - \Phi_X)` plus the de Broglie term.
+  Do not use bare energies here, because the replicas can have different :math:`N`.
+- On a :math:`\mu` ladder at one temperature, the rule becomes :math:`\Delta = \beta \sum_s (\mu_s^{(i)} - \mu_s^{(j)})(N_{Y,s} - N_{X,s})`.
+  The energies cancel.
+- If ``gcmc_factory`` sets a different :math:`\mu` on each temperature rung, for example a :math:`\mu(T)` with a thermal correction, the cross terms keep the rule exact.
+
+A non-finite :math:`\Delta`, for example from a NaN replica energy, rejects the swap and logs a warning.
 
 
 `BatchedReplicaExchange`
@@ -380,6 +415,8 @@ Requirements:
 - ``gcmc_factory(T=..., rank=i)`` (or ``mu=..., rank=i`` for chemical-potential ladders) must
   return a fresh, independently-seeded :class:`GrandCanonicalEnsemble` with its own cells and
   move selector.
+
+Swaps use the same rule as :class:`ReplicaExchange` (see :ref:`replica-exchange-swap`).
 
 Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
 ``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
