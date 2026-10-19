@@ -20,6 +20,8 @@ new model can be compared with an earlier record:
     python benchmark/force_call_scaling.py --out base.json
     python benchmark/force_call_scaling.py --out new.json --compare base.json
     python benchmark/force_call_scaling.py --recompute old1.json old2.json
+    python benchmark/force_call_scaling.py --predict base.json --atoms 1250 \
+        --relax-steps 58 --gcmc-steps 10000
 
 ``first_ms`` is the first call at each size: with cuEq it includes the
 per-size kernel tuning. The metrics use the median of the later calls only.
@@ -131,6 +133,24 @@ def describe(m):
     return text + ''.join(f'\n  note: {x}' for x in notes)
 
 
+def predict(m, n_atoms, relax_steps, gcmc_steps, moves):
+    """Lower-bound run time from the warm force-call cost of a record.
+
+    t_call = max(floor, slope * N); each trial costs (relax_steps + 1) calls,
+    the +1 being the relaxation's first force call. Tuning at new sizes and
+    the mcpy move/volume/file work are not included (about +5-30% in the
+    profiles), so the result is a lower bound.
+    """
+    slope = m['slope_us_per_atom'] or 0.0
+    t_call = max(m['floor_ms'], slope * 1e-3 * n_atoms)
+    regime = 'overhead (floor)' if t_call == m['floor_ms'] else 'model work (slope)'
+    total_s = gcmc_steps * moves * (relax_steps + 1) * t_call / 1e3
+    return (f'force call at {n_atoms} atoms: {t_call:.2f} ms, set by the {regime}\n'
+            f'{gcmc_steps} steps x {moves} moves x {relax_steps + 1:.0f} calls: '
+            f'{total_s / 3600:.2f} h ({total_s / 60:.0f} min), a lower bound '
+            f'(no new-size tuning, no mcpy overhead)')
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     p.add_argument('--checkpoint', default='medium-mpa-0',
@@ -147,7 +167,24 @@ def main():
     p.add_argument('--compare', help='earlier JSON record to compare with')
     p.add_argument('--recompute', nargs='+', metavar='JSON',
                    help='add the metrics to existing records, no GPU run')
+    p.add_argument('--predict', metavar='JSON',
+                   help='estimate a GCMC run time from a record, no GPU run '
+                        '(needs --atoms and --relax-steps)')
+    p.add_argument('--atoms', type=int, help='--predict: atoms per force call '
+                   '(all replicas together for a batched run)')
+    p.add_argument('--relax-steps', type=float,
+                   help='--predict: mean force calls per relaxation, from a pilot run')
+    p.add_argument('--gcmc-steps', type=int, default=10_000, help='--predict: run length')
+    p.add_argument('--moves', type=int, default=1, help='--predict: trial moves per step')
     args = p.parse_args()
+    if args.predict:
+        if args.atoms is None or args.relax_steps is None:
+            p.error('--predict needs --atoms and --relax-steps')
+        with open(args.predict) as f:
+            rec = json.load(f)
+        m = rec.get('metrics') or metrics(rec['rows'])
+        print(predict(m, args.atoms, args.relax_steps, args.gcmc_steps, args.moves))
+        return
     if args.recompute:
         for path in args.recompute:
             with open(path) as f:
