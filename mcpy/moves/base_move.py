@@ -42,10 +42,10 @@ class BaseMove(ABC):
 
         Parameters:
         cell (Cell): Region the move acts in (``NullCell`` for moves that
-            sample no region).
+        sample no region).
         species (list[str]): Species the move acts on.
         seed (int): Seed of the move's ``RandomNumberGenerator``. ``None``
-            seeds it from OS entropy, so the run is not repeatable.
+        seeds it from OS entropy, so the run is not repeatable.
         """
         self.species = species
         self.cell = cell

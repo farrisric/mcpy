@@ -599,7 +599,7 @@ def test_canonical_rejects_negative_temperature():
 
 @pytest.mark.parametrize('species,mu,match', [
     (['H'], {'O': -1.0}, 'no mu'),
-    (['O'], {'H': -1.0, 'O': -1.0}, "not in species"),
+    (['O'], {'H': -1.0, 'O': -1.0}, 'not in species'),
     (['H2'], {'H2': -1.0}, 'not element symbols'),
 ])
 def test_gcmc_rejects_inconsistent_species(species, mu, match):

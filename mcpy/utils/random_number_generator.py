@@ -11,7 +11,7 @@ class RandomNumberGenerator:
 
         Parameters:
         seed (int, optional): Seed for reproducibility. Default is None.
-            Any integer type, numpy integers included.
+        Any integer type, numpy integers included.
         """
         self.random = Random(None if seed is None else operator.index(seed))
 

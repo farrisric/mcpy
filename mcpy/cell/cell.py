@@ -62,7 +62,7 @@ class Cell(BaseCell):
     @property
     def mc_sample_points(self):
         """Points the next free-volume estimate draws. Adaptive, at most
-        :attr:`max_sample_points`."""
+        ``max_sample_points``."""
         return self._n_samples
 
     @mc_sample_points.setter
