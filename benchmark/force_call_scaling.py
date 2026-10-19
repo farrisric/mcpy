@@ -28,6 +28,7 @@ import numpy as np
 
 # 4-layer Ag(111) slabs: nx * nx * 4 atoms, 64 to 4096.
 SIZES = (4, 6, 8, 11, 16, 23, 32)
+WARMUP_NX = 5  # 100 atoms per structure, not one of SIZES
 
 
 def slab(nx, rattle_seed):
@@ -40,7 +41,8 @@ def slab(nx, rattle_seed):
 def environment(args):
     import torch
     from importlib.metadata import PackageNotFoundError, version
-    here = os.path.dirname(os.path.abspath(__file__))
+    import mcpy
+    here = os.path.dirname(os.path.abspath(mcpy.__file__))  # the mcpy that runs
     try:
         commit = subprocess.run(['git', 'describe', '--always', '--dirty'], cwd=here,
                                 capture_output=True, text=True, check=True).stdout.strip()
@@ -55,7 +57,8 @@ def environment(args):
     return dict(date=datetime.datetime.now().isoformat(timespec='seconds'),
                 git=commit, versions=versions, gpu=torch.cuda.get_device_name(0),
                 checkpoint=args.checkpoint, head=args.head, cueq=not args.no_cueq,
-                compile=not args.no_compile, batch=args.batch, repeats=args.repeats)
+                compile=not args.no_compile, batch=args.batch, repeats=args.repeats,
+                mcpy_path=here)
 
 
 def time_calls(calc, atoms_list, repeats):
@@ -85,6 +88,8 @@ def main():
     p.add_argument('--batch', type=int, default=1,
                    help='structures per force call (copies with different rattles)')
     p.add_argument('--repeats', type=int, default=20)
+    p.add_argument('--max-atoms', type=int, default=None,
+                   help='skip sizes whose batch holds more atoms (GPU memory)')
     p.add_argument('--out', required=True, help='JSON record to write')
     p.add_argument('--compare', help='earlier JSON record to compare with')
     args = p.parse_args()
@@ -93,10 +98,14 @@ def main():
     calc = AlchemiFCalculator(args.checkpoint, head=args.head, device='cuda',
                               enable_cueq=not args.no_cueq,
                               compile_model=not args.no_compile, steps=1)
-    time_calls(calc, [slab(SIZES[0], 0)], 3)  # compile once before timing
+    # Compile before timing, at a size outside SIZES (its own padding bucket)
+    # and with the batch's graph count, so no timed row starts warm.
+    time_calls(calc, [slab(WARMUP_NX, k) for k in range(args.batch)], 3)
 
     rows = []
     for nx in SIZES:
+        if args.max_atoms and nx * nx * 4 * args.batch > args.max_atoms:
+            continue
         atoms = [slab(nx, k) for k in range(args.batch)]
         first, med, epa = time_calls(calc, atoms, args.repeats)
         n = sum(len(a) for a in atoms)
