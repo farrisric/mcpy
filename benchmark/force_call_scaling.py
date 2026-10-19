@@ -1,19 +1,31 @@
-"""Force-call cost of an Alchemi MACE calculator: t(N) = a + b * N.
+"""Force-call cost of an Alchemi MACE calculator: floor, slope, crossover.
 
-One MACE force call costs a fixed overhead ``a`` (kernel launches, Python,
-synchronisation) plus ``b`` per atom (the model work). A single "atoms per
-second" number mixes the two, so it is not fair across system sizes. This
-script times force calls on fixed, rattled Ag(111) slabs of several sizes,
-fits the line, and writes one JSON record per run, so a code change or a new
-model can be compared with an earlier record:
+The time of one MACE force call has two regimes. For small systems it is
+flat: a fixed cost per call (kernel launches, Python, synchronisation), and
+extra atoms are almost free. For large systems the GPU is full and the time
+grows linearly with the atom count. One "atoms per second" number, or one
+straight line through both regimes, depends on the sizes measured. This
+script reports three numbers that do not:
+
+* ``floor_ms``: the lowest time per call, the overhead limit;
+* ``slope_us_per_atom``: the cost per atom, fitted only where the time is
+  at least twice the floor (the GPU is full);
+* ``crossover_atoms`` = floor / slope: below it the overhead dominates,
+  above it the model work does.
+
+It times force calls on fixed, rattled Ag(111) slabs from 64 atoms up to the
+GPU memory limit and writes one JSON record per run, so a code change or a
+new model can be compared with an earlier record:
 
     python benchmark/force_call_scaling.py --out base.json
     python benchmark/force_call_scaling.py --out new.json --compare base.json
+    python benchmark/force_call_scaling.py --recompute old1.json old2.json
 
 ``first_ms`` is the first call at each size: with cuEq it includes the
-per-size kernel tuning. The fit uses the median of the later calls only.
+per-size kernel tuning. The metrics use the median of the later calls only.
 ``e_per_atom`` is the energy of each fixed structure, a check that the
-model and the code still give the same numbers.
+model and the code still give the same numbers. ``--recompute`` adds the
+metrics to existing records without a GPU.
 
 GPU and the nvalchemi stack required (the ``alchemi`` conda env).
 """
@@ -79,6 +91,27 @@ def time_calls(calc, atoms_list, repeats):
     return times[0], float(np.median(times[1:])), float(_graph_energies(out, batch).sum()) / n
 
 
+def metrics(rows):
+    """Floor, saturated slope and crossover from the timed rows."""
+    n = np.array([r['n_atoms'] for r in rows], float)
+    t = np.array([r['ms'] for r in rows])
+    floor = float(t.min())
+    sat = t >= 2 * floor
+    saturated = int(sat.sum()) >= 2
+    if not saturated:  # the GPU never filled up: use the two largest sizes
+        sat = n >= np.sort(n)[-2]
+    slope, _ = np.polyfit(n[sat], t[sat], 1)
+    return dict(floor_ms=floor, floor_at_atoms=int(n[t.argmin()]),
+                slope_us_per_atom=float(slope * 1e3), slope_sizes=n[sat].astype(int).tolist(),
+                saturated=saturated, crossover_atoms=float(floor / slope))
+
+
+def describe(m):
+    note = '' if m['saturated'] else '  (GPU not full at any size: slope is a lower bound)'
+    return (f"floor {m['floor_ms']:.2f} ms, slope {m['slope_us_per_atom']:.3f} us/atom, "
+            f"crossover {m['crossover_atoms']:.0f} atoms{note}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     p.add_argument('--checkpoint', default='medium-mpa-0',
@@ -91,14 +124,30 @@ def main():
     p.add_argument('--repeats', type=int, default=20)
     p.add_argument('--max-atoms', type=int, default=None,
                    help='skip sizes whose batch holds more atoms (GPU memory)')
-    p.add_argument('--out', required=True, help='JSON record to write')
+    p.add_argument('--out', help='JSON record to write')
     p.add_argument('--compare', help='earlier JSON record to compare with')
+    p.add_argument('--recompute', nargs='+', metavar='JSON',
+                   help='add the metrics to existing records, no GPU run')
     args = p.parse_args()
+    if args.recompute:
+        for path in args.recompute:
+            with open(path) as f:
+                rec = json.load(f)
+            if len(rec['rows']) >= 2:
+                rec['metrics'] = metrics(rec['rows'])
+                with open(path, 'w') as f:
+                    json.dump(rec, f, indent=1)
+                print(f"{path}: {describe(rec['metrics'])}")
+            else:
+                print(f'{path}: fewer than 2 rows, skipped')
+        return
+    if not args.out:
+        p.error('--out is required unless --recompute is given')
     sizes = [nx for nx in SIZES
              if not args.max_atoms or nx * nx * 4 * args.batch <= args.max_atoms]
     if len(sizes) < 2:
         p.error(f'--max-atoms {args.max_atoms} with --batch {args.batch} leaves '
-                f'{len(sizes)} size(s); the a + b N fit needs at least 2')
+                f'{len(sizes)} size(s); the metrics need at least 2')
 
     from mcpy.calculators import AlchemiFCalculator
     calc = AlchemiFCalculator(args.checkpoint, head=args.head, device='cuda',
@@ -130,19 +179,14 @@ def main():
 
     common = dict(environment(args), rows=rows, oom_at=oom_at,
                   peak_mem_gb=torch.cuda.max_memory_allocated() / 2**30)
-    if len(rows) < 2:  # out of memory too early for a line
+    if len(rows) < 2:  # out of memory too early for any metric
         with open(args.out, 'w') as f:
-            json.dump(dict(common, fit=None), f, indent=1)
-        raise SystemExit(f'only {len(rows)} size(s) fit in GPU memory: no a + b N fit; '
+            json.dump(dict(common, metrics=None), f, indent=1)
+        raise SystemExit(f'only {len(rows)} size(s) fit in GPU memory: no metrics; '
                          f'rows written to {args.out}')
-    n = np.array([r['n_atoms'] for r in rows], float)
-    t = np.array([r['ms'] for r in rows])
-    b, a = np.polyfit(n, t, 1)
-    fit = dict(a_ms=float(a), b_us_per_atom=float(b * 1e3),
-               max_rel_residual=float(np.max(np.abs(a + b * n - t) / t)))
-    print(f'\nfit t(N) = a + b N:  a = {a:.2f} ms,  b = {b * 1e3:.3f} us/atom  '
-          f'(max residual {fit["max_rel_residual"]:.0%})')
-    record = dict(common, fit=fit, max_fitting_atoms=int(n.max()))
+    m = metrics(rows)
+    print(f'\n{describe(m)}')
+    record = dict(common, metrics=m, max_fitting_atoms=int(rows[-1]['n_atoms']))
     with open(args.out, 'w') as f:
         json.dump(record, f, indent=1)
 
@@ -150,9 +194,11 @@ def main():
         with open(args.compare) as f:
             ref = json.load(f)
         print(f'\nvs {args.compare} ({ref["git"]}, {ref["date"]}):')
-        if ref.get('fit'):
-            print(f'  a  {ref["fit"]["a_ms"]:7.2f} -> {a:7.2f} ms')
-            print(f'  b  {ref["fit"]["b_us_per_atom"]:7.3f} -> {b * 1e3:7.3f} us/atom')
+        old_m = ref.get('metrics') or (metrics(ref['rows']) if len(ref['rows']) >= 2 else None)
+        if old_m:
+            for key, unit in (('floor_ms', 'ms'), ('slope_us_per_atom', 'us/atom'),
+                              ('crossover_atoms', 'atoms')):
+                print(f'  {key:18s} {old_m[key]:10.3f} -> {m[key]:10.3f} {unit}')
         by_n = {r['n_atoms']: r for r in ref['rows']}
         for r in rows:
             old = by_n.get(r['n_atoms'])
