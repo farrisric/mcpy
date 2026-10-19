@@ -102,7 +102,11 @@ def _single_atom_gcmc(mu_h):
     atoms = Atoms('H', positions=[[5, 5, 5]], cell=[10, 10, 10], pbc=True)
     box = Cell(atoms)
     ms = MoveSelector([1], [DeletionMove(box, species=['H'], seed=1)], seed=2)
-    return _gcmc(atoms, [box], ms, mu={'H': mu_h}), ms
+    balanced = MoveSelector([1, 1], [DeletionMove(box, species=['H'], seed=1),
+                                     InsertionMove(box, species=['H'], seed=4)], seed=2)
+    g = _gcmc(atoms, [box], balanced, mu={'H': mu_h})
+    g.move_selector = ms  # deletion only: drive exactly one deletion
+    return g, ms
 
 
 def test_deletion_of_last_atom_accepted_updates_state():

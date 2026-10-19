@@ -14,6 +14,7 @@ from ase.calculators.emt import EMT
 from ase.cluster import Octahedron
 from ase.constraints import FixAtoms
 from ase.geometry import find_mic
+from ase.io import read
 
 from mcpy.cell import BaseCell, Cell, CustomCell, DomeCell, NullCell, SphericalCell
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
@@ -290,6 +291,35 @@ def test_b6_brownian_is_seeded_and_clean():
         assert 'momenta' not in atoms.arrays
         finals.append(atoms.positions.copy())
     np.testing.assert_array_equal(finals[0], finals[1])
+
+
+def test_brownian_does_not_drift_the_center_of_mass():
+    atoms = _cu_cluster()
+    com_before = atoms.get_center_of_mass()
+    BrownianMove(temperature=2000.0, calculator=EMT(), steps=50, d_t=2.0,
+                 seed=7).do_trial_move(atoms)
+    np.testing.assert_allclose(atoms.get_center_of_mass(), com_before, atol=1e-6)
+
+
+def test_brownian_writes_every_md_frame(tmp_path):
+    path = tmp_path / 'md.xyz'
+    atoms = _cu_cluster()
+    move = BrownianMove(temperature=2000.0, calculator=EMT(), steps=4, d_t=2.0,
+                        seed=7, trajectory_file=str(path))
+    move.do_trial_move(atoms)
+    move.do_trial_move(atoms)
+    frames = read(path, index=':')
+    assert len(frames) == 2 * (4 + 1)
+    assert [f.info['md_run'] for f in frames] == [1] * 5 + [2] * 5
+    assert [f.info['md_step'] for f in frames] == list(range(5)) * 2
+    last = frames[-1]
+    assert last.info['time_fs'] == pytest.approx(8.0)
+    assert last.info['T_target_K'] == 2000.0
+    assert last.info['T_K'] > 0
+    assert last.info['etot'] == pytest.approx(last.info['epot'] + last.info['ekin'])
+    np.testing.assert_allclose(last.positions, atoms.positions, atol=1e-6)
+    assert last.get_forces().shape == (len(atoms), 3)
+    assert 'momenta' not in atoms.arrays
 
 
 # --------------------------------------------------------------------------

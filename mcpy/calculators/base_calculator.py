@@ -28,8 +28,12 @@ class BaseCalculator:
         """
         Relax up to ``self.steps`` / ``self.fmax`` (in place) then return the
         potential energy. Logs a warning when the step cap stops the
-        relaxation before it converges.
+        relaxation before it converges. An empty structure is 0.0 eV and is
+        never sent to the optimizer or the calculator, which fail on 0 atoms.
         """
+        if len(atoms) == 0:
+            self.last_relax_steps = 0
+            return 0.0
         atoms.calc = self.calculator
         if self.steps > 0:
             opt = self._optimizer_cls(atoms, logfile=None)

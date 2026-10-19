@@ -124,7 +124,9 @@ class SphericalCell(Cell):
         return self.sphere_volume
 
     def _volume_samples(self):
-        return self._sample_sphere_points(self.mc_sample_points), self.sphere_volume
+        # Full cap, then a prefix: see Cell._volume_samples.
+        return (self._sample_sphere_points(self.max_sample_points)[:self.mc_sample_points],
+                self.sphere_volume)
 
     def _bounds(self):
         return self.center - self.radius, self.center + self.radius

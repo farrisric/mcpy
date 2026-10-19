@@ -61,8 +61,9 @@ R_O = 0.5
 # Shift (eV) on the bulk Ag energy per atom: G(500 K) - H(0 K) of Ag(s) at
 # 1 bar, from the CODATA data of Ag(cr) (Cox, Wagman and Medvedev, 1989) as
 # fitted in the NASA Glenn coefficients (McBride et al., NASA/TP-2002-211556).
-# NIST-JANAF has no Ag table. The value is for TEMPERATURE = 500 K. Set 0.0
-# to leave out the thermal term (static bulk Ag at 0 K).
+# NIST-JANAF has no Ag table. With it the reservoir is bulk Ag at
+# TEMPERATURE = 500 K; recompute it for another TEMPERATURE. Set 0.0 for the
+# static Ag-rich limit (bulk Ag at 0 K, no thermal term).
 MU_AG_CORRECTION = -0.176
 
 # --- system ----------------------------------------------------------------

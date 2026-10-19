@@ -23,7 +23,7 @@ class MACE_F_Calculator(BaseCalculator):
         :param device: Device to load the model on ('cpu' or 'cuda').
         :param optimizer: ASE optimizer to use: 'lbfgs' (default) or 'fire'.
                           Use 'fire' for apples-to-apples comparison with
-                          AlchemiFCalculator (which also uses FIRE).
+                          AlchemiFCalculator (FIRE by default, optimizer=...).
         :param head: Head of a multihead model, by name. ``None`` keeps
                      MACECalculator's default (the last head).
         :param default_dtype: 'float32' or 'float64'; '' keeps the

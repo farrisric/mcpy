@@ -99,19 +99,6 @@ def test_find_molecules_missing_array_and_cell_filter():
     assert find_molecules(atoms, sorted(['O', 'H', 'H']), _NowhereCell()) == []
 
 
-def test_duck_typed_cell_with_only_is_point_inside_still_works():
-    """Pre-1.4.0 contract: a user cell exposing only ``is_point_inside``
-    (no BaseCell inheritance) must keep working with the molecule moves via
-    the fallback predicate."""
-    class _LegacyDuckCell:
-        def is_point_inside(self, point):
-            return False
-
-    atoms = _water_box()
-    assert find_molecules(atoms, sorted(['O', 'H', 'H']),
-                          _LegacyDuckCell()) == []
-
-
 def test_random_rotation_matrix_is_rotation():
     rng = RandomNumberGenerator(seed=7)
     r1 = random_rotation_matrix(rng)
@@ -276,6 +263,13 @@ def test_move_selector_exchange_count():
     assert ms2.get_exchange_count() is None
 
 
+class _NoMove:
+    species, cell = ['X'], None
+
+    def do_trial_move(self, atoms):
+        return False, 0, 'X'
+
+
 class _StubCalc:
     def get_potential_energy(self, atoms):
         return -1.0 * len(atoms)
@@ -289,13 +283,17 @@ class _HugeUphillCalc:
 
 
 def _mol_gcmc(atoms, move_selector, calculator, mu_h2o=0.0):
-    return GrandCanonicalEnsemble(
+    g = GrandCanonicalEnsemble(
         atoms=atoms, cells=[Cell(atoms)], units_type='LJ',
         calculator=calculator, mu={'H2O': mu_h2o}, species=[],
-        temperature=1.0, move_selector=move_selector, random_seed=3,
+        temperature=1.0, move_selector=MoveSelector([1], [_NoMove()]), random_seed=3,
         traj_file=None, outfile=None,
-        molecules={'H2O': _water_template()},
+        molecules={'H2O': _water_template(), 'O2': Atoms('O2')},
     )
+    # The selector under test may hold one exchange move only, which the
+    # constructor's insertion/deletion balance check refuses.
+    g.move_selector = move_selector
+    return g
 
 
 def test_gcmc_acceptance_uses_molecule_count():

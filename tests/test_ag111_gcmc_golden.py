@@ -16,8 +16,8 @@ proposals redrawn against the same ``species_radii`` exclusion spheres
 (ADR 0003), de Broglie acceptance, arrays+constraints rollback,
 trajectory writing) reproduces exactly when seeded.
 
-Parameters come from ``examples/03_gcmc_surface_mace.py --no-ag-moves`` (the
-example exchanges Ag as well by default), the calibrated set for this
+Parameters come from ``examples/03_gcmc_surface_mace.py`` without its Ag
+moves (the example exchanges Ag as well), the calibrated set for this
 checkpoint: a=4.165, the O-Ag exclusion radius 2.068 used both as the
 radius and as the region depth below the top layer, height 7, an O-O
 clearance of 0.5 (``species_radii['O']``, formerly ``min_insert``), and the
@@ -207,9 +207,13 @@ RE_STEPS = 30
 RE_EXCHANGE_INTERVAL = 5
 
 # Golden values: seed 777, ladder above, 30 steps.
-RE_GOLDEN_N = [53, 53, 51]                  # final atom count per replica
-RE_GOLDEN_O = [5, 5, 3]                     # O count per replica, monotonic in mu
-RE_GOLDEN_ENERGY = [-151.8250, -151.8484, -141.4654]
+# Last regenerated for two deliberate changes, with identical results in two
+# runs: the startup volume refresh after the batched re-relaxation, and the
+# convergence check before the first FIRE step (an O inserted with every free
+# force below fmax now stays where it was put).
+RE_GOLDEN_N = [53, 52, 52]                  # final atom count per replica
+RE_GOLDEN_O = [5, 4, 4]                     # O count per replica, non-increasing in mu
+RE_GOLDEN_ENERGY = [-151.8011, -146.6509, -146.6045]
 
 
 def _replica_factory(tmp_path, calculator):

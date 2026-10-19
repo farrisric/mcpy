@@ -1,13 +1,15 @@
-import random
+import functools
 import logging
+import os
+import random
+import subprocess
 
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
+import ase.io
 from ase import Atoms
 from ase.calculators.calculator import Calculator
-
-import numpy as np
 
 from ..cell import Cell
 
@@ -41,7 +43,8 @@ class BaseEnsemble(ABC):
         ``minima_file`` (off by default) enables basin-hopping-style output:
         a frame is written every time a new strictly-lower score is observed
         (see ``_minimum_score``). ``minima_mode='a'`` appends a history of
-        improving minima; ``'w'`` keeps only the current running best.
+        improving minima (a fresh ensemble starts the file anew; a later
+        ``run()`` continues it); ``'w'`` keeps only the current running best.
         """
         self.logger = logger
 
@@ -69,6 +72,8 @@ class BaseEnsemble(ABC):
         # Step of the last trajectory frame, so a frame is never written
         # twice for the same state (e.g. finalize_run after an aligned write).
         self._last_traj_step = None
+        # Step of the last outfile row, so a row is never written twice.
+        self._last_logged_step = None
 
         self._minima_file = minima_file
         self._minima_mode = minima_mode
@@ -85,7 +90,7 @@ class BaseEnsemble(ABC):
             self._random_seed = random_seed
 
     def __enter__(self):
-        self.initialize_run()
+        self._start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -114,15 +119,18 @@ class BaseEnsemble(ABC):
 
     def write_outfile(self, step: int, energy: float) -> None:
         """
-        Default outfile writer: ``STEP: <s> ENERGY: <e>``. Subclasses
-        typically override this. No-op when ``outfile`` is disabled or the
-        handle was never opened.
+        Default outfile writer: ``STEP: <s> ENERGY: <e>``, at most once per
+        step. Subclasses typically override this. No-op when ``outfile`` is
+        disabled or the handle was never opened.
         """
+        if self._last_logged_step == step:
+            return
         if self._outfile is None or self._outfile_handle is None:
             return
         try:
             self._outfile_handle.write(f'STEP: {step} ENERGY: {energy}\n')
             self._outfile_handle.flush()
+            self._last_logged_step = step
         except (OSError, AttributeError):
             self.logger.exception('Error writing to file %s', self._outfile)
 
@@ -149,9 +157,11 @@ class BaseEnsemble(ABC):
         """
         return energy
 
-    def _record_minimum(self, atoms: Atoms, energy: float) -> None:
+    def _record_minimum(self, atoms: Atoms, energy: float, step: int = None) -> None:
         """If ``atoms``/``energy`` improves the running best, snapshot it and
-        write to ``minima_file`` (no-op when ``minima_file`` is disabled)."""
+        write to ``minima_file`` (no-op when ``minima_file`` is disabled).
+        ``step`` labels the frame (default ``self._step``); calls from inside
+        a step pass ``self._step + 1``, the number the outfile gives it."""
         score = self._minimum_score(atoms, energy)
         if score >= self._best_score:
             return
@@ -164,8 +174,9 @@ class BaseEnsemble(ABC):
             if self._minima_mode == 'w':
                 self._minima_handle.seek(0)
                 self._minima_handle.truncate()
-            extra = f'step={self._step} score={score:.6f}'
-            write_xyz(atoms, energy, self._minima_handle, extra=extra)
+            step = self._step if step is None else step
+            write_xyz(atoms, energy, self._minima_handle,
+                      extra={'step': step, 'score': round(score, 6)})
         except (OSError, AttributeError):
             self.logger.exception('Error writing to minima file %s', self._minima_file)
 
@@ -223,8 +234,9 @@ class BaseEnsemble(ABC):
                 # 'w' opens read+write so we can truncate on each improvement
                 # without losing the handle (single-best mode). A resumed run
                 # keeps the current best ('a+' still truncates on improvement).
+                # History mode starts a fresh file and continues it on resume.
                 if self._minima_mode != 'w':
-                    mode = 'a'
+                    mode = 'a' if self._resume_files else 'w'
                 else:
                     mode = 'a+' if self._resume_files else 'w+'
                 self._minima_handle = open(self._minima_file, mode)
@@ -240,12 +252,8 @@ class BaseEnsemble(ABC):
         self.logger.info('Simulation complete.')
         ms = getattr(self, 'move_selector', None)
         if ms is not None:
-            if hasattr(ms, 'total_ratios'):
-                self.logger.info('Total attempts per move: %s', ms.move_counter_total)
-                self.logger.info('Cumulative acceptance ratios: %s', ms.total_ratios())
-            else:
-                self.logger.info('Attempts per move: %s', ms.move_counter)
-                self.logger.info('Acceptance ratios: %s', ms.get_acceptance_ratio())
+            self.logger.info('Total attempts per move: %s', ms.move_counter_total)
+            self.logger.info('Cumulative acceptance ratios: %s', ms.total_ratios())
         if hasattr(self, 'E_old'):
             self.logger.info('Final energy (eV): %.6f', self.E_old)
         self.close_files()
@@ -258,6 +266,17 @@ class BaseEnsemble(ABC):
     def get_outfile_metadata(self) -> str:
         return ''
 
+    def _start(self) -> None:
+        """``initialize_run``, undone on failure: the handles are closed and
+        the ensemble is not marked initialized, so a retried ``run()`` sets
+        up from scratch (headers included) instead of skipping the setup."""
+        try:
+            self.initialize_run()
+        except BaseException:
+            self.close_files()
+            self._initialized = False
+            raise
+
     @abstractmethod
     def _run(self) -> None:
         """Perform a single ensemble step. Implemented by subclasses."""
@@ -265,7 +284,7 @@ class BaseEnsemble(ABC):
 
     def run(self, steps: int) -> None:
         """Standard run loop: initialize_run, loop _run, finalize_run."""
-        self.initialize_run()
+        self._start()
         try:
             for _ in range(steps):
                 self._run()
@@ -296,47 +315,42 @@ def write_global_minimum(path, bests, per_rung, logger):
     try:
         with open(path, 'w') as fh:
             for rank, (score, energy, atoms) in entries:
-                write_xyz(atoms, energy, fh, extra=f'rank={rank} score={score:.6f}')
+                write_xyz(atoms, energy, fh, extra={'rank': rank, 'score': round(score, 6)})
     except OSError:
         logger.exception('Error writing global minimum to %s', path)
 
 
-def write_xyz(atoms, energy, file_or_path, extra: str = ''):
+def write_xyz(atoms, energy, file_or_path, extra: dict = None):
     """
-    Write an XYZ frame to an open file handle or a path (append mode).
-    Single-string build; avoids the per-frame ``np.savetxt`` overhead.
+    Write one extended-XYZ frame to an open file handle or a path (append
+    mode), through ``ase.io.write`` so pbc, FixAtoms (``move_mask``), tags
+    and per-atom arrays such as ``molecule_id`` survive a restart.
 
-    ``extra`` is inserted into the comment line between ``energy=`` and the
-    ``Lattice=`` field (e.g. ``"step=42 score=-1.234"``).
+    ``extra`` adds info keys to the comment line next to ``energy``
+    (e.g. ``{'step': 42, 'score': -1.234}``).
     """
-    cell = np.asarray(atoms.get_cell())
-    positions = atoms.positions
-    symbols = atoms.get_chemical_symbols()
-    num_atoms = len(atoms)
-    cell_str = ' '.join(f'{v:.8f}' for v in cell.ravel())
-
-    mol_ids = atoms.arrays.get('molecule_id')
-
-    comment = f'energy={energy:.6f}'
-    if extra:
-        comment += f' {extra}'
-    comment += f' Lattice="{cell_str}"'
-    if mol_ids is not None:
-        comment += ' Properties=species:S:1:pos:R:3:molecule_id:I:1'
-    comment += '\n'
-    parts = [f'{num_atoms}\n', comment]
-
-    for i, (s, p) in enumerate(zip(symbols, positions)):
-        line = f'{s} {p[0]} {p[1]} {p[2]}'
-        if mol_ids is not None:
-            line += f' {mol_ids[i]}'
-        line += '\n'
-        parts.append(line)
-    text = ''.join(parts)
-
+    frame = atoms.copy()  # no calculator: its stale results must not be written
+    frame.info = {'energy': float(energy), **(extra or {})}
     if isinstance(file_or_path, str):
         with open(file_or_path, 'a') as xyz_file:
-            xyz_file.write(text)
+            ase.io.write(xyz_file, frame, format='extxyz')
     else:
-        file_or_path.write(text)
+        ase.io.write(file_or_path, frame, format='extxyz')
         file_or_path.flush()
+
+
+@functools.lru_cache(maxsize=None)
+def code_version() -> str:
+    """The mcpy version, plus ``git describe`` when mcpy runs from a git
+    checkout (an editable install), for the outfile header."""
+    from .. import __version__
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not os.path.exists(os.path.join(root, '.git')):
+        return __version__
+    try:
+        out = subprocess.run(['git', 'describe', '--tags', '--always', '--dirty'],
+                             cwd=root, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return __version__
+    describe = out.stdout.strip()
+    return f'{__version__} (git {describe})' if out.returncode == 0 and describe else __version__

@@ -2,6 +2,11 @@
 
 The grand-canonical acceptance criterion feeds the **total atom count** (`len(atoms)` before the move, every species plus the fixed substrate) into the de Broglie combinatorial factor `V/((N+1)Λ³)`, not the physically standard per-species, in-region count used by the textbook form and LAMMPS `fix gcmc`.
 
-We chose this deliberately, despite the per-species count being the more correct ideal-gas indistinguishability term, because: (1) **reproducibility** — the group's entire body of GCMC work, including the forthcoming Ag-oxidation study, was produced with this convention, and switching shifts the effective chemical potential by `kT·ln((N_total+1)/(N_species+1))` (~0.1–0.2 eV toward insertion), which would require re-running and re-calibrating μ across all prior work; and (2) it **masks a runaway failure mode** where species dissolving below the cell floor are undercounted, keeping insertion favoured regardless of μ — the total count is self-limiting because buried atoms still raise `N_total`.
+We chose this deliberately, despite the per-species count being the more correct ideal-gas indistinguishability term, because: (1) **reproducibility**: the group's entire body of GCMC work, including the forthcoming Ag-oxidation study, was produced with this convention, and switching shifts the effective chemical potential by `kT·ln((N_total+1)/(N_species+1))` (~0.1–0.2 eV toward insertion), which would require re-running and re-calibrating μ across all prior work; and (2) it **masks a runaway failure mode** where species dissolving below the cell floor are undercounted, keeping insertion favoured regardless of μ; the total count is self-limiting because buried atoms still raise `N_total`.
 
 This is a reproducibility choice, **not** a correctness claim. A fresh study with no need to match prior runs should prefer the per-species count and recalibrate μ against a gas reference. Full derivation, LAMMPS comparison, and change history: `docs/gcmc_acceptance_convention.rst`. Guarded by `tests/test_acceptance.py::test_do_gcmc_step_feeds_total_atom_count`.
+
+Under relaxed trials (ADR 0002) neither count is exact.
+A relaxed run weights each basin by its catchment volume, so it samples at an effective mu that differs from the nominal mu, with either count.
+The per-species count is still the better choice for a fresh study.
+`docs/gcmc_acceptance_convention.rst` (section "Relaxed trials shift the effective mu") gives the formula and worked numbers.

@@ -19,7 +19,9 @@ import pytest
 from ase import Atoms
 from ase.build import bulk, fcc111
 from ase.calculators.emt import EMT
+from ase.cluster import Octahedron
 from ase.constraints import FixAtoms, FixCartesian
+from ase.io import read
 
 from mcpy.calculators import BaseCalculator
 
@@ -161,14 +163,21 @@ def alchemi():
 
 
 @pytest.fixture(scope='module')
-def energy_calc(alchemi):
-    return alchemi.AlchemiCalculator(str(CHECKPOINT), device='cuda',
+def device(alchemi):
+    # CUDA when there is one; the gated tests also pass on the CPU.
+    return os.environ.get('MCPY_TEST_DEVICE') or (
+        'cuda' if alchemi.torch.cuda.is_available() else 'cpu')
+
+
+@pytest.fixture(scope='module')
+def energy_calc(alchemi, device):
+    return alchemi.AlchemiCalculator(str(CHECKPOINT), device=device,
                                      enable_cueq=False, compile_model=False)
 
 
 @pytest.fixture(scope='module')
-def relax_calc(alchemi):
-    return alchemi.AlchemiFCalculator(str(CHECKPOINT), steps=50, device='cuda',
+def relax_calc(alchemi, device):
+    return alchemi.AlchemiFCalculator(str(CHECKPOINT), steps=50, device=device,
                                       enable_cueq=False, compile_model=False)
 
 
@@ -191,8 +200,8 @@ def test_empty_structure_is_zero_energy(which, request):
 
 
 @gpu
-def test_relax_steps0_is_pure_single_point(alchemi, energy_calc, caplog):
-    calc = alchemi.AlchemiFCalculator(str(CHECKPOINT), steps=0, device='cuda', enable_cueq=False,
+def test_relax_steps0_is_pure_single_point(alchemi, device, energy_calc, caplog):
+    calc = alchemi.AlchemiFCalculator(str(CHECKPOINT), steps=0, device=device, enable_cueq=False,
                                       compile_model=False)
     slab = _ag_slab()
     start = slab.positions.copy()
@@ -216,14 +225,48 @@ def test_unsupported_constraint_raises(relax_calc, energy_calc):
 
 
 @gpu
-def test_energy_only_defaults(alchemi, energy_calc, relax_calc):
+def test_energy_only_defaults(alchemi, device, energy_calc, relax_calc):
     assert energy_calc.energy_only is True
     assert 'forces' not in energy_calc.model.model_config.active_outputs
     with pytest.raises(ValueError, match='energy_only'):
         energy_calc.run_md(_ag_slab(), temperature=300.0, steps=2)
-    shared = alchemi.AlchemiCalculator(relax_calc.model, device='cuda')
+    shared = alchemi.AlchemiCalculator(relax_calc.model, device=device)
     assert shared.energy_only is False
     assert 'forces' in relax_calc.model.model_config.active_outputs
+
+
+@gpu
+def test_run_md_does_not_drift_the_center_of_mass(relax_calc):
+    # Before the per-step COM removal, the Langevin noise shifted this
+    # 79-atom cluster by about 0.17 A per 100-step run at 2000 K.
+    atoms = Octahedron('Cu', 5, 1)
+    atoms.center(vacuum=8.0)
+    atoms.pbc = True
+    com_before = atoms.get_center_of_mass()
+    relax_calc.run_md(atoms, temperature=2000.0, steps=100, dt=2.0, seed=3)
+    assert np.linalg.norm(atoms.get_center_of_mass() - com_before) < 0.02
+
+
+@gpu
+def test_alchemi_brownian_writes_every_md_frame(relax_calc, tmp_path):
+    from mcpy.moves import AlchemiBrownianMove
+    path = tmp_path / 'md.xyz'
+    atoms = Octahedron('Cu', 5, 1)
+    atoms.center(vacuum=8.0)
+    atoms.pbc = True
+    move = AlchemiBrownianMove(relax_calc, temperature=2000.0, steps=5, dt=2.0,
+                               seed=1, trajectory_file=str(path))
+    move.do_trial_move(atoms)
+    move.do_trial_move(atoms)
+    frames = read(path, index=':')
+    assert [f.info['md_run'] for f in frames] == [1] * 6 + [2] * 6
+    assert [f.info['md_step'] for f in frames] == list(range(6)) * 2
+    # initialize_velocities rescales to the target T, so a wrong velocity
+    # unit would show up here as a T off by a factor of ~100.
+    assert frames[0].info['T_K'] == pytest.approx(2000.0, rel=0.05)
+    assert frames[-1].info['time_fs'] == pytest.approx(10.0)
+    np.testing.assert_allclose(frames[-1].positions, atoms.positions, atol=1e-4)
+    assert np.isfinite(frames[-1].get_forces()).all()
 
 
 def _fake_mace(edge, first_edge, flag=None, node='512x0e'):
@@ -254,6 +297,8 @@ def _uses_cueq(calc):
 
 @gpu
 @pytest.mark.skipif(not MH1.exists(), reason='mh-1 checkpoint not cached')
+@pytest.mark.skipif(os.environ.get('MCPY_TEST_DEVICE', 'cuda') != 'cuda',
+                    reason='cuEq needs CUDA')
 def test_mh1_cueq_is_repaired_and_matches_e3nn(alchemi, caplog):
     """mh-1 predates use_edge_irreps_first; mcpy sets it so the cuEq rebuild
     keeps block 0's real width. Three fresh cuEq loads must use cuEq kernels
@@ -271,3 +316,33 @@ def test_mh1_cueq_is_repaired_and_matches_e3nn(alchemi, caplog):
         assert _uses_cueq(cueq)
         assert cueq.get_potential_energy(ag.copy()) == pytest.approx(ref, abs=1e-6)
     assert not any('cuEq disabled' in r.getMessage() for r in caplog.records)
+
+
+def _model_forces(calc, atoms):
+    from mcpy.calculators.alchemi import _build_nl
+    batch = calc._batch(atoms)
+    _build_nl(batch, calc._nl_hook())
+    return calc.model(batch)['forces'].detach().cpu().numpy()
+
+
+@gpu
+@pytest.mark.skipif(not MH1.exists(), reason='mh-1 checkpoint not cached')
+@pytest.mark.skipif(os.environ.get('MCPY_TEST_DEVICE', 'cuda') != 'cuda',
+                    reason='cuEq needs CUDA')
+def test_mh1_cueq_with_compile_gives_e3nn_forces(alchemi, caplog):
+    """With cuEq, inductor miscompiled mh-1's non-linear blocks: forces were
+    off by up to 0.6 eV/A on this rattled Pt55, energies right. compile is
+    now turned off for such a model, so the forces match e3nn."""
+    pt = Octahedron('Pt', 5, cutoff=2, latticeconstant=3.92)
+    pt.center(vacuum=8.0)
+    pt.pbc = True
+    pt.rattle(0.1, seed=0)
+    kw = dict(device='cuda', head='omat_pbe', energy_only=False)
+    ref = _model_forces(alchemi.AlchemiCalculator(
+        str(MH1), enable_cueq=False, compile_model=False, **kw), pt)
+    with caplog.at_level(logging.WARNING, logger='mcpy.calculators'):
+        cueq = alchemi.AlchemiCalculator(str(MH1), enable_cueq=True,
+                                         compile_model=True, **kw)
+    assert _uses_cueq(cueq)
+    assert any('compile_model disabled' in r.getMessage() for r in caplog.records)
+    np.testing.assert_allclose(_model_forces(cueq, pt), ref, rtol=0, atol=1e-4)

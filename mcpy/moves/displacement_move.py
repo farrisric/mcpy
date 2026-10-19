@@ -1,7 +1,6 @@
 import numpy as np
-from ase.constraints import FixAtoms
 
-from .base_move import BaseMove
+from .base_move import BaseMove, fixed_mask
 from ..cell import NullCell
 
 
@@ -37,7 +36,8 @@ class DisplacementMove(BaseMove):
         cell = NullCell()
         super().__init__(cell, species, seed)
         self.max_displacement = max_displacement
-        self.constraints = np.asarray(constraints, dtype=int) if constraints else np.empty(0, int)
+        self.constraints = (np.empty(0, int) if constraints is None
+                            else np.asarray(constraints, dtype=int).ravel())
         self.n_steps = int(n_steps)
 
     def _movable_indices(self, atoms):
@@ -46,9 +46,7 @@ class DisplacementMove(BaseMove):
         mask = np.isin(atoms.get_chemical_symbols(), self.species)
         in_range = self.constraints[(self.constraints >= 0) & (self.constraints < n)]
         mask[in_range] = False
-        for constraint in atoms.constraints:
-            if isinstance(constraint, FixAtoms):
-                mask[constraint.get_indices()] = False
+        mask &= ~fixed_mask(atoms)
         return np.flatnonzero(mask)
 
     def do_trial_move(self, atoms):
@@ -57,22 +55,19 @@ class DisplacementMove(BaseMove):
         within ``max_displacement``. With ``n_steps=1`` (default) this is the
         classic single-atom displacement; larger values bundle several
         displacements into a single trial for basin-hopping-style sampling.
+        With fewer movable atoms than ``n_steps``, all of them move. This
+        stays symmetric: a displacement does not change the movable count.
         """
         to_move = self._movable_indices(atoms)
         if to_move.size == 0:
             # An empty GCMC box, or no atom of ``species`` present yet: a
             # failed proposal, like a deletion with nothing to delete.
             return False, 0, 'X'
-        if self.n_steps > to_move.size:
-            raise ValueError(
-                f'n_steps={self.n_steps} exceeds movable atom count {to_move.size}'
-            )
+        k = min(self.n_steps, to_move.size)
         if self.n_steps == 1:
             selected = (int(self.rng.random.choice(to_move)),)
         else:
-            selected = tuple(int(i) for i in self.rng.random.sample(
-                list(to_move), self.n_steps,
-            ))
+            selected = tuple(int(i) for i in self.rng.random.sample(list(to_move), k))
 
         positions = atoms.get_positions()
         for atom_index in selected:

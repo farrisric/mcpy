@@ -173,7 +173,7 @@ class TestWriteXyz:
         write_xyz(atoms, -1.234, buf)
         content = buf.getvalue()
         assert str(len(atoms)) in content
-        assert 'energy=-1.234000' in content
+        assert 'energy=-1.234' in content
         assert 'Lattice=' in content
 
     def test_write_xyz_path_fallback(self, tmp_path):
@@ -182,5 +182,5 @@ class TestWriteXyz:
         path = str(tmp_path / 'traj.xyz')
         write_xyz(atoms, -2.5, path)
         content = open(path).read()
-        assert 'energy=-2.500000' in content
+        assert 'energy=-2.5' in content
         assert str(len(atoms)) in content

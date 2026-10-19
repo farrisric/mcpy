@@ -75,15 +75,11 @@ def test_mcpy_logger_has_null_handler():
 
 
 def test_library_loggers_use_module_name():
-    """Each module exposes ``logger = logging.getLogger(__name__)``."""
-    from mcpy.ensembles import base_ensemble, canonical_ensemble
-    from mcpy.ensembles import grand_canonical_ensemble
+    """Each module exposes ``logger = logging.getLogger(__name__)``. The
+    ensemble subclasses log through the base module's logger."""
+    from mcpy.ensembles import base_ensemble
 
     assert base_ensemble.logger.name == 'mcpy.ensembles.base_ensemble'
-    assert canonical_ensemble.logger.name == 'mcpy.ensembles.canonical_ensemble'
-    assert grand_canonical_ensemble.logger.name == (
-        'mcpy.ensembles.grand_canonical_ensemble'
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -221,17 +217,21 @@ def _lj_gcmc():
 
     from mcpy.cell import Cell
     from mcpy.ensembles import GrandCanonicalEnsemble
-    from mcpy.moves import InsertionMove, MoveSelector
+    from mcpy.moves import DeletionMove, InsertionMove, MoveSelector
 
     atoms = Atoms('H', positions=[[1.0, 1.0, 1.0]], cell=[6.0] * 3, pbc=True)
     cell = Cell(atoms, seed=1)
-    return GrandCanonicalEnsemble(
+    g = GrandCanonicalEnsemble(
         atoms=atoms, cells=[cell], units_type='LJ',
         calculator=LennardJones(rc=3.0, smooth=False), mu={'H': 50.0},
         species=['H'], temperature=1.0,
-        move_selector=MoveSelector([1], [InsertionMove(cell, species=['H'], seed=2)],
+        move_selector=MoveSelector([1, 1], [InsertionMove(cell, species=['H'], seed=2),
+                                            DeletionMove(cell, species=['H'], seed=5)],
                                    seed=3),
         random_seed=4, traj_file=None, outfile=None)
+    # Insertion only, so do_gcmc_step drives one accepted insertion.
+    g.move_selector = MoveSelector([1], [InsertionMove(cell, species=['H'], seed=2)], seed=3)
+    return g
 
 
 def _assert_lazy(caplog, prefix):

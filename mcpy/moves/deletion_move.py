@@ -1,4 +1,4 @@
-from .base_move import BaseMove
+from .base_move import BaseMove, fixed_mask, free_atom_count
 from ..cell import Cell
 
 
@@ -7,6 +7,9 @@ class DeletionMove(BaseMove):
 
     Mutates ``atoms`` in place by removing one atom. The ensemble snapshots
     the arrays dict before the move and rolls back on rejection.
+
+    ``min_atoms`` floors the free atoms (``molecule_id < 0``) of the chosen
+    species in the whole system, substrate included.
     """
     def __init__(self,
                  cell: Cell,
@@ -26,8 +29,7 @@ class DeletionMove(BaseMove):
         selected_species = self.rng.random.choice(self.species)
 
         if self.min_atoms is not None:
-            n_species = atoms.get_chemical_symbols().count(selected_species)
-            if n_species <= self.min_atoms:
+            if free_atom_count(atoms, selected_species) <= self.min_atoms:
                 return False, -1, selected_species
 
         indices_of_species = self.cell.get_atoms_specie_inside_cell(
@@ -41,6 +43,10 @@ class DeletionMove(BaseMove):
             indices_of_species = indices_of_species[
                 mol_ids[indices_of_species] < 0
             ]
+        # FixAtoms-held atoms are not candidates either: insertions only
+        # append free atoms, so deleting one could never be reversed.
+        indices_of_species = indices_of_species[
+            ~fixed_mask(atoms)[indices_of_species]]
         if len(indices_of_species) == 0:
             return False, -1, 'X'
         remove_index = int(self.rng.random.choice(indices_of_species))

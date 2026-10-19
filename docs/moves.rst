@@ -13,8 +13,12 @@ A run typically mixes several move types using a `MoveSelector`.
 `MoveSelector`
 --------------
 
-`MoveSelector` samples one move per step from a weighted list and tracks acceptance
-statistics on two levels:
+`MoveSelector` samples moves from a weighted list.
+One ensemble step runs ``n_moves`` trial moves, and each trial draws its own move.
+By default ``n_moves`` is ``round(sum(weights))`` (at least 1), so the weights ``[1, 1]`` give two
+trials per step.
+Pass ``n_moves`` to set the count directly.
+The selector tracks acceptance statistics on two levels:
 
 - **per-interval counters** -- reset after each log write; reported in `outfile` as the
   recent acceptance ratio of each move,
@@ -39,11 +43,27 @@ denominator, so the reported ratios reflect *viable* attempts only.
 
 Weights need not sum to one -- they are interpreted as relative frequencies.
 
+The acceptance rule assumes that a species is inserted and deleted with equal probability per
+trial in the same cell.
+`GrandCanonicalEnsemble` checks this when you create it.
+For each species and cell, it adds up the insertion weights and the deletion weights (a move
+with several species splits its weight equally between them).
+If the two sums differ, it raises ``ValueError``, because the difference shifts
+:math:`\mu` by :math:`kT \ln(p_{\mathrm{ins}}/p_{\mathrm{del}})`.
+Give the insertion move and the deletion move of a species the same weight, the same species
+list and the same cell object.
+
 
 Built-in moves
 --------------
 
 The following move classes are available from `mcpy.moves`.
+
+The displacement, shake, permutation and MD moves act on atoms anywhere in the box.
+They can carry an exchanged atom out of the region of the insertion and deletion moves, or into
+it.
+`GrandCanonicalEnsemble` rejects such trials for a `SphericalCell`, a `DomeCell` and the top of a
+`CustomCell` (see :doc:`cells`).
 
 `InsertionMove`
 ~~~~~~~~~~~~~~~
@@ -51,7 +71,12 @@ The following move classes are available from `mcpy.moves`.
 Attempts to insert an atom of one of the selected species at a random point drawn from the
 attached cell. Sets `delta_particles = +1` on a successful proposal. Optional ``max_atoms``
 skips the trial (no mutation, no energy evaluation) when the structure already contains at
-least that many atoms of the selected species.
+least that many free atoms of the selected species.
+Free atoms are the atoms outside molecules (``molecule_id < 0``), in the whole system, so the
+substrate counts too.
+Optional ``min_insert`` is a seed clearance for relaxed trials (ADR 0004).
+Use it only with a relaxing calculator: with single-point energies it shifts :math:`\mu` by
+:math:`kT \ln(V_{\mathrm{free}}/V_{\mathrm{seed}})`, and the ensemble warns.
 
 `DeletionMove`
 ~~~~~~~~~~~~~~
@@ -60,6 +85,9 @@ Attempts to delete a randomly chosen atom of one of the selected species lying i
 attached cell. Sets `delta_particles = -1` on a successful proposal; returns falsy when no
 candidate atom exists or when optional ``min_atoms`` would be violated, which the
 `MoveSelector` records as a failure rather than as a rejection.
+``min_atoms`` counts free atoms (``molecule_id < 0``) of the species in the whole system,
+like ``max_atoms``.
+Atoms held by ``FixAtoms`` are never deleted, because no insertion can put them back.
 
 `DisplacementMove`
 ~~~~~~~~~~~~~~~~~~
@@ -71,8 +99,8 @@ The optional ``n_steps`` parameter (default ``1``) bundles ``n_steps`` *distinct
 displacements into a single trial -- the energy is evaluated once, after all displacements,
 and the whole compound perturbation is accepted or rejected together. This is the building
 block of basin-hopping with displacement moves: a one-atom step usually relaxes back into the
-same basin, so a meaningful escape requires several atoms to move at once. Setting
-``n_steps`` larger than the number of movable atoms raises ``ValueError``.
+same basin, so a meaningful escape requires several atoms to move at once.
+If ``n_steps`` is larger than the number of movable atoms, the move displaces all movable atoms.
 
 `PermutationMove`
 ~~~~~~~~~~~~~~~~~
@@ -94,6 +122,9 @@ ratios balanced across the ladder.
 
 Displaces *all* atoms by independent random vectors bounded by `r_max`. Useful as a global
 perturbation, typically combined with a local relaxation in the calculator wrapper.
+Atoms held by ``FixAtoms`` do not move.
+Without ``FixAtoms``, the move removes the mass-weighted mean displacement, so a free particle
+does not drift through the box.
 
 `BrownianMove`
 ~~~~~~~~~~~~~~
@@ -109,6 +140,22 @@ Runs a short Langevin MD trajectory on the GPU as the trial move, reusing the mo
 Alchemi calculator, so no second model is loaded. The MD needs forces: pass an
 ``AlchemiFCalculator``, or an ``AlchemiCalculator`` built with ``energy_only=False``
 (an ``AlchemiCalculator`` that loads its own model is energy-only by default).
+
+Both MD moves take a debug option, ``trajectory_file``.
+When you set it, the move appends every MD step of every call to that file as an extended-XYZ frame.
+The move writes the frames before the acceptance test, so the file also contains the rejected runs.
+Each frame holds the positions, the velocities (as ``momenta``) and the forces.
+The info line holds ``md_run`` (the call count of the move), ``md_step``, ``time_fs``,
+``T_target_K``, the instantaneous ``T_K``, and ``epot``, ``ekin`` and ``etot`` in eV.
+Use it on short runs only, because it writes one frame per MD step.
+
+Without ``FixAtoms``, both MD moves remove the center-of-mass motion.
+`BrownianMove` zeros the net momentum of the initial velocities, and `AlchemiBrownianMove`
+zeros the center-of-mass velocity after every Langevin step.
+Otherwise each accepted move would shift the whole particle a little, and the shifts would add
+up to a random walk.
+With ``FixAtoms``, the fixed atoms hold the system in place, and the COM motion is kept.
+If every atom is fixed, the move is a failed proposal.
 
 .. warning::
 
@@ -145,3 +192,4 @@ cell's exchangeable region. Optional ``min_molecules`` keeps a floor.
 Translates one molecule by up to ``max_displacement`` and rotates it about its center of
 mass, rigidly. Optional ``max_angle`` caps the rotation for strongly anchored adsorbates.
 A move that would carry the center of mass out of the cell counts as a rejection.
+The test uses ``cell.is_point_inside``, so for a `CustomCell` the top is a hard wall.
