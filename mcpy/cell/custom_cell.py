@@ -30,22 +30,29 @@ class CustomCell(Cell):
     def get_custom_height_cell(self, custom_height, bottom_z):
         """
         Calculate the dimensions and offset for a custom-height cell.
+
+        The sub-cell is the slab ``bottom_z <= z < bottom_z + custom_height``
+        of the box: the c vector is scaled, not replaced by a vertical one,
+        so a tilted c keeps the box shear and wrapped atoms stay inside.
         """
         if custom_height is None or bottom_z is None:
             raise ValueError(
                 'CustomCell requires explicit custom_height and bottom_z '
                 f'(got custom_height={custom_height}, bottom_z={bottom_z})'
             )
+        if np.any(np.abs(self.original_dimensions[:2, 2]) > 1e-9):
+            raise ValueError(
+                'CustomCell needs in-plane a and b vectors with no z component '
+                f'(got a={self.original_dimensions[0]}, b={self.original_dimensions[1]}).')
         if custom_height > self.original_dimensions[2][2]:
             raise ValueError('Custom height cannot be greater than the original cell height.')
         if bottom_z < 0 or bottom_z + custom_height > self.original_dimensions[2][2]:
             raise ValueError('Custom cell exceeds the bounds of the original cell.')
 
+        c = self.original_dimensions[2]
         new_dimensions = np.copy(self.original_dimensions)
-        new_dimensions[2][2] = custom_height
-
-        offset = np.zeros(3)
-        offset[2] = bottom_z
+        new_dimensions[2] = c * (custom_height / c[2])
+        offset = c * (bottom_z / c[2])
 
         return new_dimensions, offset
 
@@ -66,7 +73,9 @@ class CustomCell(Cell):
 
     def is_point_inside(self, point):
         """
-        Check if a given point is inside the custom cell.
+        Check if a given point is inside the custom cell: the region
+        insertions are proposed in. Displacement and MD moves also test it,
+        so the cell top is a hard wall for them.
         """
         frac = (point - self.offset) @ self._dim_inv
         return bool(np.all((frac >= 0.0) & (frac < 1.0)))
@@ -76,11 +85,13 @@ class CustomCell(Cell):
         xy footprint and at or above the cell floor, with the z upper bound
         dropped.
 
-        Without this a molecule that desorbs above the cell top would stop
-        being a deletion candidate *and* would drop out of the per-species
-        count in the acceptance factor ``V/((N+1)Λ³)`` -- the runaway
-        insertion mode described in docs/gcmc_acceptance_convention.rst.
-        Molecules below the floor stay excluded, like atoms.
+        Without this a molecule that relaxation pushes above the cell top
+        would stop being a deletion candidate *and* would drop out of the
+        per-species count in the acceptance factor ``V/((N+1)Λ³)`` -- the
+        runaway insertion mode described in docs/gcmc_acceptance_convention.rst.
+        Molecules below the floor stay excluded, like atoms. Displacement
+        moves do not use this predicate: they test :meth:`is_point_inside`,
+        because no insertion can put a molecule above the top.
         """
         frac = (point - self.offset) @ self._dim_inv
         return bool(np.all(frac[:2] >= 0.0) and np.all(frac[:2] < 1.0)
