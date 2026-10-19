@@ -184,6 +184,16 @@ def test_pressure_axis_is_p0_at_standard_dmu(T, dmu_standard, dmu0):
     assert abs(_dmu_at_p0(fig.axes[1], -1.0, 0.0) - dmu0) < 0.0075
 
 
+def test_pressure_axis_ignores_display_label():
+    # adsorbate_label is display text only: the O2 table must still be found.
+    plot_phase_diagram([_ag_slab(0, -135.80), _ag_slab(4, -157.00)], adsorbate='O',
+                       adsorbate_label=r'\mathrm{O}', metal_symbols=('Ag',), mu_ref=-4.913,
+                       T=500.0, show_structures=False, show_plot=True)
+    fig = plt.gcf()
+    plt.close(fig)
+    assert abs(_dmu_at_p0(fig.axes[1], -1.0, 0.0) - (-0.495)) < 0.0075
+
+
 def test_pressure_axis_outside_janaf_range(caplog):
     # The phases do not depend on T: outside the table only the axis goes.
     with caplog.at_level(logging.WARNING, logger='mcpy.utils.phase_diagram'):

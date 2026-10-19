@@ -635,7 +635,9 @@ def plot_phase_diagram(
               handlelength=2.2, columnspacing=1.2)
 
     # p = p0 at dmu = dmu_standard, the reservoir's Delta mu^0(T).
-    gas = label if atoms_per_reservoir_molecule == 1 else f'{label}{atoms_per_reservoir_molecule}'
+    # Table key from the symbol, not the display label (e.g. r'\mathrm{O}').
+    gas = (adsorbate if atoms_per_reservoir_molecule == 1
+           else f'{adsorbate}{atoms_per_reservoir_molecule}')
     if dmu_standard is None and gas in _JANAF:
         try:
             dmu_standard = _janaf_dmu0(gas, T, n_res)
@@ -643,7 +645,7 @@ def plot_phase_diagram(
             pass  # T outside the table: same as no table
     if dmu_standard is None:
         logger.warning('No built-in Delta mu^0(T) for a %s reservoir at T = %g K: the pressure '
-                       'axis is omitted. Pass dmu_standard to draw it.', gas, T)
+                       'axis is omitted. Pass dmu_standard to draw it.', gas_label, T)
     else:
         ax2 = ax.twiny()
         ax2.set_xlim(*_log10_p_over_p0(np.array([x0, x1]), dmu_standard, T, n_res, k_b))
