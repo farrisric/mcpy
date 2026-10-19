@@ -431,9 +431,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                           for c, _ in self._top_guards])
         free = new_arrays['molecule_id'] < 0 if 'molecule_id' in new_arrays else True
         for (_, numbers), was, now in zip(self._top_guards, *above):
-            exchanged = (np.isin(old_arrays['numbers'], numbers)
-                         | np.isin(new_arrays['numbers'], numbers))
-            if np.any((was != now) & exchanged & free):
+            # Per slot: an exchanged atom above the top. Comparing this, not
+            # only positions, also catches a permutation that keeps every
+            # position but swaps an exchanged species above the top.
+            was &= np.isin(old_arrays['numbers'], numbers)
+            now &= np.isin(new_arrays['numbers'], numbers)
+            if np.any((was != now) & free):
                 return True
         return False
 

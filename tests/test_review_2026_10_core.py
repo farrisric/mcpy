@@ -22,7 +22,7 @@ from mcpy.ensembles.base_ensemble import write_xyz
 from mcpy.moves import (AlchemiBrownianMove, BrownianMove, DeletionMove,
                         DisplacementMove, InsertionMove, MoleculeDeletionMove,
                         MoleculeDisplacementMove, MoleculeInsertionMove,
-                        MoveSelector, ShakeMove)
+                        MoveSelector, PermutationMove, ShakeMove)
 from mcpy.moves.molecule_utils import find_molecules, molecule_com
 from mcpy.utils import RandomNumberGenerator
 from mcpy.utils.set_unit_constant import SetUnits
@@ -270,6 +270,24 @@ def test_custom_cell_top_crossing_is_rejected_before_the_energy_call():
     ms = g.move_selector
     assert ms.move_counter_total[2] == 100 and ms.move_failed_counter_total[2] == 0
     assert 20 < calc.calls - 1 == ms.move_acceptance_total[2] < 80
+
+
+def test_permutation_cannot_swap_an_exchanged_species_above_the_top():
+    """A swap keeps every position, so only the species above the top
+    changes: H below the top swapped with Au above it would put an H where
+    deletion reaches it but no insertion can. Rejected with no energy call."""
+    atoms = Atoms('HAu', positions=[[1, 1, 6.0], [3, 3, 9.0]], cell=[6, 6, 20],
+                  pbc=(True, True, False))
+    cell = CustomCell(atoms, custom_height=3.0, bottom_z=5.0, seed=1)
+    calc = _Counting()
+    g = _gcmc(atoms, [cell], [InsertionMove(cell, ['H'], 2), DeletionMove(cell, ['H'], 3),
+                              PermutationMove(['H', 'Au'], 4)],
+              weights=[0, 0, 1], calc=calc)
+    for _ in range(20):
+        g.do_gcmc_step()
+        assert g.atoms.get_chemical_symbols() == ['H', 'Au']
+    assert calc.calls == 1
+    assert g.move_selector.move_acceptance_total[2] == 0
 
 
 # --------------------------------------------------------------------------
