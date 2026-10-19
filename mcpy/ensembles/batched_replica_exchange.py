@@ -15,9 +15,11 @@ accepted state). The batching is across replicas at the same logical step.
 Factory requirements
 --------------------
 ``gcmc_factory(T, rank)`` must return a fresh ``GrandCanonicalEnsemble`` with
-its own ``cells``, ``move_selector`` and atoms object. Sharing cells or a
-move_selector across replicas will corrupt per-replica state (cell volumes,
-acceptance counters, RNG streams). See ``examples/04_replica_exchange_batched.py``.
+its own ``cells``, ``move_selector`` and atoms object, all seeded
+independently per replica. Sharing cells or a move_selector across replicas
+corrupts per-replica state (cell volumes, acceptance counters, RNG streams),
+and equal seeds couple the replicas; both raise ValueError. See
+``examples/04_replica_exchange_batched.py``.
 
 The shared ``calculator`` must implement ``get_potential_energies(atoms_list)``
 returning an ndarray of energies. ``AlchemiCalculator`` provides this.
@@ -33,7 +35,8 @@ import numpy as np
 
 from ..utils.random_number_generator import RandomNumberGenerator
 from .base_ensemble import BaseEnsemble, write_global_minimum
-from .replica_exchange import RE_RULE, mus_differ, re_header, re_row
+from .replica_exchange import (RE_RULE, check_independent_seeds, mus_differ,
+                               re_header, re_row, rng_fingerprint)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,7 @@ class BatchedReplicaExchange:
                 'per replica (see the module docstring). Shared objects mix '
                 "the replicas' volumes, counters and RNG streams silently."
             )
+        check_independent_seeds([rng_fingerprint(r) for r in self.replicas])
 
         if not hasattr(calculator, 'get_potential_energies'):
             raise TypeError(
@@ -126,6 +130,7 @@ class BatchedReplicaExchange:
 
         self._outfile = outfile
         self._outfile_handle = None
+        self._log_started = False
         self._global_minimum_file = global_minimum_file
         # With many replicas the per-replica GCMC lifecycle logs interleave
         # into an unreadable console stream; by default they are silenced for
@@ -204,8 +209,10 @@ class BatchedReplicaExchange:
         a warm batched path before the loop)."""
         atoms_list = [r.atoms for r in self.replicas]
         energies = self.calculator.get_potential_energies(atoms_list)
-        for r, E in zip(self.replicas, energies):
+        for r, E in zip(self.replicas, energies, strict=True):
             r.E_old = float(E)
+            # A relaxing calculator moved the atoms: refresh the volumes.
+            r.calculate_cells_volume(r.atoms)
 
     # ----------------------------------------------------------- batched MC
 
@@ -263,9 +270,18 @@ class BatchedReplicaExchange:
             return
 
         viable = list(pending)
-        energies = self.calculator.get_potential_energies(
-            [self.replicas[i].atoms for i in viable])
-        for i, E_new in zip(viable, energies):
+        try:
+            energies = list(self.calculator.get_potential_energies(
+                [self.replicas[i].atoms for i in viable]))
+            if len(energies) != len(viable):
+                raise ValueError(f'calculator returned {len(energies)} energies '
+                                 f'for {len(viable)} configurations')
+        except BaseException:
+            # No replica may keep an unscored trial (Ctrl-C, CUDA OOM).
+            for i in viable:
+                self.replicas[i]._restore(pending[i][0])
+            raise
+        for i, E_new in zip(viable, energies, strict=True):
             snapshot, meta = pending[i]
             self.replicas[i]._commit_or_rollback(float(E_new), snapshot, meta)
 
@@ -381,6 +397,9 @@ class BatchedReplicaExchange:
         ri._last_traj_step = rj._last_traj_step = None
         ri.calculate_cells_volume(ri.atoms)
         rj.calculate_cells_volume(rj.atoms)
+        # Score each arriving configuration under its new rung's mu.
+        ri._record_minimum(ri.atoms, ri.E_old)
+        rj._record_minimum(rj.atoms, rj.E_old)
 
     # ----------------------------------------------------------- output
 
@@ -388,6 +407,10 @@ class BatchedReplicaExchange:
         if self._outfile is None:
             return
         try:
+            # A later run() continues the log, as the replica files do.
+            if self._log_started:
+                self._outfile_handle = open(self._outfile, 'a')
+                return
             with open(self._outfile, 'w') as fh:
                 fh.write('+-------------------------------------------------+\n')
                 fh.write('| Batched Replica Exchange (single-GPU) GCMC      |\n')
@@ -402,6 +425,7 @@ class BatchedReplicaExchange:
                         fh.write(f'Chemical potentials replica {k}: {mu}\n')
                 fh.write(re_header('Replica', 8) + '\n')
                 fh.write(RE_RULE + '\n')
+            self._log_started = True
             self._outfile_handle = open(self._outfile, 'a')
         except OSError:
             self.logger.exception('Error opening output file %s', self._outfile)

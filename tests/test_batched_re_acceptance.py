@@ -420,8 +420,12 @@ def test_shared_cells_are_refused():
 def test_distinct_replica_state_is_accepted():
     from types import SimpleNamespace
 
+    from mcpy.utils.random_number_generator import RandomNumberGenerator
+
     def factory(T, rank):
-        return SimpleNamespace(atoms=object(), move_selector=object(),
+        selector = SimpleNamespace(rng=RandomNumberGenerator(seed=rank),
+                                   move_list=[])
+        return SimpleNamespace(atoms=object(), move_selector=selector,
                                cells=[object()])
 
     re = BatchedReplicaExchange(factory, _StubBatchCalc(),
