@@ -1605,7 +1605,7 @@ wheels = [
 
 [[package]]
 name = "mcpy-gcmc"
-version = "1.4.0"
+version = "1.6.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
