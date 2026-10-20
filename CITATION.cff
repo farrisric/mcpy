@@ -20,6 +20,6 @@ authors:
     affiliation: "Institut de Química Teòrica i Computacional (IQTCUB), Universitat de Barcelona, Barcelona, Spain"
 date-released: "2026-10-20"
 version: "1.5.0"
-doi: "10.5281/zenodo.20396721"
+doi: "10.5281/zenodo.20396720"
 url: "https://github.com/farrisric/mcpy"
 license: "MIT"
