@@ -4,11 +4,13 @@ The pure helpers run wherever nvalchemi imports. The exactness check against
 an unpadded forward needs a GPU and a cuEq-capable checkpoint, so it is
 opt-in like the other GPU tests (``MCPY_GPU_TESTS=1``).
 """
+import contextlib
 import os
 import pathlib
 
 import numpy as np
 import pytest
+from ase import Atoms
 
 # Skip on nvalchemi first: importing torch can SIGBUS in a torch-less env
 # (see tests/test_audit_2026_10_calculators.py).
@@ -94,21 +96,36 @@ def _structures():
     return out
 
 
-@gpu
-def test_padding_does_not_change_energies_or_forces():
-    calc = alchemi.AlchemiFCalculator(str(CHECKPOINT), device='cuda', enable_cueq=True,
-                                      compile_model=False)
-    wrapper = calc.model
-    assert isinstance(wrapper, alchemi._PaddedMixin)   # cuEq on: padded
-    batch = calc._batch(_structures())
-    alchemi._build_nl(batch, calc._nl_hook())
-    padded = wrapper(batch)
-    plain_cls = [c for c in type(wrapper).__mro__ if c is not alchemi._PaddedMixin][1]
-    wrapper.__class__ = plain_cls
+@contextlib.contextmanager
+def _unpadded(wrapper):
+    """Run ``wrapper`` without padding inside the block, then pad it again."""
+    wrapper.__class__ = next(c for c in type(wrapper).__mro__
+                             if not issubclass(c, alchemi._PaddedMixin))
     try:
-        plain = wrapper(batch)
+        yield wrapper
     finally:
         alchemi._with_cueq_padding(wrapper)
+
+
+@pytest.fixture(scope='module')
+def padded_calc():
+    calc = alchemi.AlchemiFCalculator(str(CHECKPOINT), device='cuda', enable_cueq=True,
+                                      compile_model=False)
+    assert isinstance(calc.model, alchemi._PaddedMixin)   # cuEq on: padded
+    return calc
+
+
+def _forward(calc, structures):
+    batch = calc._batch(structures)
+    alchemi._build_nl(batch, calc._nl_hook())
+    return calc.model(batch)
+
+
+@gpu
+def test_padding_does_not_change_energies_or_forces(padded_calc):
+    padded = _forward(padded_calc, _structures())
+    with _unpadded(padded_calc.model):
+        plain = _forward(padded_calc, _structures())
     assert padded['energy'].shape == plain['energy'].shape
     assert padded['forces'].shape == plain['forces'].shape
     # float32 noise only: the kernels may differ between the two sizes.
@@ -116,6 +133,55 @@ def test_padding_does_not_change_energies_or_forces():
                                plain['atomic_energies'].detach().cpu(), atol=1e-5)
     np.testing.assert_allclose(padded['forces'].detach().cpu(), plain['forces'].detach().cpu(),
                                atol=1e-4)
+
+
+@gpu
+def test_padding_does_not_change_the_stress(padded_calc):
+    active = padded_calc.model.model_config.active_outputs
+    if 'stress' not in padded_calc.model.model_config.outputs:
+        pytest.skip('this checkpoint has no stress output')
+    active.add('stress')
+    try:
+        padded = _forward(padded_calc, _structures())
+        with _unpadded(padded_calc.model):
+            plain = _forward(padded_calc, _structures())
+    finally:
+        active.discard('stress')
+    assert padded['stress'].shape == plain['stress'].shape == (3, 3, 3)
+    np.testing.assert_allclose(padded['stress'].detach().cpu(),
+                               plain['stress'].detach().cpu(), atol=1e-5)
+
+
+@gpu
+def test_padded_md_follows_the_unpadded_trajectory(padded_calc):
+    # Same seed, so the same velocities and noise: only float32 rounding differs.
+    md = dict(temperature=300.0, steps=10, seed=7)
+    a = _structures()[1]
+    b = a.copy()
+    padded_calc.run_md(a, **md)
+    with _unpadded(padded_calc.model):
+        padded_calc.run_md(b, **md)
+    assert len(a) == len(b)
+    assert np.abs(a.positions - b.positions).max() < 1e-3
+
+
+@gpu
+def test_shared_wrapper_is_padded_once(padded_calc):
+    cls = type(padded_calc.model)
+    other = alchemi.AlchemiCalculator(padded_calc.model, device='cuda')
+    assert other.model is padded_calc.model
+    assert type(other.model) is cls            # not wrapped a second time
+    assert alchemi._with_cueq_padding(other.model) is other.model
+    assert type(other.model) is cls
+
+
+@gpu
+def test_empty_structures_around_padded_ones(padded_calc):
+    slab = _structures()[1]
+    ref = padded_calc.get_potential_energies([slab.copy()])[0]
+    out = padded_calc.get_potential_energies([Atoms(), slab.copy(), Atoms()])
+    assert out[0] == 0.0 and out[2] == 0.0
+    assert out[1] == pytest.approx(ref, abs=1e-3)
 
 
 @gpu
