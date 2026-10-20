@@ -69,6 +69,77 @@ class _HeadMACEWrapper(MACEWrapper):
         return d
 
 
+def _pad_bucket(n: int) -> int:
+    """Smallest bucketed atom count >= ``n``: a multiple of 2**(bits(n) - 4),
+    at least 32. Padding is then at most 1/16 to 1/8 of the atoms, and each
+    doubling of the size adds only 8 buckets."""
+    g = 1 << max(5, n.bit_length() - 4)
+    return -(-n // g) * g
+
+
+def _pad_inputs(d: dict) -> tuple:
+    """Append isolated dummy atoms, as one extra graph, to a MACE input dict.
+
+    cuEquivariance tunes its kernels once for every new atom count (~0.2 s on
+    an RTX 5090, against ~10 ms for a force call). GCMC and the compacted
+    batched relaxation reach a new count on most calls. Padding to
+    ``_pad_bucket`` sizes leaves few counts to tune. The dummies have no
+    edges and sit in their own graph, so the real atoms' energies and forces
+    do not change. Returns ``(padded_dict, n_real_atoms, n_real_graphs)``.
+    """
+    n, b = d['positions'].shape[0], d['ptr'].shape[0] - 1
+    p = _pad_bucket(n + 1) - n  # >= 1, so the extra graph always exists
+    pos = d['positions']
+    d = dict(d)
+    d['positions'] = torch.cat([pos, pos.new_zeros(p, 3)])
+    d['node_attrs'] = torch.cat([d['node_attrs'], d['node_attrs'][:1].expand(p, -1)])
+    d['batch'] = torch.cat([d['batch'], d['batch'].new_full((p,), b)])
+    d['ptr'] = torch.cat([d['ptr'], d['ptr'][-1:] + p])
+    d['cell'] = torch.cat([d['cell'], torch.eye(3, dtype=d['cell'].dtype,
+                                                device=d['cell'].device)[None]])
+    if 'head' in d:
+        d['head'] = torch.cat([d['head'], d['head'][-1:]])
+    return d, n, b
+
+
+def _unpad_outputs(raw: dict, n: int, b: int) -> dict:
+    """Drop the dummy rows that ``_pad_inputs`` added from the MACE outputs."""
+    raw = dict(raw)
+    for key, size in (('energy', b), ('stress', b), ('forces', n), ('node_energy', n)):
+        if raw.get(key) is not None:
+            raw[key] = raw[key][:size]
+    return raw
+
+
+class _PaddedMixin:
+    """Pads the MACE input to bucketed atom counts (see ``_pad_inputs``)."""
+
+    def adapt_input(self, data, **kwargs):
+        d, self._pad_n, self._pad_b = _pad_inputs(super().adapt_input(data, **kwargs))
+        return d
+
+    def adapt_output(self, raw_output, data):
+        return super().adapt_output(_unpad_outputs(raw_output, self._pad_n, self._pad_b),
+                                    data)
+
+
+def _with_cueq_padding(wrapper: MACEWrapper) -> MACEWrapper:
+    """Switch ``wrapper`` to padded inputs when its model runs cuEq kernels.
+
+    Without cuEq there is no per-size tuning, so padding would only add work.
+    Changes the wrapper's class in place, so a wrapper shared between
+    calculators is padded once.
+    """
+    from nvalchemi.models.mace import _mace_uses_cueq
+    cls = type(wrapper)
+    if issubclass(cls, _PaddedMixin):
+        return wrapper
+    model = getattr(wrapper.model, '_orig_mod', wrapper.model)  # torch.compile
+    if _mace_uses_cueq(model):
+        wrapper.__class__ = type(f'_Padded{cls.__name__}', (_PaddedMixin, cls), {})
+    return wrapper
+
+
 def _cueq_rebuild_matches(raw) -> bool:
     """Whether MACE's cuEq conversion rebuilds interaction block 0 correctly.
 
@@ -433,8 +504,8 @@ class _AlchemiBase:
         self.dtype = dtype
         self.max_neighbors = max_neighbors
         self.chunk_size = chunk_size
-        self.model = _load_model(checkpoint, device, dtype, enable_cueq,
-                                 compile_model, head)
+        self.model = _with_cueq_padding(_load_model(checkpoint, device, dtype, enable_cueq,
+                                                    compile_model, head))
         self._nl_config = self.model.model_config.neighbor_config
         # Per-atom energies, for the float64 per-graph sum (_graph_energies).
         self.model.model_config.active_outputs.add('atomic_energies')
