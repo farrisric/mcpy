@@ -130,7 +130,12 @@ def _with_cueq_padding(wrapper: MACEWrapper) -> MACEWrapper:
     Changes the wrapper's class in place, so a wrapper shared between
     calculators is padded once.
     """
-    from nvalchemi.models.mace import _mace_uses_cueq
+    try:
+        from nvalchemi.models.mace import _mace_uses_cueq
+    except ImportError:  # private helper; absent nvalchemi versions run unpadded
+        logger.warning('nvalchemi.models.mace._mace_uses_cueq not found; '
+                       'cuEq padding disabled')
+        return wrapper
     cls = type(wrapper)
     if issubclass(cls, _PaddedMixin):
         return wrapper

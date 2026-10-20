@@ -7,6 +7,7 @@ opt-in like the other GPU tests (``MCPY_GPU_TESTS=1``).
 import contextlib
 import os
 import pathlib
+import sys
 
 import numpy as np
 import pytest
@@ -57,6 +58,13 @@ def test_pad_inputs_adds_one_isolated_graph():
     # Forces need a gradient path back to the real positions.
     p['positions'].sum().backward()
     assert d['positions'].grad is not None
+
+
+def test_missing_cueq_helper_disables_padding(monkeypatch):
+    # Older/newer nvalchemi without the private helper: fall back to unpadded.
+    monkeypatch.setitem(sys.modules, 'nvalchemi.models.mace', None)
+    wrapper = object()
+    assert alchemi._with_cueq_padding(wrapper) is wrapper
 
 
 def test_unpad_outputs_keeps_the_real_rows():
