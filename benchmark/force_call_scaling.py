@@ -173,7 +173,8 @@ def main():
     p.add_argument('--atoms', type=int, help='--predict: atoms per force call '
                    '(all replicas together for a batched run)')
     p.add_argument('--relax-steps', type=float,
-                   help='--predict: mean force calls per relaxation, from a pilot run')
+                   help='--predict: mean optimizer steps per relaxation, excluding the '
+                        'first force call, from a pilot run (calc.last_relax_steps)')
     p.add_argument('--gcmc-steps', type=int, default=10_000, help='--predict: run length')
     p.add_argument('--moves', type=int, default=1, help='--predict: trial moves per step')
     args = p.parse_args()
@@ -182,7 +183,11 @@ def main():
             p.error('--predict needs --atoms and --relax-steps')
         with open(args.predict) as f:
             rec = json.load(f)
-        m = rec.get('metrics') or metrics(rec['rows'])
+        m = rec.get('metrics')
+        if not m:
+            if len(rec['rows']) < 2:
+                p.error('--predict needs a record with metrics or at least 2 measured sizes')
+            m = metrics(rec['rows'])
         print(predict(m, args.atoms, args.relax_steps, args.gcmc_steps, args.moves))
         return
     if args.recompute:
