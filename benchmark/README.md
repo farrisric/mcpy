@@ -95,7 +95,9 @@ The dense argon liquid relaxes slowly under GCMC in both codes, so liquid points
 | repulsive LJ | 10.2 | 11 | 2.3 sigma |
 | argon | 21.1 | 14 | 2.9 sigma |
 
-Rerun: `python benchmark/lammps_lj_isotherms.py` (about 4 h on 24 cores; writes `benchmark/lj_isotherms/`), or `--plot` to redraw from the CSV.
+The data behind the figure is in the repository: `benchmark/lj_isotherms/lj_isotherms.csv`.
+Redraw the figure from it in seconds with `python benchmark/lammps_lj_isotherms.py --plot`.
+Rerun: `python benchmark/lammps_lj_isotherms.py` (about 4 h on 24 cores; writes `benchmark/lj_isotherms/`).
 
 ## Internal material
 

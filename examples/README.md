@@ -10,7 +10,7 @@ top of the file. Edit and re-run.
 | `00_hello_gcmc.py` | The GCMC loop: cell, insertion/deletion/displacement moves, chemical potential, output files. Lennard-Jones fluid in a box; prints <N> next to the LAMMPS `fix gcmc` value. | ASE only | ~3 min |
 | `01_canonical_mc.py` | Canonical (NVT) MC and basin hopping: single and compound permutation moves, LBFGS-relaxed trials, `minima_file`. Au segregates to the surface of a CuAu nanoparticle (EMT). | ASE only | ~10 s |
 | `02_molecule_gcmc.py` | Molecular adsorbates: rigid insertion, deletion and translate+rotate moves, `molecule_id` bookkeeping. Lennard-Jones dimers; prints <N_mol> next to the LAMMPS `fix gcmc mol` value. | ASE only | ~2 min |
-| `03_gcmc_surface_mace.py` | A production run: O and Ag both exchanged on an Ag(111) surface (one cell per species) with a machine-learned potential, FIRE relaxation, and chemical potentials derived from the potential itself. | `pip install -e .[alchemi]`, CUDA GPU | hours |
+| `03_gcmc_surface_mace.py` | O and Ag both exchanged on an Ag(111) surface (one cell per species) with the small AGNESI MACE potential and LBFGS-relaxed trials, with the settings of the Ag oxidation study. Runs on a CPU; the model downloads on the first run. | `pip install -e .[mace]` | hours |
 | `04_replica_exchange_batched.py` | Replica exchange on one GPU, with every replica's trial energy evaluated in a single batched forward pass. | `pip install -e .[alchemi]`, CUDA GPU | hours |
 | `05_pt_nanoparticle_h_che.py` | H on a Pt nanoparticle versus electrode potential: a replica-exchange ladder over U_SHE, mu_H from the computational hydrogen electrode, MACE mh-1 with cuEq and LBFGS relaxation. | `pip install -e .[alchemi]`, nvalchemi from GitHub main, CUDA GPU | hours |
 

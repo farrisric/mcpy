@@ -46,9 +46,8 @@ ENABLE_CUEQ = True       # cuEquivariance kernel fusion; verify per checkpoint
 COMPILE_MODEL = True     # torch.compile: ~2x faster forward pass
 
 # --- calibration -----------------------------------------------------------
-# Measured with CHECKPOINT = 'medium-mpa-0'. Shared with
-# examples/03_gcmc_surface_mace.py: keep the two copies identical, and
-# re-measure all of them when you change the potential (docs/species_radii.rst).
+# Measured with CHECKPOINT = 'medium-mpa-0'. Re-measure all of them when you
+# change the potential (docs/species_radii.rst).
 AG_LATTICE = 4.165   # fcc Ag lattice constant (A): the minimum of E(a), 4.166 A
 # Relaxed O-Ag bond of O in the fcc hollow of Ag(111) (2.136 A). Used twice:
 # as the exclusion radius an incoming O sees around Ag, and as how far below

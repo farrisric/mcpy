@@ -89,7 +89,7 @@ Start long runs with expandable segments to keep it near the real peak:
 
 .. code-block:: bash
 
-   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python examples/03_gcmc_surface_mace.py
+   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python examples/04_replica_exchange_batched.py
 
 MPI for replica exchange
 ------------------------

@@ -135,7 +135,7 @@ thermal terms.
 Thus use :math:`\delta` only for a shift of :math:`\mu_{\mathrm{Ag}}` away
 from equilibrium with bulk Ag, for example Ag-poor conditions.
 Do not use it for the thermal free energy of Ag(s), for example
-``MU_AG_CORRECTION`` in ``examples/03_gcmc_surface_mace.py``.
+``MU_AG_CORRECTION`` in ``examples/04_replica_exchange_batched.py``.
 The oxide has no matching thermal term, so the boundary moves the wrong way.
 With :math:`\delta` = -0.176 eV, the boundary moves to +0.029 eV, and bulk
 Ag\ :sub:`2`\ O is never stable.

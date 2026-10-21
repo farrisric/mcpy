@@ -160,7 +160,7 @@ reproduced two Lennard-Jones reference systems against LAMMPS [@lammps2022]
 argon in physical (eV) units.
 Both codes run the same potential, initial state, move mix, and number of trial moves, with four independently seeded runs per chemical potential.
 The average particle number agrees within statistical error across both unit systems, including the sharp gas–liquid condensation of argon.
-The script that produces the figure, `benchmark/lammps_lj_isotherms.py`, is part of the repository.
+The script that produces the figure, `benchmark/lammps_lj_isotherms.py`, and the data behind it, `benchmark/lj_isotherms/lj_isotherms.csv`, are part of the repository.
 Although `mcpy`
 has so far been applied mainly to metal surfaces and nanoparticles, this
 benchmark confirms that its grand canonical machinery is correct and general,
