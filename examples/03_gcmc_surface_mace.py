@@ -1,23 +1,27 @@
-"""GCMC on an Ag(111) surface with a machine-learned potential (GPU).
+"""GCMC on an Ag(111) surface with a machine-learned potential.
 
-A production run, in contrast to examples 00-02: a real potential, a real
-surface, and both species exchanged with their reservoirs.
+A real potential on a real surface, in contrast to examples 00-02. The
+settings are those of the Methods of the Ag oxidation study (Telari, Farris,
+Neyman and Bruix), for one replica of its replica-exchange runs:
 
-  * O is inserted and deleted in a 7 A region that starts one O-Ag distance
-    *below* the top layer, so subsurface sites are reachable.
-  * Ag is inserted and deleted through its own cell, identical to the O one
-    except for the exclusion radius an insertion sees. Exchanging Ag is what
-    lets the surface reconstruct into an oxide instead of merely decorating
-    the lattice it started with.
-  * Reference chemical potentials are derived from the running potential, so
-    swapping the checkpoint keeps the setup self-consistent. Only DELTA_MU_O
-    is a physical knob, and its balance point differs per checkpoint.
+  * MACE foundation model mace-small-density-agnesi-stress (small AGNESI).
+  * Every trial is relaxed with at most 40 optimizer steps. The study uses
+    FMAX = 0.1 eV/A; the looser 0.5 here keeps a CPU run short.
+  * O and Ag are both inserted and deleted, with equal probability, in a
+    region near the top layer. The region starts one O-Ag distance *below*
+    the top layer, so subsurface sites are reachable.
+  * Fixed chemical potentials from DFT references: mu_Ag = -2.99 eV and
+    mu_O = E(O2)/2 + DELTA_MU_O, with E(O2)/2 = -4.91 eV.
 
-Every setting is a constant below; edit and re-run. Set EXCHANGE_AG to False
-for the O-only setup. ``tests/test_ag111_gcmc_golden.py`` pins that O-only
-setup with a different checkpoint and that checkpoint's own calibration.
+The study runs six such replicas (250-500 K) per DELTA_MU_O in
+(-0.40, -0.60, -0.90) with replica exchange; see
+``04_replica_exchange_batched.py`` for that setup.
 
-Requirements: pip install 'nvalchemi-toolkit[mace]', and a CUDA GPU.
+Every setting is a constant below; edit and re-run. The potential runs
+through ``MACE_F_Calculator`` (mace-torch with an ASE optimizer), so it works
+on a CPU. Set DEVICE = 'cuda' to use a GPU.
+
+Requirements: pip install -e '.[mace]'
 
     python examples/03_gcmc_surface_mace.py
 """
@@ -25,63 +29,60 @@ import numpy as np
 from ase.build import fcc111
 from ase.constraints import FixAtoms
 
-from mcpy.calculators import AlchemiFCalculator
+from mace.calculators import mace_mp
+
+from mcpy.calculators import MACE_F_Calculator
 from mcpy.cell import CustomCell
 from mcpy.ensembles import GrandCanonicalEnsemble
 from mcpy.moves import DeletionMove, InsertionMove, MoveSelector
-from mcpy.utils import derive_mu_bulk, derive_mu_gas
 from mcpy.utils.logging import configure as configure_logging
 
 # --- potential -------------------------------------------------------------
-# A named checkpoint (e.g. 'medium-mpa-0') or a path to a local .pt file.
-CHECKPOINT = 'medium-mpa-0'
-DEVICE = 'cuda'
-ENABLE_CUEQ = True    # cuEquivariance kernel fusion; verify per checkpoint
-COMPILE_MODEL = True  # torch.compile: ~2x faster forward pass
-RELAX_STEPS = 300     # max FIRE steps per energy evaluation
-FMAX = 0.05           # FIRE force threshold (eV/A)
-OPTIMIZER = 'fire2'   # 'fire2' usually converges in fewer steps than 'fire'
+# A named MACE-MP checkpoint or a path to a local model file. 'small-0b2' is
+# mace-small-density-agnesi-stress (small AGNESI). mace_mp downloads a named
+# checkpoint on the first run and caches it in ~/.cache/mace.
+CHECKPOINT = 'small-0b2'
+DEVICE = 'cpu'        # or 'cuda'
+RELAX_STEPS = 40      # max optimizer steps per energy evaluation
+FMAX = 0.5            # force threshold (eV/A)
+OPTIMIZER = 'lbfgs'   # 'lbfgs' or 'fire'
 
-# --- calibration -----------------------------------------------------------
-# Measured with CHECKPOINT = 'medium-mpa-0'. Shared with
-# examples/04_replica_exchange_batched.py: keep the two copies identical, and
-# re-measure all of them when you change the potential (docs/species_radii.rst).
-AG_LATTICE = 4.165   # fcc Ag lattice constant (A): the minimum of E(a), 4.166 A
-# Relaxed O-Ag bond of O in the fcc hollow of Ag(111) (2.136 A). Used twice:
-# as the exclusion radius an incoming O sees around Ag, and as how far below
-# the top layer the exchange region starts, so subsurface sites are reachable.
-R_O_AG = 2.14
-# An incoming Ag needs a larger radius. 2.75 A is a value near the relaxed Ag
-# adatom-Ag bond on Ag(111) (2.78 A), not a histogram mode. This is why each
-# species gets its own cell over the same region.
+# --- chemical potentials ---------------------------------------------------
+# DFT (PBE) references, so they do not change with the checkpoint.
+# mu_Ag = E(Ag, bulk) + dG_Ag(T) = -2.82 - 0.163 eV, from thermochemical
+# tables, and kept the same at every temperature.
+MU_AG = -2.99
+# E(O2)/2 from E(Ag2O) - 2 E(Ag) + dHf(Ag2O), which avoids the PBE O2 error.
+MU_O_REF = -4.91
+
+# --- insertion radii -------------------------------------------------------
+# O-Ag radius (A), from the first maximum of the O-Ag radial distribution.
+# Used twice: as the exclusion radius an incoming O sees around Ag, and as how
+# far below the top layer the exchange region starts.
+R_O_AG = 2.11
+# An incoming Ag needs a larger radius. This is why each species gets its own
+# cell over the same region.
 R_AG_AG = 2.75
 # Exclusion radius around an existing O (A). A minimal clearance that stops an
 # insertion on top of an O atom, not a bond length.
 R_O = 0.5
-# Shift (eV) on the bulk Ag energy per atom: G(500 K) - H(0 K) of Ag(s) at
-# 1 bar, from the CODATA data of Ag(cr) (Cox, Wagman and Medvedev, 1989) as
-# fitted in the NASA Glenn coefficients (McBride et al., NASA/TP-2002-211556).
-# NIST-JANAF has no Ag table. With it the reservoir is bulk Ag at
-# TEMPERATURE = 500 K; recompute it for another TEMPERATURE. Set 0.0 for the
-# static Ag-rich limit (bulk Ag at 0 K, no thermal term).
-MU_AG_CORRECTION = -0.176
 
 # --- system ----------------------------------------------------------------
-SLAB_SIZE = (16, 16, 4)     # fcc111 supercell (Nx, Ny, Nlayers) = 1024 atoms
-VACUUM = 10.0               # vacuum above and below the slab (A)
-FIX_LAYERS = 2              # bottom layers frozen
+AG_LATTICE = 4.159          # PBE fcc Ag lattice constant (A)
+SLAB_SIZE = (4, 4, 3)       # fcc111 supercell (Nx, Ny, Nlayers) = 48 atoms
+VACUUM = 8.0                # vacuum above and below the slab (A)
+FIX_LAYERS = 1              # bottom layers frozen
 CELL_HEIGHT = 7.0           # height of the exchange region (A)
 
 # --- thermodynamics --------------------------------------------------------
 TEMPERATURE = 500.0
-DELTA_MU_O = -0.3           # shift applied to mu_O = E(O2)/2
+DELTA_MU_O = -0.40          # the study uses -0.40, -0.60 and -0.90
 EXCHANGE_AG = True          # False = O only
 
 # --- run -------------------------------------------------------------------
-# A step takes a few seconds on one GPU (3.7 s measured on a 3.7k-atom
-# system), so this is several hours: a first look, not a converged sweep.
-STEPS = 10_000
-WRITE_INTERVAL = 10
+# The study runs 20,000 moves per replica and samples every 100 moves.
+STEPS = 20_000
+WRITE_INTERVAL = 1
 SEED = 42                   # one master seed; every RNG below derives from it
 
 
@@ -118,23 +119,14 @@ def main():
     cell_ag = CustomCell(atoms, custom_height=CELL_HEIGHT, bottom_z=bottom_z,
                          species_radii={'Ag': R_AG_AG, 'O': R_O}, seed=seed_cell_ag)
 
-    # AlchemiFCalculator relaxes each trial structure with GPU-native FIRE,
-    # honouring the FixAtoms constraint. Swap in AlchemiCalculator for
-    # energy-only evaluation (faster, but no relaxation of the trial).
-    calculator = AlchemiFCalculator(
-        checkpoint=CHECKPOINT,
+    # MACE_F_Calculator relaxes each trial structure with an ASE optimizer,
+    # honouring the FixAtoms constraint.
+    calculator = MACE_F_Calculator(
+        mace_mp(model=CHECKPOINT, device=DEVICE),
         steps=RELAX_STEPS,
         fmax=FMAX,
-        device=DEVICE,
-        enable_cueq=ENABLE_CUEQ,
-        compile_model=COMPILE_MODEL,
         optimizer=OPTIMIZER,
     )
-
-    # Hardcoded reference energies silently change meaning when the
-    # checkpoint changes, so they are measured with the running potential.
-    mu_ag = derive_mu_bulk(calculator, 'Ag', a=AG_LATTICE) + MU_AG_CORRECTION
-    mu_o = derive_mu_gas(calculator, 'O2') + DELTA_MU_O
 
     moves = [InsertionMove(cell_o, species=['O'], seed=seed_ins_o),
              DeletionMove(cell_o, species=['O'], seed=seed_del_o)]
@@ -155,7 +147,7 @@ def main():
         atoms=atoms,
         cells=cells,
         calculator=calculator,
-        mu={'Ag': mu_ag, 'O': mu_o},
+        mu={'Ag': MU_AG, 'O': MU_O_REF + DELTA_MU_O},
         species=species,
         units_type='metal',
         temperature=TEMPERATURE,

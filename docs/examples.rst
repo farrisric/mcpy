@@ -26,8 +26,9 @@ top of the file, so you edit the file and run it again.
        ``fix gcmc mol``.
      - ASE only, about 2 min on a CPU
    * - `03_gcmc_surface_mace.py <https://github.com/farrisric/mcpy/blob/main/examples/03_gcmc_surface_mace.py>`_
-     - Production GCMC: O and Ag exchanged on Ag(111) with MACE-MPA-0.
-     - ``.[alchemi]`` and a CUDA GPU, hours
+     - GCMC: O and Ag exchanged on Ag(111) with the small AGNESI MACE
+       potential, as in the Ag oxidation study.
+     - ``.[mace]``, CPU or GPU, hours
    * - `04_replica_exchange_batched.py <https://github.com/farrisric/mcpy/blob/main/examples/04_replica_exchange_batched.py>`_
      - Replica exchange on one GPU with batched energy evaluation.
      - ``.[alchemi]`` and a CUDA GPU, hours

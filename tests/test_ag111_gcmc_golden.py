@@ -16,10 +16,9 @@ proposals redrawn against the same ``species_radii`` exclusion spheres
 (ADR 0003), de Broglie acceptance, arrays+constraints rollback,
 trajectory writing) reproduces exactly when seeded.
 
-Parameters come from ``examples/03_gcmc_surface_mace.py`` without its Ag
-moves (the example exchanges Ag as well), the calibrated set for this
-checkpoint: a=4.165, the O-Ag exclusion radius 2.068 used both as the
-radius and as the region depth below the top layer, height 7, an O-O
+Parameters are the O-only calibrated set for this checkpoint: a=4.165,
+the O-Ag exclusion radius 2.068 used both as the radius and as the region
+depth below the top layer, height 7, an O-O
 clearance of 0.5 (``species_radii['O']``, formerly ``min_insert``), and the
 -0.176 bulk Ag correction.
 """

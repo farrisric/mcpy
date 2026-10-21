@@ -45,8 +45,8 @@ Optional extras:
 
 | Extra | Adds | Needed for |
 | --- | --- | --- |
-| `.[mace]` | `mace-torch` | `MACE_F_Calculator` |
-| `.[alchemi]` | `nvalchemi-toolkit[mace]` | `AlchemiCalculator`, `AlchemiFCalculator`, `examples/03` and `examples/04` (CUDA GPU) |
+| `.[mace]` | `mace-torch` | `MACE_F_Calculator`, `examples/03` (CPU or GPU) |
+| `.[alchemi]` | `nvalchemi-toolkit[mace]` | `AlchemiCalculator`, `AlchemiFCalculator`, `examples/04` and `examples/05` (CUDA GPU) |
 | `.[plot]` | `matplotlib` | the phase-diagram utilities |
 | `.[mpi]` | `mpi4py` | `ReplicaExchange` over MPI |
 | `.[test]` | `pytest` | the test suite |

@@ -1,10 +1,13 @@
 GCMC on Ag(111) with a machine-learned potential
 ================================================
 
-``examples/03_gcmc_surface_mace.py`` is a production setup: O and Ag are both
-exchanged with their reservoirs on a 1024-atom Ag(111) slab, and every trial
-is relaxed on the GPU with MACE-MPA-0.
-It needs the ``alchemi`` extra and a CUDA GPU (see :doc:`../installation`).
+``examples/03_gcmc_surface_mace.py`` exchanges O and Ag with their
+reservoirs on a 48-atom Ag(111) slab.
+Every trial is relaxed with the small AGNESI MACE foundation model
+(``mace-small-density-agnesi-stress``).
+The settings are those of one replica of the Ag oxidation study.
+It needs the ``mace`` extra and runs on a CPU (see :doc:`../installation`).
+``mace_mp`` downloads the model on the first run.
 This page explains its three design choices: the exchange region, the
 relaxed trial energy, and the reference chemical potentials.
 
@@ -24,7 +27,7 @@ Wexler et al. (2019).
 Each species gets its own cell over the same window.
 The cells differ only in ``species_radii``, the clearance that an incoming
 atom needs from the atoms already present.
-An incoming O needs ``R_O_AG`` = 2.14 Å from Ag, and an incoming Ag needs
+An incoming O needs ``R_O_AG`` = 2.11 Å from Ag, and an incoming Ag needs
 ``R_AG_AG`` = 2.75 Å.
 Both cells keep 0.5 Å from existing O atoms.
 The free volume of each cell, and so its insertion and deletion acceptance,
@@ -34,9 +37,11 @@ follows from its own radii (:doc:`../species_radii`).
 The relaxed trial energy
 ------------------------
 
-``AlchemiFCalculator`` relaxes each trial structure with FIRE before it
-returns the energy, and it honours the ``FixAtoms`` constraint on the two
-bottom layers.
+``MACE_F_Calculator`` relaxes each trial structure with LBFGS before it
+returns the energy, and it honours the ``FixAtoms`` constraint on the bottom
+layer.
+The relaxation stops at 0.5 eV/Å or after 40 steps.
+The study uses 0.1 eV/Å; the looser value keeps a CPU run short.
 A random insertion in a dense metal surface rarely lands at a binding site,
 and its unrelaxed energy would reject almost every trial.
 The relaxation lets the acceptance test see the nearby minimum instead.
@@ -48,33 +53,26 @@ the run samples relaxed basins, not the plain configurational ensemble.
 Reference chemical potentials
 -----------------------------
 
-The script derives both references from the running potential.
-:func:`~mcpy.utils.reference_mu.derive_mu_gas` returns
-:math:`E(\mathrm{O_2})/2` for an O\ :sub:`2` molecule relaxed in a box, and
-:func:`~mcpy.utils.reference_mu.derive_mu_bulk` returns the bulk Ag energy per
-atom at the potential's own lattice constant.
-Hardcoded reference energies from another checkpoint silently shift every
-:math:`\Delta\mu`, because each potential has its own energy zero.
+The script uses fixed DFT (PBE) references, as the study does.
+They do not change when you change the potential.
+:math:`\mu_\mathrm{Ag}` = -2.99 eV is the bulk Ag energy, -2.82 eV, plus a
+thermal free-energy correction of -0.163 eV from thermochemical tables.
+The reference for O is :math:`E(\mathrm{O_2})/2` = -4.91 eV.
+It comes from
+:math:`E(\mathrm{Ag_2O}) - 2E(\mathrm{Ag}) + \Delta H^f_{\mathrm{Ag_2O}}`,
+which avoids the PBE error of the O\ :sub:`2` molecule.
 
-Only two numbers stay physical inputs.
 ``DELTA_MU_O`` sets the O\ :sub:`2` gas conditions relative to
 :math:`E(\mathrm{O_2})/2`.
-``MU_AG_CORRECTION`` = -0.176 eV adds the thermal free energy of bulk Ag to
-the static bulk energy.
-With it, the Ag reservoir is in equilibrium with bulk Ag at 500 K.
-The value is :math:`G(500\,\mathrm{K}) - H(0\,\mathrm{K})` per atom of solid Ag at 1 bar.
-500 K is ``TEMPERATURE`` in the script.
-Recompute the value when you change ``TEMPERATURE``.
-The CODATA Key Values for Thermodynamics (Cox, Wagman and Medvedev, 1989) give the data of Ag(cr) at 298.15 K: :math:`S^\circ` = 42.55 J/(mol K) and :math:`H(298.15\,\mathrm{K}) - H(0\,\mathrm{K})` = 5.745 kJ/mol.
-The NASA Glenn coefficients for Ag(cr) (McBride et al., NASA/TP-2002-211556) fit these data.
-They give the heat capacity from 298 to 500 K.
-A constant heat capacity of 25.4 J/(mol K) gives the same value to within 1 meV.
-Set it to 0.0 for the static Ag-rich limit: bulk Ag at 0 K, with no thermal term.
+The study uses -0.40, -0.60 and -0.90 eV.
+It runs six replicas from 250 to 500 K for each value, with replica exchange
+(:doc:`replica_exchange`).
 
-The calibration constants at the top of the script (``AG_LATTICE``,
-``R_O_AG``, ``R_AG_AG``) were measured with MACE-MPA-0.
-Measure them again when you change the potential.
-``examples/04_replica_exchange_batched.py`` uses the same values.
+To derive the references from the running potential instead, use
+:func:`~mcpy.utils.reference_mu.derive_mu_gas` and
+:func:`~mcpy.utils.reference_mu.derive_mu_bulk`, as
+``examples/04_replica_exchange_batched.py`` does.
+Measure the radii again when you change the potential.
 
 
 The script
