@@ -2,13 +2,25 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/mit)
 [![GitHub issues](https://img.shields.io/github/issues/farrisric/mcpy.svg)](https://GitHub.com/farrisric/mcpy/issues)
 [![Documentation Status](https://readthedocs.org/projects/mc-py/badge/)](https://mc-py.readthedocs.io/en/latest/index.html)
+[![PyPI](https://img.shields.io/pypi/v/mcpy-gcmc.svg)](https://pypi.org/project/mcpy-gcmc/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/farrisric/mcpy/blob/main/notebooks/gcmc_basics_lj.ipynb)
 
 # mcpy
 
 `mcpy` runs Grand Canonical Monte Carlo (GCMC) simulations of atomistic systems on top of the Atomic Simulation Environment (ASE).
 It predicts the composition and structure of surfaces and nanoparticles in contact with a gas or metal reservoir, with any ASE calculator: classical potentials, DFT, or machine-learned interatomic potentials such as MACE.
 
+```sh
+pip install mcpy-gcmc
+```
+
 Documentation: <https://mc-py.readthedocs.io>
+Try it in the browser, with no install: [GCMC basics notebook on Colab](https://colab.research.google.com/github/farrisric/mcpy/blob/main/notebooks/gcmc_basics_lj.ipynb).
+
+<p align="center">
+  <img src="docs/_static/fig_phase_diagram_ag_o.png" width="640" alt="Surface phase diagram of O on Ag(111) computed with mcpy.">
+</p>
+<p align="center"><em>Surface phase diagram of O on a 3x3 Ag(111) slab at 500 K, from mcpy GCMC runs with MACE (<a href="notebooks/phase_diagram.ipynb">phase_diagram notebook</a>).</em></p>
 
 ## Features
 
@@ -32,7 +44,13 @@ The tables, the rerunnable scripts and a MACE comparison are in [`benchmark/READ
 mcpy needs Python 3.11 or later.
 The distribution is named `mcpy-gcmc` (the `mcpy` name on PyPI belongs to an unrelated package).
 You still write `import mcpy`.
-Until the first PyPI release, install from the repository:
+
+```sh
+pip install mcpy-gcmc
+pip install 'mcpy-gcmc[mace]'   # with an extra, see the table below
+```
+
+To run the examples or change the code, install from the repository instead:
 
 ```sh
 git clone https://github.com/farrisric/mcpy.git
