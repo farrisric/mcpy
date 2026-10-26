@@ -28,5 +28,5 @@ Done when: every neighbour pair has non-zero second-half acceptance and every ru
 ## Traps
 
 - The cumulative acceptance column looks fine for dead ladders: early swaps between identical starting replicas are free and inflate it forever.
-- Each `BatchedReplicaExchange(..., mus=[...])` result from before 2026-07-27 (v1.4.0) is invalid; re-run it.
+- Each `BatchedReplicaExchange(..., mus=[...])` result from mcpy 1.3.0 or earlier is invalid; re-run it (fixed in 1.4.0).
 - Temperature-ladder runs from before 2026-08-17 lack the de Broglie cross-term whenever N differs between rungs.
