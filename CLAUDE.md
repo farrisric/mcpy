@@ -95,7 +95,7 @@ purpose for `CustomCell`.
 - `AlchemiCalculator`, `AlchemiFCalculator` — optional GPU-native nvalchemi
   backend. Energy-only and FIRE-relaxing respectively; both honor `FixAtoms`,
   expose batched `get_potential_energies(atoms_list)` with `chunk_size`, and
-  offer `run_md` for Langevin proposals. Shared internals in `_alchemi_common.py`
+  offer `run_md` for Langevin proposals. Shared internals in `_AlchemiBase` (`mcpy/calculators/alchemi.py`)
 
 **Utils** (`mcpy/utils/`):
 - `SetUnits` — computes thermodynamic constants (β, de Broglie wavelengths) for `"metal"` or `"LJ"` unit systems
@@ -153,8 +153,8 @@ Launch with `mpirun -n N python -m mpi4py my_run.py`. Every rank must be seeded 
   `docs/adr/0001-gcmc-de-broglie-total-atom-count.md`.
 - Replica-exchange ladder spacing has its own guide:
   `docs/replica_exchange_ladder_spacing.rst`. Uniform μ spacing can kill the ladder.
-- Reproducibility: seeds must be passed explicitly to the cells, the
-  `MoveSelector`, and the ensemble (`random_seed=`). Any one of them left at
+- Reproducibility: seeds must be passed explicitly to the cells, each
+  move, the `MoveSelector`, and the ensemble (`random_seed=`). Any one of them left at
   `None` makes a run unrepeatable.
 - When you add, rename or remove a module, update the Architecture section of
   this file in the same PR.

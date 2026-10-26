@@ -21,7 +21,7 @@ Unit tests alone do not prove the physics. A GCMC bug often shows only as wrong 
    - `outfile.out`: N_atoms settles to a plateau; energy has no jumps or NaN; each move has an acceptance ratio that is not stuck at 0 % or 100 %.
    - `trajectory.xyz`: open a few frames (for example `ase gui trajectory.xyz`); atoms stay inside the cell, fixed atoms stay fixed, no atoms overlap.
 6. When the change can move results (acceptance rule, free volume, move proposal, calculator energy), compare a short run before and after on the same seeds.
-   Seed the cells, the `MoveSelector` and the ensemble (`random_seed=`); one unseeded part makes the comparison meaningless.
+   Use the same seeds for the cells, each move (`seed=`), the `MoveSelector` and the ensemble (`random_seed=`) in both runs; one changed or unseeded part makes the comparison meaningless.
 
 Done when: lint is clean, all tests pass, and an example run shows physically sane output for the code you changed.
 
