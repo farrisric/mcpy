@@ -49,8 +49,8 @@ joss/
 scratch/
 
 # Claude files
-CLAUDE.md
-.claude/
+.claude/*
+!.claude/skills/
 
 # Tool-generated / planning artifacts (kept local)
 .understand-anything/
