@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in \"$CLAUDE_PROJECT_DIR\"/mcpy/*.py) ;; *) exit 0 ;; esac; command -v flake8 >/dev/null || exit 0; cd \"$CLAUDE_PROJECT_DIR\" && out=$(flake8 \"$f\") || { echo \"$out\" >&2; exit 2; }",
+            "statusMessage": "flake8"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -51,6 +51,7 @@ scratch/
 # Claude files
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 
 # Tool-generated / planning artifacts (kept local)
 .understand-anything/

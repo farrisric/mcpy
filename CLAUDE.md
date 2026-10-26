@@ -156,6 +156,8 @@ Launch with `mpirun -n N python -m mpi4py my_run.py`. Every rank must be seeded 
 - Reproducibility: seeds must be passed explicitly to the cells, the
   `MoveSelector`, and the ensemble (`random_seed=`). Any one of them left at
   `None` makes a run unrepeatable.
+- When you add, rename or remove a module, update the Architecture section of
+  this file in the same PR.
 
 ## Karpathy Guidelines
 
@@ -236,3 +238,8 @@ Default vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-f
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Pull requests
+
+Every change reaches `main` through a PR that the other maintainer reviews.
+To review a PR, check out its branch and run the `verify-gcmc` skill on it.
