@@ -17,11 +17,6 @@ pip install mcpy-gcmc
 Documentation: <https://mc-py.readthedocs.io>
 Try it in the browser, with no install: [GCMC basics notebook on Colab](https://colab.research.google.com/github/farrisric/mcpy/blob/main/notebooks/gcmc_basics_lj.ipynb).
 
-<p align="center">
-  <img src="paper/argon_lammps_validation.png" width="720" alt="mcpy and LAMMPS fix gcmc isotherms for a repulsive LJ fluid and argon.">
-</p>
-<p align="center"><em>mcpy reproduces LAMMPS <code>fix gcmc</code>: average particle number of a repulsive Lennard-Jones fluid and of argon across its gas-liquid condensation (<a href="benchmark/README.md">benchmark</a>).</em></p>
-
 ## Features
 
 - **Grand-canonical Monte Carlo**: atomic insertion and deletion at fixed chemical potential, with the free volume of the insertion region estimated from per-species exclusion radii.
