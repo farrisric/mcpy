@@ -18,9 +18,9 @@ Documentation: <https://mc-py.readthedocs.io>
 Try it in the browser, with no install: [GCMC basics notebook on Colab](https://colab.research.google.com/github/farrisric/mcpy/blob/main/notebooks/gcmc_basics_lj.ipynb).
 
 <p align="center">
-  <img src="docs/_static/fig_phase_diagram_ag_o.png" width="640" alt="Surface phase diagram of O on Ag(111) computed with mcpy.">
+  <img src="paper/argon_lammps_validation.png" width="720" alt="mcpy and LAMMPS fix gcmc isotherms for a repulsive LJ fluid and argon.">
 </p>
-<p align="center"><em>Surface phase diagram of O on a 3x3 Ag(111) slab at 500 K, from mcpy GCMC runs with MACE (<a href="notebooks/phase_diagram.ipynb">phase_diagram notebook</a>).</em></p>
+<p align="center"><em>mcpy reproduces LAMMPS <code>fix gcmc</code>: average particle number of a repulsive Lennard-Jones fluid and of argon across its gas-liquid condensation (<a href="benchmark/README.md">benchmark</a>).</em></p>
 
 ## Features
 
