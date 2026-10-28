@@ -1,3 +1,4 @@
+[![status](https://joss.theoj.org/papers/b3fcd2a6358f1c92d719c2295a45dc1e/status.svg)](https://joss.theoj.org/papers/b3fcd2a6358f1c92d719c2295a45dc1e)
 [![Tests](https://github.com/farrisric/mcpy/actions/workflows/tests.yml/badge.svg)](https://github.com/farrisric/mcpy/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/mit)
 [![GitHub issues](https://img.shields.io/github/issues/farrisric/mcpy.svg)](https://GitHub.com/farrisric/mcpy/issues)
