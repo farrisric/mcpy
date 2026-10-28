@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/farrisric/mcpy/main/docs/_static/logo/mcpy_logo_dark.svg">
+    <img src="https://raw.githubusercontent.com/farrisric/mcpy/main/docs/_static/logo/mcpy_logo.svg" alt="mcpy logo" width="420">
+  </picture>
+</p>
+
 [![status](https://joss.theoj.org/papers/b3fcd2a6358f1c92d719c2295a45dc1e/status.svg)](https://joss.theoj.org/papers/b3fcd2a6358f1c92d719c2295a45dc1e)
 [![Tests](https://github.com/farrisric/mcpy/actions/workflows/tests.yml/badge.svg)](https://github.com/farrisric/mcpy/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/mit)

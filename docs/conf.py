@@ -47,3 +47,7 @@ nitpick_ignore_regex = [
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+# The sidebar is dark, so it takes the logo with light text.
+html_logo = '_static/logo/mcpy_logo_dark.svg'
+html_favicon = '_static/logo/favicon.png'
+html_theme_options = {'logo_only': True}
