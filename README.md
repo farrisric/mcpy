@@ -2,7 +2,7 @@
 [![Tests](https://github.com/farrisric/mcpy/actions/workflows/tests.yml/badge.svg)](https://github.com/farrisric/mcpy/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/mit)
 [![GitHub issues](https://img.shields.io/github/issues/farrisric/mcpy.svg)](https://GitHub.com/farrisric/mcpy/issues)
-[![Documentation Status](https://readthedocs.org/projects/mc-py/badge/)](https://mc-py.readthedocs.io/en/latest/index.html)
+[![Documentation Status](https://app.readthedocs.org/projects/mc-py/badge/?version=latest)](https://mc-py.readthedocs.io/en/latest/index.html)
 [![PyPI](https://img.shields.io/pypi/v/mcpy-gcmc.svg)](https://pypi.org/project/mcpy-gcmc/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/farrisric/mcpy/blob/main/notebooks/gcmc_basics_lj.ipynb)
 
