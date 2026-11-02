@@ -21,7 +21,7 @@ description: Use when reading finished GCMC or replica-exchange output - judging
    `molecule_id` column when molecule moves ran. Read with
    `ase.io.read('trajectory.xyz', index=':')`.
 5. Phase diagrams: use `mcpy.utils.phase_diagram.plot_phase_diagram(frames, adsorbate=...,
-   metal_symbols=..., mu_ref=..., kind='surface'|'nanoparticle', dmu_range=...)`.
+   metal_symbols=..., mu_ref=..., kind='surface'|'nano', dmu_range=...)`.
    Do not hand-roll coverage curves; the library routine does the envelope, transition
    lines, and structure thumbnails. Guide: `docs/phase_diagrams.rst`.
    (`analyze_phase_diagram_results` is the older oxidation-specific entry point.)

@@ -34,5 +34,6 @@ cell's reported free volume is a plausible fraction of the window volume.
   the effective mu (~0.036 eV in that test) - never change radii mid-campaign.
 - `species_radii={..: 0}` (as in the calibration script itself) means no exclusion;
   fine for calibration, wrong for production.
-- Relation to the removed `min_insert`: ADR 0003/0004 - the cell's radii rule now owns both
-  proposal region and acceptance volume; do not reintroduce a separate insertion cutoff.
+- Relation to the deprecated `min_insert` (still an `InsertionMove` parameter): ADR 0003/0004 -
+  the cell's radii rule now owns both proposal region and acceptance volume; do not
+  reintroduce a separate insertion cutoff.

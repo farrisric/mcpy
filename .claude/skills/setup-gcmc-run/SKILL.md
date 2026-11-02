@@ -22,7 +22,7 @@ Copy the nearest example and edit it; do not write from scratch.
    free volume enters the acceptance rule.
 3. Pick moves. Minimum GCMC set: `InsertionMove` + `DeletionMove` with equal weights,
    plus `DisplacementMove`. Molecules: use the `molecule-gcmc` skill.
-   Wrap in `MoveSelector(weights, moves, seed=...)`.
+   Wrap in `MoveSelector(probabilities, move_list, seed=...)`.
 4. Get mu with the `choose-mu` skill. Never hardcode a number from another potential.
 5. Seed EVERYTHING: each cell, each move, the `MoveSelector`, and the ensemble
    (`random_seed=`). One `None` makes the run unrepeatable.

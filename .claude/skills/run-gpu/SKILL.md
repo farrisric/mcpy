@@ -15,11 +15,8 @@ description: Launch any mcpy run that imports torch, mace or nvalchemi (MACE or 
    Reason: GCMC changes the atom count each move, so the CUDA cache fragments.
    `nvidia-smi` memory then climbs to the card limit and gives false OOMs, while live memory stays flat.
    This is not a leak; the env var is the fix.
-3. Check the system fits (reference: RTX 5090, 32 GB, medium-mpa-0, fp32, cuEq):
-   - FIRE relax: about 0.1 GiB + 1.3 MiB per atom (supported oxide); about 0.9 MiB per atom (bare metal NP).
-   - Relax ceiling: about 32k atoms bare NP, about 23k atoms supported oxide.
-   - Batched replica exchange: set `chunk_size` on the calculator so peak memory follows the chunk, not the replica count.
-     Pick the largest chunk that fits; `chunk_size=1` is many times slower.
+3. Check the system fits: memory rules, ceilings, and `chunk_size` choice live in the
+   `size-gpu-run` skill (single source for the measured numbers).
 4. Derive reference chemical potentials at runtime with `mcpy.utils.reference_mu` (`derive_mu_gas`, `derive_mu_bulk`).
    Each checkpoint gives a different E(O2)/2, so a hardcoded mu from another model is wrong.
 

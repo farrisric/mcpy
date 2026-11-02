@@ -6,9 +6,10 @@ description: Use when sizing a GPU GCMC or batched replica-exchange run - choosi
 # Size a GPU run (atoms, replicas, memory, time)
 
 Reference card: RTX 5090, 32 GB, nvalchemi 0.2.0, fp32, cuEq on, compile off.
-All numbers below are measured on it with `benchmark/internal/re_batched_scaling.py`.
-On other hardware or after an nvalchemi upgrade, re-run that script and trust its
-numbers over this card.
+On other hardware or after an nvalchemi upgrade, re-measure a small (atoms x replicas)
+sweep and trust the measured peaks over this card.
+Maintainers: the sweep script is `benchmark/internal/re_batched_scaling.py`
+(local-only; `benchmark/internal/` is gitignored, not in the public repo).
 
 ## Steps
 
@@ -48,4 +49,6 @@ covers >= 10^4 steps per rung.
   use the env var and judge by torch allocated memory.
 - Reusing pre-0.2.0 numbers (e.g. "8 x 664 atoms = 29 GB"): stale; 0.2.0 halved batched memory.
 - Estimating MH-1 with the 1.3 MiB/atom rule: it is ~6x hungrier.
-- To re-measure on new hardware or a new model: `benchmark/internal/re_batched_scaling.py`.
+- To re-measure on new hardware or a new model: the local-only sweep script named in the
+  header, or any short grid of (atoms x replicas) runs with
+  `torch.cuda.max_memory_allocated` logged.
