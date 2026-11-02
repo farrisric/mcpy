@@ -58,7 +58,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Free-volume sampling adapts the sample count to about 0.5% relative noise. `find_molecules` is about 12x faster.
 
 ### Removed
-- `CanonicalEnsemble(units_type=)`, `BaseEnsemble(units_type=, user_tag=)` and `RandomNumberGenerator(warm_up=)`. They had no effect.
+- `CanonicalEnsemble(units_type=)` and `BaseEnsemble(units_type=, user_tag=)`. They were stored but never used.
+- `RandomNumberGenerator(warm_up=)`. It discarded draws after seeding, which Python's Mersenne Twister does not need. The default was 0; a run that set it gets a different random stream now.
 - `MoveSelector.get_acceptance_ration` (typo alias). Use `get_acceptance_ratio`.
 - Unused modules `mcpy/moves/go_moves.py`, `mcpy/calculators/mace_calculator.py` and `mcpy/utils/utils.py`.
 
