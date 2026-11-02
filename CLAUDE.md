@@ -34,6 +34,7 @@ python examples/04_replica_exchange_batched.py
 Tests live in `tests/` and run with `pytest tests/` (CI runs them on Python 3.11–3.14). They cover the cells, moves, logging, acceptance criteria, molecule moves, constraint rollback, and both replica-exchange swap rules, and do not require `mace-torch`, `torch`, or `mpi4py`. End-to-end verification of simulations is still done by running example scripts and inspecting `outfile.out` and `trajectory.xyz`.
 
 GPU runs: see the `run-gpu` skill (`.claude/skills/run-gpu/SKILL.md`).
+More skills in `.claude/skills/`: `setup-gcmc-run`, `choose-mu`, `size-gpu-run`, `analyze-results`, `troubleshoot-run`, `molecule-gcmc`, `species-radii`, `replica-exchange-setup`, `verify-gcmc`, `release`.
 
 ## Architecture
 
