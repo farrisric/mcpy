@@ -4,6 +4,69 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-11-02
+
+### Added
+- Claude Code project setup: a shared `CLAUDE.md` and project skills under `.claude/skills/` that help users set up and run simulations with Claude: `setup-gcmc-run`, `choose-mu`, `size-gpu-run`, `analyze-results`, `troubleshoot-run`, `molecule-gcmc`, `species-radii`, `replica-exchange-setup`, `run-gpu`, `verify-gcmc` and `release`. `.claude/settings.json` runs flake8 on every `mcpy/*.py` file that Claude edits.
+- The data behind JOSS Fig. 1 is tracked in `benchmark/lj_isotherms/lj_isotherms.csv`. `benchmark/lammps_lj_isotherms.py --plot` redraws the figure from it without a LAMMPS rerun.
+- The mcpy logo in the README and the docs.
+
+### Changed
+- Example 03 runs on a CPU: it uses `MACE_F_Calculator` with the small AGNESI checkpoint (`small-0b2`, downloaded on the first run), at most 40 relaxation steps and a 48-atom Ag(111) slab. Example 04 is now the GPU example.
+- The README shows `pip install mcpy-gcmc`, PyPI, Colab and JOSS badges, and the GCMC basics notebook installs mcpy from PyPI when it is missing, so it runs on Colab.
+- `CITATION.cff` cites the Zenodo concept DOI, which always resolves to the newest version, and uses the title of the JOSS paper.
+
+### Fixed
+- `uv.lock` replaced the yanked `configargparse` 1.7 with 1.8.0.
+- Paper bibliography: the MACE reference cites the NeurIPS proceedings (DOI and pages) instead of the arXiv preprint, and the first ASE author renders as Hjorth Larsen.
+
+## [1.5.0] - 2026-10-20
+
+### Changed
+- **The distribution is renamed to `mcpy-gcmc` and is on PyPI** (`pip install mcpy-gcmc`), because the `mcpy` name on PyPI belongs to an unrelated package. The import name stays `mcpy`.
+- This release fixes bugs that can change simulation results. **Runs made with 1.4.0 or earlier can differ from runs made with 1.5.0.**
+
+### Fixed
+- **Wrong forces for MACE models with non-linear interaction blocks (mh-1) when cuEq and `torch.compile` are both on.** Forces were off by up to 0.6 eV/A while energies stayed correct. Compile is now turned off for such models, with a warning.
+- mh-1 under cuEq: MACE rebuilt the first interaction block with the wrong width and random weights (ACEsuit/mace#1298). The model is now repaired before conversion, with a fallback to e3nn only when the repair does not match.
+- Insertion proposals now use the same exclusion rule as the free volume (all atoms and periodic images), and deletions use the post-deletion volume, so the acceptance satisfies detailed balance (ADR 0003).
+- An error is raised when insertion and deletion attempt probabilities differ per species and cell, which silently shifted mu.
+- Trials that move exchanged atoms across a `SphericalCell` or `DomeCell` surface, or above a `CustomCell` top, are rejected, so atoms can no longer get stranded where no deletion reaches them. This includes `PermutationMove` swaps.
+- `CustomCell` scales the box c vector, so a tilted cell no longer strands wrapped insertions outside the deletable footprint.
+- FixAtoms atoms are never deleted, and atom caps count free atoms only. `ShakeMove`, `DisplacementMove` and `MoleculeDisplacementMove` honour FixAtoms, and FixAtoms rows are restored in float64 after an Alchemi relaxation.
+- The cell of every insertion move is refreshed after an accepted trial, not only the cells listed in `cells=`.
+- MPI `ReplicaExchange` uses one general cross-term swap rule, exact for a per-rung mu(T), with the de Broglie term and NaN rejection on every ladder. Replica exchange rejects replicas or ranks that share a random stream.
+- Phase diagrams: `plot_phase_diagram` scores frames by `E - sum_m mu_m (N_m - N_m,ref)` through `mu_metal`, pressure axes use NIST-JANAF dmu0(T) for O2 and H2, the JANAF table is picked from the adsorbate symbol, and `derive_mu_bulk` fits an equation of state instead of a parabola.
+- A second `run()` appends to the trajectory, outfile and minima files, with no duplicate final frame.
+- MPI runs abort on all ranks instead of hanging when one rank fails.
+- `global_minimum.xyz` holds one frame per rung whenever the rungs' mu differ, and minima are recorded for swapped-in configurations.
+- A failed energy call or setup leaves no half state. `write_xyz` keeps pbc, constraints and tags. `get_state` returns a detached copy.
+- `DisplacementMove` `n_steps`, `ShakeMove` centre-of-mass drift, and `BrownianMove` NaN with one free atom are fixed. `BrownianMove` is seeded and leaves no calculator or momenta behind.
+- Alchemi calculators: `steps=0` is a single point, empty structures give 0 eV, per-graph energies are summed in float64, relaxation checks convergence before the first step, and a missing checkpoint path raises `FileNotFoundError`.
+
+### Added
+- `AlchemiFCalculator(optimizer='lbfgs')`: batched L-BFGS when the installed nvalchemi provides it, about 3x faster than FIRE per trial relaxation.
+- cuEq input padding to bucketed atom counts, so cuEq does not re-tune its kernels for every new atom count: 1.3-5x faster batched relaxations.
+- `mu_h_che` and `mu_o_che`: pH- and potential-dependent chemical potentials from the computational hydrogen electrode.
+- `derive_mu_bulk` and `derive_mu_gas`: reference chemical potentials from the running potential.
+- `min_insert` sets a seed clearance for relaxed insertions (ADR 0004).
+- `trajectory_file` option on `BrownianMove` and `AlchemiBrownianMove` to debug MD proposals.
+- `plot_phase_diagram`: exact lower envelope, numbered phases, colourblind-safe colours, optional hatched region.
+- New example: H adsorption on a Pt nanoparticle with a CHE potential ladder.
+- The outfile records the mcpy version.
+- A warning when a relaxation hits its step cap, and relax step counters on `BaseCalculator`.
+- Free-volume sampling adapts the sample count to about 0.5% relative noise. `find_molecules` is about 12x faster.
+
+### Removed
+- `CanonicalEnsemble(units_type=)`, `BaseEnsemble(units_type=, user_tag=)` and `RandomNumberGenerator(warm_up=)`. They had no effect.
+- `MoveSelector.get_acceptance_ration` (typo alias). Use `get_acceptance_ratio`.
+- Unused modules `mcpy/moves/go_moves.py`, `mcpy/calculators/mace_calculator.py` and `mcpy/utils/utils.py`.
+
+### Docs
+- Reworked README, examples and API reference (generated with autodoc), and a replica-exchange page with an `mpirun` recipe.
+- JOSS Fig. 1 shows the mcpy - LAMMPS difference against a two-sigma band, with four seeds per chemical potential and equal trial budgets.
+- Release workflow: a version tag uploads the package to PyPI and creates the GitHub release.
+
 ## [1.4.0] - 2026-07-28
 
 ### Fixed
@@ -108,6 +171,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial public release.
 
+[1.5.1]: https://github.com/farrisric/mcpy/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/farrisric/mcpy/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/farrisric/mcpy/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/farrisric/mcpy/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/farrisric/mcpy/compare/v1.1.0...v1.2.0
