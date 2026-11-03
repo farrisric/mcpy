@@ -46,6 +46,9 @@ More skills in `.claude/skills/`: `setup-gcmc-run`, `choose-mu`, `size-gpu-run`,
 - `BaseEnsemble` — abstract base; owns atoms, calculator, file I/O, step counter
 - `GrandCanonicalEnsemble` — GCMC: inserts/deletes particles, evaluates acceptance via the de Broglie criterion
 - `CanonicalEnsemble` — NVT: constant particle number
+- `IsothermalIsobaricEnsemble` — NPT: subclass of `GrandCanonicalEnsemble` with fixed N and a
+  `pressure`; needs a `VolumeMove`, full PBC, no constraints, no molecules. Restores the lattice
+  on rejection and scores minima (and replica-exchange swaps) by the enthalpy E + PV
 - `ReplicaExchange` - parallel-tempering wrapper around GCMC; requires `mpi4py`, one MPI rank per replica. The factory gets T **or** μ, never both, but the swap uses the same general cross-term rule as `BatchedReplicaExchange` (exact for a per-rung μ(T), de Broglie term included). No molecular species (it counts atoms by symbol)
 - `BatchedReplicaExchange` — single-process, single-GPU replica exchange: all replicas live in one process and every replica's trial energy is evaluated in one batched forward pass. Needs a calculator with `get_potential_energies(atoms_list)`. Same general swap rule as `ReplicaExchange`, plus molecular species; warns on a degenerate or dead ladder
 
@@ -66,6 +69,8 @@ Every ensemble can emit a `minima_file` of strictly improving configurations; re
 - `AlchemiBrownianMove` — short GPU Langevin MD as the proposal, reusing the
   Alchemi calculator's already-loaded model
 - `PermutationMove` — swap species identities (`n_swaps` for compound trials)
+- `VolumeMove` — isotropic box scaling, random walk in ln V (`max_delta_ln_volume`); reports
+  `last_volumes` and `last_log_jacobian` for `IsothermalIsobaricEnsemble` (no other ensemble scores it)
 - `MoveSelector` — weighted sampler over a list of moves; tracks per-interval and
   cumulative acceptance counters, and excludes failed proposals from the denominator
 

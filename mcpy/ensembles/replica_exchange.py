@@ -226,6 +226,11 @@ class ReplicaExchange:
         terms keep it exact when the factory sets a T-dependent mu per rank.
         A state without mu (CanonicalEnsemble) scores bare E. Same rule as
         ``BatchedReplicaExchange._accept_swap``.
+
+        An isobaric state (``IsothermalIsobaricEnsemble``) carries its
+        ``pressure``, and Phi gains + P V. That adds
+        (beta_2 P_2 - beta_1 P_1)(V_Y - V_X); a state without one counts as
+        P = 0.
         """
         beta1, beta2 = state1['beta'], state2['beta']
         mu1, mu2 = state1.get('mu') or {}, state2.get('mu') or {}
@@ -240,6 +245,10 @@ class ReplicaExchange:
             if dn and beta1 != beta2 and specie in mu1:
                 delta += 3.0 * dn * np.log(state1['lambda_dbs'][specie]
                                            / state2['lambda_dbs'][specie])
+        p1, p2 = state1.get('pressure'), state2.get('pressure')
+        if p1 is not None or p2 is not None:
+            delta += ((beta2 * (p2 or 0.0) - beta1 * (p1 or 0.0))
+                      * (state2['atoms'].get_volume() - state1['atoms'].get_volume()))
         if not np.isfinite(delta):
             # min(1, exp(nan)) is 1: a diverged energy would always swap.
             self.logger.warning(

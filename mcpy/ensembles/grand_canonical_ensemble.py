@@ -18,6 +18,7 @@ from ..moves.molecule_deletion_move import MoleculeDeletionMove
 from ..moves.molecule_insertion_move import MoleculeInsertionMove
 from ..moves.move_selector import MoveSelector
 from ..moves.molecule_utils import find_molecules, molecule_groups
+from ..moves.volume_move import VolumeMove
 from ..cell import Cell, CustomCell, SphericalCell
 
 _RATIO_COL_PER_MOVE = 8  # width per "100.0%, " entry, generous
@@ -30,6 +31,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
     _ball_guards = ()
     # (cell, atomic numbers) per CustomCell top exchanged atoms may not cross.
     _top_guards = ()
+    # Only IsothermalIsobaricEnsemble adds the P dV term and restores the lattice.
+    _scores_volume_moves = False
 
     def __init__(self,
                  atoms: Atoms,
@@ -75,6 +78,12 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         self._temperature = temperature
         self._mu = mu
         self.move_selector = move_selector
+        if not self._scores_volume_moves and any(
+                isinstance(m, VolumeMove) for m in move_selector.move_list):
+            raise ValueError(
+                f'{type(self).__name__} cannot score a VolumeMove: its acceptance has '
+                'no P dV term and a rejection would keep the scaled box. Use '
+                'IsothermalIsobaricEnsemble.')
         self._check_species(species)
         self._check_exchange_balance()
         self._check_molecule_ids()

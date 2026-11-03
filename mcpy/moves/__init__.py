@@ -10,6 +10,7 @@ from .permutation_move import PermutationMove
 from .molecule_insertion_move import MoleculeInsertionMove
 from .molecule_deletion_move import MoleculeDeletionMove
 from .molecule_displacement_move import MoleculeDisplacementMove
+from .volume_move import VolumeMove
 
 __all__ = [
     'BaseMove',
@@ -24,4 +25,5 @@ __all__ = [
     'MoleculeInsertionMove',
     'MoleculeDeletionMove',
     'MoleculeDisplacementMove',
+    'VolumeMove',
 ]

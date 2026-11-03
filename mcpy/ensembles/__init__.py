@@ -2,6 +2,7 @@ from .base_ensemble import BaseEnsemble
 from .batched_replica_exchange import BatchedReplicaExchange
 from .canonical_ensemble import CanonicalEnsemble
 from .grand_canonical_ensemble import GrandCanonicalEnsemble
+from .isothermal_isobaric_ensemble import IsothermalIsobaricEnsemble
 from .replica_exchange import ReplicaExchange
 
 __all__ = [
@@ -9,5 +10,6 @@ __all__ = [
     'BatchedReplicaExchange',
     'CanonicalEnsemble',
     'GrandCanonicalEnsemble',
+    'IsothermalIsobaricEnsemble',
     'ReplicaExchange',
 ]

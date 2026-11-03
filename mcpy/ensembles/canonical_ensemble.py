@@ -4,6 +4,7 @@ import numpy as np
 from ase.units import kB as boltzmann_constant
 
 from .base_ensemble import BaseEnsemble
+from ..moves.volume_move import VolumeMove
 from ..utils.random_number_generator import RandomNumberGenerator
 
 
@@ -41,6 +42,9 @@ class CanonicalEnsemble(BaseEnsemble):
                  minima_mode: str = 'a') -> None:
         if not (np.isfinite(temperature) and temperature >= 0):
             raise ValueError(f'temperature must be finite and >= 0, got {temperature}')
+        if any(isinstance(m, VolumeMove) for m in getattr(move_selector, 'move_list', ())):
+            raise ValueError('CanonicalEnsemble cannot score a VolumeMove: its acceptance '
+                             'has no P dV term. Use IsothermalIsobaricEnsemble.')
         super().__init__(atoms=atoms,
                          cells=cells if cells is not None else [],
                          calculator=calculator,
