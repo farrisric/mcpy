@@ -389,12 +389,7 @@ def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
     if not fixed:
         return None
     batch.atom_categories[fixed] = AtomCategory.SPECIAL.value
-    hook = FreezeAtomsHook()
-    # nvalchemi 0.2.0 restores only after post_update, so the Langevin noise
-    # of pre_update moved frozen rows during the force evaluation. Restore
-    # before compute too (nvalchemi > 0.2.0 already does).
-    hook._active_stages = hook._active_stages | {DynamicsStage.AFTER_PRE_UPDATE}
-    return [hook]
+    return [FreezeAtomsHook()]
 
 
 class _RemoveCOMMotionHook:
@@ -641,10 +636,6 @@ class _AlchemiBase:
         )
 
         fixed = _fixed_indices(atoms)
-        if fixed:
-            # nvalchemi 0.2.0 FreezeAtomsHook only acts after post_update, so
-            # the step-0 drift would move frozen rows with these velocities.
-            batch.velocities[fixed] = 0.0
         freeze_hooks = _freeze_hook_for(batch, fixed)
         com_hooks = [] if fixed else [_RemoveCOMMotionHook()]
         traj_hooks = [] if trajectory_file is None else [_TrajectoryHook(
