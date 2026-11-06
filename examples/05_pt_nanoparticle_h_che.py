@@ -61,8 +61,7 @@ ENABLE_CUEQ = True
 # torch.compile gives wrong mh-1 forces with cuEq (inductor bug), so mcpy
 # turns it off for this model anyway; False skips the warning.
 COMPILE_MODEL = False
-# LBFGS converges in ~3x fewer steps than FIRE. It needs nvalchemi newer
-# than 0.2.0 (GitHub main); set 'fire' on nvalchemi 0.2.0.
+# LBFGS converges in ~3x fewer steps than FIRE.
 OPTIMIZER = 'lbfgs'
 
 # --- thermodynamics --------------------------------------------------------

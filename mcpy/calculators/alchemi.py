@@ -1,7 +1,7 @@
 """GPU-native MACE calculators on the nvalchemi stack.
 
 Two calculators over one base: :class:`AlchemiCalculator` evaluates energies
-with a single forward pass, :class:`AlchemiFCalculator` relaxes first (FIRE by
+with a single forward pass, :class:`AlchemiFCalculator` relaxes first (L-BFGS by
 default, ``optimizer=``).
 Everything they share -- loading and configuring the model, batching, the
 neighbour-list hook, the chunked batched-evaluation template, Langevin MD --
@@ -25,6 +25,7 @@ from nvalchemi._typing import AtomCategory
 from nvalchemi.data import AtomicData
 from nvalchemi.data.batch import Batch
 from nvalchemi.dynamics import (FIRE as AlchemiFIRE, FIRE2 as AlchemiFIRE2,
+                                LBFGS as AlchemiLBFGS,
                                 ConvergenceHook, NVTLangevin,
                                 initialize_velocities)
 from nvalchemi.dynamics._ops.thermostat_utils import remove_com_motion
@@ -39,12 +40,8 @@ from ..utils.md_trajectory import write_md_frame
 
 logger = logging.getLogger(__name__)
 
-_ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2}
-try:  # nvalchemi > 0.2.0
-    from nvalchemi.dynamics import LBFGS as AlchemiLBFGS
-    _ALCHEMI_OPTIMIZERS['lbfgs'] = AlchemiLBFGS
-except ImportError:
-    pass
+_ALCHEMI_OPTIMIZERS = {'fire': AlchemiFIRE, 'fire2': AlchemiFIRE2,
+                       'lbfgs': AlchemiLBFGS}
 
 
 # --------------------------------------------------------------- model loading
@@ -767,7 +764,7 @@ class AlchemiCalculator(_AlchemiBase):
 
 class AlchemiFCalculator(_AlchemiBase):
     """
-    Alchemi calculator with geometry relaxation, FIRE by default
+    Alchemi calculator with geometry relaxation, L-BFGS by default
     (``optimizer=``).
 
     Mirrors MACE_F_Calculator: relax atoms, then return the energy. Uses
@@ -783,18 +780,20 @@ class AlchemiFCalculator(_AlchemiBase):
     fmax : float
         Force convergence threshold in eV/Å.
     dt : float
-        FIRE initial timestep in the internal unit A*sqrt(amu/eV) (about
-        10.18 fs), the same unit ASE's FIRE uses; nvalchemi's FIRE passes it
-        unconverted, unlike its MD integrators, which take fs. Default 1.0,
+        FIRE/FIRE2 initial timestep (L-BFGS ignores it) in the internal
+        unit A*sqrt(amu/eV) (about 10.18 fs), the same unit ASE's FIRE
+        uses; nvalchemi's FIRE passes it unconverted, unlike its MD
+        integrators, which take fs. Default 1.0,
         the value of ASE FIRE's dtmax; benchmarks show dt=1.0 converges in
         ~half the steps vs 0.1. Note nvalchemi grows the adaptive timestep up
         to dt_max = 10*dt, unlike ASE's dtmax=1.0 cap; per-step displacement
         stays clamped by nvalchemi's default maxstep either way (0.2 A for
         'fire', 0.1 A for 'fire2').
     optimizer : str
-        'fire' (default, classic FIRE), 'fire2' (Guénolé et al variant -
-        typically converges in fewer steps) or 'lbfgs' (needs nvalchemi
-        newer than 0.2.0; ignores ``dt``).
+        'lbfgs' (default; ~3x fewer steps than FIRE, ignores ``dt``),
+        'fire' (classic FIRE, deprecated in nvalchemi 0.3.0) or 'fire2'
+        (Guénolé et al variant). L-BFGS lands ~0.1 eV lower than FIRE on
+        supported NPs, so do not mix results across optimizers.
     """
 
     def __init__(
@@ -807,7 +806,7 @@ class AlchemiFCalculator(_AlchemiBase):
         enable_cueq: bool = True,
         compile_model: bool = True,
         dt: float = 1.0,
-        optimizer: str = 'fire',
+        optimizer: str = 'lbfgs',
         max_neighbors: int | None = None,
         chunk_size: int | None = None,
         head: Union[str, int, None] = None,
