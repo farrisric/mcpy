@@ -189,7 +189,9 @@ def test_empty_structures_around_padded_ones(padded_calc):
     ref = padded_calc.get_potential_energies([slab.copy()])[0]
     out = padded_calc.get_potential_energies([Atoms(), slab.copy(), Atoms()])
     assert out[0] == 0.0 and out[2] == 0.0
-    assert out[1] == pytest.approx(ref, abs=1e-3)
+    # L-BFGS relaxes of this slab vary run to run by up to ~1.4 meV (GPU float
+    # nondeterminism); a broken empty-structure path is off by eV.
+    assert out[1] == pytest.approx(ref, abs=5e-3)
 
 
 @gpu

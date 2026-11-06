@@ -276,3 +276,15 @@ def test_cueq_load_keeps_the_default_dtype(alchemi, torch, device):
     alchemi.AlchemiCalculator(str(CHECKPOINT), device=device, dtype=other,
                               enable_cueq=True, compile_model=False)
     assert torch.get_default_dtype() == before
+
+
+@gpu
+@pytest.mark.parametrize('compile_model', [False, True])
+def test_local_checkpoint_wrapper_is_inference_only(alchemi, kw, compile_model):
+    # A local .model load builds MACEWrapper directly; in train mode every
+    # force pass would build a retained second-order graph.
+    model = alchemi._load_model(str(CHECKPOINT), kw['device'], kw['dtype'],
+                                enable_cueq=False, compile_model=compile_model)
+    assert not model.training
+    assert not any(m.training for m in model.modules())
+    assert not any(p.requires_grad for p in model.parameters())

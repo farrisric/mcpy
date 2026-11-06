@@ -233,11 +233,10 @@ def _load_model(
                 'yourself before sharing it.'
             )
         return checkpoint
-    # The donated_buffer=False workaround (b333c8e) is gone: the crash it
-    # papered over came from the wrapper running in train mode
-    # (create_graph=True made the FIRE force backward need the buffers the
-    # compiled backward donates); with wrapper.eval() below, donation is safe
-    # (verified compile+cuEq, alias and local paths, varying-N GCMC).
+    # No donated_buffer=False workaround (b333c8e): the crash it papered over
+    # came from the wrapper running in train mode (create_graph=True made the
+    # force backward need the buffers the compiled backward donates).
+    # MACEWrapper defaults to train=False, so donation is safe.
     # Local .model file: load directly. MACEWrapper.from_checkpoint treats the
     # string as a download alias, so it cannot open local paths. ``head``
     # selects a multihead model's head by name or index.
@@ -278,24 +277,11 @@ def _load_model(
                 compile_model = False
         raw = raw.to(device)
         if compile_model:
-            # Mirror MACEWrapper.from_checkpoint step 3: the model is
-            # inference-only after this. The e3nn patch is a private nvalchemi
-            # helper; benchmark/internal/verify_compile_parity.py pins it so an upgrade
-            # that renames it fails loudly.
-            from nvalchemi.models.mace import _patch_e3nn_irrep_len_for_compile
-            _patch_e3nn_irrep_len_for_compile()
-            raw.eval()
-            for param in raw.parameters():
-                param.requires_grad = False
+            # torch.compile traces at the first call, after MACEWrapper.__init__
+            # has applied the e3nn compile shim, frozen the weights and set eval
+            # mode (train=False), as in MACEWrapper.from_checkpoint.
             raw = torch.compile(raw)
-        wrapper = MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
-        # MACEWrapper.forward passes training=self.training down to MACE, where
-        # it becomes create_graph/retain_graph on the force autograd. nn.Module
-        # defaults to train mode, and from_checkpoint's wrapper.eval() (alias
-        # path below) never runs here - without this every force pass builds a
-        # retained second-order graph.
-        wrapper.eval()
-        return wrapper
+        return MACEWrapper(raw) if idx is None else _HeadMACEWrapper(raw, idx)
     if head is not None:
         raise ValueError(
             'head= is only supported when loading a local .model path; '
@@ -377,10 +363,10 @@ def _fixed_indices(atoms: Atoms) -> List[int]:
     return sorted(idx)
 
 
-def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
+def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook] | None:
     """Tag ``fixed`` batch rows as SPECIAL and return the hook that holds them.
 
-    nvalchemi's FIRE has no notion of ASE ``FixAtoms``; without this the
+    nvalchemi's optimizers have no notion of ASE ``FixAtoms``; without this the
     "fixed" atoms relax freely and are only snapped back afterward, leaving the
     returned energy inconsistent with the stored geometry. Marking them
     ``AtomCategory.SPECIAL`` and registering :class:`FreezeAtomsHook` zeros their
@@ -389,12 +375,7 @@ def _freeze_hook_for(batch: Batch, fixed: List[int]) -> List[FreezeAtomsHook]:
     if not fixed:
         return None
     batch.atom_categories[fixed] = AtomCategory.SPECIAL.value
-    hook = FreezeAtomsHook()
-    # nvalchemi 0.2.0 restores only after post_update, so the Langevin noise
-    # of pre_update moved frozen rows during the force evaluation. Restore
-    # before compute too (nvalchemi > 0.2.0 already does).
-    hook._active_stages = hook._active_stages | {DynamicsStage.AFTER_PRE_UPDATE}
-    return [hook]
+    return [FreezeAtomsHook()]
 
 
 class _RemoveCOMMotionHook:
@@ -530,9 +511,9 @@ class _AlchemiBase:
                    fixed: List[int]):
         """Build the neighbour list and initial forces before the loop starts.
 
-        ``FreezeAtomsHook`` zeros frozen forces only at ``AFTER_POST_UPDATE``,
-        and this ``compute()`` runs outside the hook loop, so step 0 would
-        otherwise displace the frozen rows once. Returns the model outputs.
+        This ``compute()`` runs outside the hook loop, so ``FreezeAtomsHook``
+        never zeros its frozen forces; step 0 would otherwise displace the
+        frozen rows once. Returns the model outputs.
         """
         _build_nl(batch, nl_hook)
         out = opt.compute(batch)
@@ -641,10 +622,6 @@ class _AlchemiBase:
         )
 
         fixed = _fixed_indices(atoms)
-        if fixed:
-            # nvalchemi 0.2.0 FreezeAtomsHook only acts after post_update, so
-            # the step-0 drift would move frozen rows with these velocities.
-            batch.velocities[fixed] = 0.0
         freeze_hooks = _freeze_hook_for(batch, fixed)
         com_hooks = [] if fixed else [_RemoveCOMMotionHook()]
         traj_hooks = [] if trajectory_file is None else [_TrajectoryHook(
@@ -733,8 +710,7 @@ class AlchemiCalculator(_AlchemiBase):
     def _forward(self, batch):
         """Model forward. The wrapper manages positions grad itself when forces
         are active; with energy_only nothing needs grad, and no_grad keeps the
-        forward graph-free even when model parameters still require grad
-        (compile_model=False local loads)."""
+        forward graph-free even for a shared wrapper built with train=True."""
         if self.energy_only:
             with torch.no_grad():
                 return self.model(batch)
@@ -792,8 +768,10 @@ class AlchemiFCalculator(_AlchemiBase):
     optimizer : str
         'lbfgs' (default; ~3x fewer steps than FIRE, ignores ``dt``),
         'fire' (classic FIRE, deprecated in nvalchemi 0.3.0) or 'fire2'
-        (Guénolé et al variant). L-BFGS lands ~0.1 eV lower than FIRE on
-        supported NPs, so do not mix results across optimizers.
+        (Guénolé et al variant). The optimizers can end in different local
+        minima: on Ag(111)+O trials L-BFGS shows no net shift but up to
+        +-0.2 eV on single trials, and ~0.1 eV lower on supported NPs. Do not
+        mix results across optimizers.
     """
 
     def __init__(
@@ -861,8 +839,8 @@ class AlchemiFCalculator(_AlchemiBase):
         """Batched relaxation of one sub-batch, mutating positions."""
         batch = self._batch(chunk)
         if self.steps == 0:
-            # Pure single point, built before the optimizer: nvalchemi > 0.2.0
-            # rejects n_steps=0. Positions are not written back, since float32
+            # Pure single point, built before the optimizer: nvalchemi rejects
+            # n_steps=0. Positions are not written back, since float32
             # would move every atom ~1e-7 A.
             _build_nl(batch, self._nl_hook())
             self._chunk_steps.append(0)
