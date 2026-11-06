@@ -46,7 +46,7 @@ mace = [
 # Requires CUDA toolkit and a compatible PyTorch build; install with:
 #   pip install -e .[alchemi]
 alchemi = [
-    "nvalchemi-toolkit[mace]>=0.2.0,<0.3",
+    "nvalchemi-toolkit[mace]>=0.3.0,<0.4",
 ]
 # MPI ReplicaExchange. A conda-installed mpi4py is often preferable, because it
 # links the system MPI library.

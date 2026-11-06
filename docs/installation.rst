@@ -54,8 +54,7 @@ NVIDIA Alchemi backend (optional)
 ``AlchemiCalculator`` and ``AlchemiFCalculator`` evaluate MACE on the GPU
 through `nvalchemi-toolkit <https://github.com/NVIDIA/nvalchemi-toolkit>`_,
 and ``AlchemiFCalculator`` also relaxes each trial with a GPU-native
-optimizer: FIRE by default, or FIRE2 or LBFGS with ``optimizer=``
-(LBFGS needs nvalchemi newer than 0.2.0).
+optimizer: L-BFGS by default, or FIRE or FIRE2 with ``optimizer=``.
 They are the backend of ``examples/03``, ``examples/04`` and ``examples/05``.
 Install them with the ``alchemi`` extra:
 
