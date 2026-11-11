@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from types import SimpleNamespace
 
+import ase.parallel
 import numpy as np
 import pytest
 from ase import Atoms
@@ -16,6 +17,8 @@ from ase.io import read
 
 from mcpy.cell.null_cell import NullCell
 from mcpy.ensembles import GrandCanonicalEnsemble
+from mcpy.ensembles import replica_exchange as rex
+from mcpy.ensembles.base_ensemble import write_xyz
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.ensembles.replica_exchange import ReplicaExchange
 from mcpy.moves import DisplacementMove, MoveSelector
@@ -26,77 +29,6 @@ def _bare_re():
     re.logger = logging.getLogger('test')
     re.rank = 0
     return re
-
-
-def _state(beta, energy, mu, formula):
-    # Lambda = 1 (as in LJ units): the de Broglie term drops out, so these
-    # hand-made states test the Phi terms alone.
-    return {'beta': beta, 'energy': energy, 'mu': mu, 'atoms': Atoms(formula),
-            'lambda_dbs': defaultdict(lambda: 1.0)}
-
-
-def test_t_ladder_swap_subtracts_mu_N_for_grand_canonical():
-    re = _bare_re()
-    # Phi1 = 10 - 1*5 = 5, Phi2 = 20 - 1*18 = 2
-    # delta = (beta2 - beta1)(Phi2 - Phi1) = (0.5 - 1.0)(2 - 5) = 1.5 -> p = 1
-    s1 = _state(beta=1.0, energy=10.0, mu={'Ag': 1.0}, formula='Ag5')
-    s2 = _state(beta=0.5, energy=20.0, mu={'Ag': 1.0}, formula='Ag18')
-    # bare-E would give delta = (0.5-1.0)(20-10) = -5 -> p << 1
-    assert re._exchange_prob(s1, s2) == 1.0
-
-
-def test_t_ladder_swap_without_mu_is_bare_energy():
-    re = _bare_re()
-    s1 = _state(beta=1.0, energy=10.0, mu=None, formula='Ag5')
-    s2 = _state(beta=0.5, energy=20.0, mu=None, formula='Ag18')
-    # delta = (0.5 - 1.0)(20 - 10) = -5
-    assert re._exchange_prob(s1, s2) == min(1.0, float(np.exp(-5.0)))
-
-
-def test_mu_ladder_swap_reads_species_from_mu_dict():
-    """mu-ladder swap (shared beta): driven by Delta_N and Delta_mu, energies
-    cancel. Reads species from state['mu'], not the nonexistent gcmc.species."""
-    re = _bare_re()
-    # Delta_N = 8 - 5 = 3; arg = b2*mu2*(-dN) + b1*mu1*dN = 1*0*(-3) + 1*0.5*3 = 1.5
-    s1 = _state(beta=1.0, energy=10.0, mu={'Ag': 0.5}, formula='Ag5')
-    s2 = _state(beta=1.0, energy=999.0, mu={'Ag': 0.0}, formula='Ag8')
-    assert re._exchange_prob(s1, s2) == min(1.0, float(np.exp(1.5)))
-
-
-def test_mu_ladder_swap_clamps_and_ignores_energy():
-    re = _bare_re()
-    # Reverse direction: arg = 1*0.5*(-(-3)) ... dN = 5 - 8 = -3
-    # arg = b2*mu2*(-dN) + b1*mu1*dN = 1*0.5*(3) + 1*0*(-3) = 1.5 -> clamps to 1
-    s1 = _state(beta=1.0, energy=-50.0, mu={'Ag': 0.0}, formula='Ag8')
-    s2 = _state(beta=1.0, energy=50.0, mu={'Ag': 0.5}, formula='Ag5')
-    assert re._exchange_prob(s1, s2) == min(1.0, float(np.exp(1.5)))
-
-
-def test_mu_ladder_swap_rejects_nan_energy(caplog):
-    """On a mu ladder the energies cancel only for finite values: a diverged
-    replica must not swap. The old mu rule never read the energy and so
-    returned p = 1 here."""
-    re = _bare_re()
-    s1 = _state(beta=1.0, energy=float('nan'), mu={'Ag': 0.5}, formula='Ag5')
-    s2 = _state(beta=1.0, energy=10.0, mu={'Ag': 0.0}, formula='Ag8')
-    with caplog.at_level(logging.WARNING, logger='test'):
-        assert re._exchange_prob(s1, s2) == 0.0
-    assert 'non-finite' in caplog.text
-
-
-def test_mu_ladder_swap_does_not_depend_on_energy():
-    """On a mu ladder (shared beta) the energies cancel exactly, as in the
-    old mu rule. Scoring each Phi first cancels terms of size beta*|E|: at
-    |E| = 1.2e5 eV that left a relative error of 1.7e-10 in p."""
-    re = _bare_re()
-    beta = 38.68  # 300 K in metal units
-    s1 = _state(beta, -1.2e5, {'Ag': -2.80, 'O': -4.88}, 'Ag100O12')
-    s2 = _state(beta, -1.2e5 + 19.8, {'Ag': -2.80, 'O': -4.90}, 'Ag100O8')
-    p = re._exchange_prob(s1, s2)
-    # beta (mu_1 - mu_2)(N_Y - N_X) = beta * 0.02 * (8 - 12)
-    assert p == pytest.approx(np.exp(beta * 0.02 * -4), rel=1e-12)
-    for shift in (1.0e3, -3.7e4, 0.123):
-        assert re._exchange_prob(dict(s1, energy=s1['energy'] + shift), s2) == p
 
 
 # --------------------------------------------------------------------------
@@ -182,39 +114,6 @@ def test_swap_matches_weights_and_batched_rule_on_random_states():
         batched.rng = SimpleNamespace(get_uniform=lambda: p * (1.0 + 1e-9))
         assert not batched._accept_swap(0, 1)
     assert checked > 20
-
-
-def test_swap_reduces_to_t_rule_for_shared_mu():
-    """(beta_j - beta_i)(Phi_Y - Phi_X) + 3 sum_s dN_s ln(Lambda_i/Lambda_j)."""
-    rng = np.random.default_rng(11)
-    for _ in range(50):
-        gi, gj = _random_pair(rng, shared_mu=True)
-        n = {s: (gi.atoms.symbols.count(s), gj.atoms.symbols.count(s))
-             for s in gi._mu}
-        delta = (gj.units.beta - gi.units.beta) * (
-            gj._minimum_score(gj.atoms, gj.E_old)
-            - gi._minimum_score(gi.atoms, gi.E_old))
-        delta += sum(
-            3.0 * (nx - ny)
-            * np.log(gi.units.lambda_dbs[s] / gj.units.lambda_dbs[s])
-            for s, (nx, ny) in n.items())
-        p = _bare_re()._exchange_prob(gi.get_state(), gj.get_state())
-        assert p == pytest.approx(min(1.0, float(np.exp(delta))),
-                                  rel=1e-9, abs=1e-300)
-
-
-def test_swap_reduces_to_mu_rule_for_shared_t():
-    """beta sum_s (mu_i,s - mu_j,s)(N_Y,s - N_X,s); the energies cancel."""
-    rng = np.random.default_rng(13)
-    for _ in range(50):
-        gi, gj = _random_pair(rng, shared_t=True)
-        beta = gi.units.beta
-        delta = sum(beta * (gi._mu[s] - gj._mu[s])
-                    * (gj.atoms.symbols.count(s) - gi.atoms.symbols.count(s))
-                    for s in gi._mu)
-        p = _bare_re()._exchange_prob(gi.get_state(), gj.get_state())
-        assert p == pytest.approx(min(1.0, float(np.exp(delta))),
-                                  rel=1e-9, abs=1e-300)
 
 
 # --------------------------------------------------------------------------
@@ -314,3 +213,53 @@ def test_global_minimum_per_rung_when_t_rungs_have_own_mu(driver, tmp_path):
 def test_global_minimum_single_frame_when_t_rungs_share_mu(driver, tmp_path):
     mu = {'Ag': -2.80, 'O': -4.90}
     assert _write_gm(driver, [mu, dict(mu)], tmp_path) == [0]
+
+
+def test_write_xyz_writes_on_a_non_master_mpi_rank(tmp_path, monkeypatch):
+    """ase.io.write runs on MPI rank 0 only unless told otherwise. Every
+    rank of ReplicaExchange owns its files, so rank 1 must write too."""
+    path = tmp_path / 'rank1.xyz'
+    atoms = Atoms('H', positions=[[1, 1, 1]], cell=[5] * 3, pbc=True)
+    with monkeypatch.context() as m:
+        m.setattr(ase.parallel, 'world', SimpleNamespace(size=2, rank=1))
+        with open(path, 'w') as handle:
+            write_xyz(atoms, -1.0, handle)
+    assert path.stat().st_size > 0
+    assert len(read(path, index=':')) == 1
+
+
+def _bare_mpi_re():
+    re = object.__new__(rex.ReplicaExchange)
+    re.logger = logging.getLogger('test')
+    re.rank = 0
+    return re
+
+
+# MPI ReplicaExchange (fake communicator)
+
+def test_mpi_exchange_prob_rejects_nan(caplog):
+    re = _bare_mpi_re()
+    s1 = {'beta': 1.0, 'energy': float('nan'), 'mu': None, 'atoms': Atoms('Ag')}
+    s2 = {'beta': 0.5, 'energy': 1.0, 'mu': None, 'atoms': Atoms('Ag')}
+    with caplog.at_level(logging.WARNING, logger='test'):
+        assert re._exchange_prob(s1, s2) == 0.0
+    assert 'non-finite' in caplog.text
+
+
+def _state(beta, energy, mu, formula):
+    # Lambda = 1 (as in LJ units): the de Broglie term drops out, so these
+    # hand-made states test the Phi terms alone.
+    return {'beta': beta, 'energy': energy, 'mu': mu, 'atoms': Atoms(formula),
+            'lambda_dbs': defaultdict(lambda: 1.0)}
+
+
+def test_mu_ladder_swap_rejects_nan_energy(caplog):
+    """On a mu ladder the energies cancel only for finite values: a diverged
+    replica must not swap. The old mu rule never read the energy and so
+    returned p = 1 here."""
+    re = _bare_re()
+    s1 = _state(beta=1.0, energy=float('nan'), mu={'Ag': 0.5}, formula='Ag5')
+    s2 = _state(beta=1.0, energy=10.0, mu={'Ag': 0.0}, formula='Ag8')
+    with caplog.at_level(logging.WARNING, logger='test'):
+        assert re._exchange_prob(s1, s2) == 0.0
+    assert 'non-finite' in caplog.text

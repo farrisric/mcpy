@@ -9,7 +9,6 @@ names. Also enforces (statically) that no library module calls
 
 Run with: python -m pytest tests/test_logging.py -v
 """
-from __future__ import annotations
 
 import logging
 import pathlib
@@ -234,20 +233,19 @@ def _lj_gcmc():
     return g
 
 
+def test_lj_outfile_header_uses_reduced_units():
+    """An LJ run is in reduced units, so its log must not claim eV or K."""
+    header = _lj_gcmc().get_outfile_metadata()
+    assert 'Energy (eps)' in header and 'Temperature (reduced)' in header
+    assert '(eV)' not in header and '(K)' not in header
+
+
 def _assert_lazy(caplog, prefix):
     """The matching record was logged with %-args (formatted only on emit),
     not a pre-built f-string."""
     recs = [r for r in caplog.records if r.msg.startswith(prefix)]
     assert recs, f'no {prefix!r} debug record'
     assert all(r.args for r in recs), 'message was formatted eagerly'
-
-
-def test_acceptance_condition_debug_is_lazy(caplog):
-    """Drives the real insertion acceptance path at DEBUG."""
-    g = _lj_gcmc()
-    with caplog.at_level(logging.DEBUG, logger='mcpy.ensembles'):
-        g._acceptance_condition(0.0, 1, 100.0, 'H', 1)
-    _assert_lazy(caplog, 'Lambda_db:')
 
 
 def test_do_gcmc_step_debug_is_lazy(caplog):
@@ -257,10 +255,3 @@ def test_do_gcmc_step_debug_is_lazy(caplog):
         g.do_gcmc_step()
     assert g.n_atoms == 2
     _assert_lazy(caplog, 'Volume:')
-
-
-def test_lj_outfile_header_uses_reduced_units():
-    """An LJ run is in reduced units, so its log must not claim eV or K."""
-    header = _lj_gcmc().get_outfile_metadata()
-    assert 'Energy (eps)' in header and 'Temperature (reduced)' in header
-    assert '(eV)' not in header and '(K)' not in header

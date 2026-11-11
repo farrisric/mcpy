@@ -19,8 +19,8 @@ Highlights
   densely packed metallic systems.
 - **Basin-hopping output for free** - every ensemble can emit a running
   ``minima_file`` of strictly improving configurations alongside the
-  sampling trajectory, and replica-exchange runs add a global
-  ``global_minimum.xyz`` at the end.
+  sampling trajectory, and replica-exchange runs keep a global
+  ``global_minimum.xyz``.
 - **Calibratable free volume** via Monte Carlo sampling with element-wise
   exclusion radii.
 - **Cell geometries out of the box** - periodic box, rectangular sub-slab,

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+
 DOC = Path(__file__).resolve().parent.parent / 'docs' / 'species_radii.rst'
 
 

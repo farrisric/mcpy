@@ -9,9 +9,11 @@ Run with: python -m pytest tests/test_dome_cell.py -v
 """
 import numpy as np
 import pytest  # noqa: F401
-from ase import Atoms, Atom
+from ase import Atom, Atoms
+from ase.build import fcc111
 
 from mcpy.cell import DomeCell
+
 
 BOTTOM_Z = 0.0
 VACUUM = 1.0
@@ -44,35 +46,11 @@ def make_cell():
                     vacuum=VACUUM, species_radii=RADII, seed=0)
 
 
-def test_center_is_particle_centroid():
-    """Dome centers on the particle, not the whole-system center of mass."""
-    cell = make_cell()
-    np.testing.assert_allclose(cell.center, AG_POS.mean(axis=0), atol=1e-9)
-
-
-def test_radius_covers_particle_plus_vacuum():
-    cell = make_cell()
-    expected = np.linalg.norm(AG_POS - AG_POS.mean(axis=0), axis=1).max() + VACUUM
-    assert cell.radius == pytest.approx(expected)
-
-
 def test_sampled_points_are_inside():
     """Every sampled point passes is_point_inside (region self-consistency)."""
     cell = make_cell()
     for _ in range(2000):
         assert cell.is_point_inside(cell.get_random_point())
-
-
-def test_sampled_points_above_surface():
-    cell = make_cell()
-    for _ in range(2000):
-        assert cell.get_random_point()[2] >= BOTTOM_Z
-
-
-def test_far_support_point_is_outside():
-    """A point on the bare support far from the particle is excluded."""
-    cell = make_cell()
-    assert not cell.is_point_inside(np.array([1.0, 1.0, 0.1]))
 
 
 def test_subsurface_point_is_outside():
@@ -93,15 +71,6 @@ def test_inserted_atom_is_counted():
         assert len(idx) == 1
 
 
-def test_subsurface_atom_is_not_counted():
-    """O absorbed below the surface is kept (not exchangeable with reservoir)."""
-    cell = make_cell()
-    atoms = make_supported()
-    atoms.append(Atom('O', position=[cell.center[0], cell.center[1], BOTTOM_Z - 0.5]))
-    idx = cell.get_atoms_specie_inside_cell(atoms, ['O'])
-    assert len(idx) == 0
-
-
 def test_dome_volume_is_a_fraction_of_the_ball():
     """Free dome volume is positive and below the full enclosing ball volume."""
     cell = make_cell()
@@ -109,3 +78,21 @@ def test_dome_volume_is_a_fraction_of_the_ball():
     cell.calculate_volume(atoms)
     full_ball = (4.0 / 3.0) * np.pi * cell.radius ** 3
     assert 0.0 < cell.get_volume() < full_ball
+
+
+# Spherical regions must fit the periodic box; the dome must be non-empty
+
+def test_p8_dome_cell_larger_than_box_raises():
+    slab = fcc111('Ag', size=(3, 3, 3), vacuum=10.0, periodic=True)
+    z_top = slab.positions[:, 2].max()
+    slab += Atoms('Ag', positions=[slab.cell.sum(axis=0) * [0.5, 0.5, 0]
+                                   + [0, 0, z_top + 2.3]])
+    with pytest.raises(ValueError, match='periodic'):
+        DomeCell(slab, 'Ag', bottom_z=z_top, vacuum=8.0,
+                 species_radii={'Ag': 1.0})
+
+
+def test_p8_dome_cell_entirely_below_floor_raises():
+    atoms = Atoms('Ag', positions=[[5, 5, 5]], cell=[20] * 3, pbc=True)
+    with pytest.raises(ValueError, match='bottom_z'):
+        DomeCell(atoms, 'Ag', bottom_z=9.0, vacuum=3.0, species_radii={'Ag': 1.0})

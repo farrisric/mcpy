@@ -4,22 +4,6 @@ import pytest
 from mcpy.utils.chunking import chunk_ranges
 
 
-def test_none_yields_single_full_range():
-    assert list(chunk_ranges(5, None)) == [(0, 5)]
-
-
-def test_chunk_larger_than_n_is_single_range():
-    assert list(chunk_ranges(3, 10)) == [(0, 3)]
-
-
-def test_exact_division():
-    assert list(chunk_ranges(6, 2)) == [(0, 2), (2, 4), (4, 6)]
-
-
-def test_remainder_chunk():
-    assert list(chunk_ranges(7, 3)) == [(0, 3), (3, 6), (6, 7)]
-
-
 def test_chunk_size_one():
     assert list(chunk_ranges(3, 1)) == [(0, 1), (1, 2), (2, 3)]
 

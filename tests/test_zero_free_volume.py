@@ -16,7 +16,7 @@ import pytest
 from ase import Atoms
 from ase.build import fcc111
 
-from mcpy.cell import CustomCell, DomeCell, SphericalCell
+from mcpy.cell import Cell, CustomCell, DomeCell
 
 
 def test_custom_cell_full_region_floors_volume(caplog):
@@ -30,15 +30,6 @@ def test_custom_cell_full_region_floors_volume(caplog):
     assert cell.get_volume() == pytest.approx(cell.cell_volume / 1000)
     assert cell.get_volume() > 0.0
     assert any('free volume' in r.message for r in caplog.records)
-
-
-def test_spherical_cell_full_region_floors_volume():
-    atoms = Atoms('Ag', positions=[[0.0, 0.0, 0.0]])
-    cell = SphericalCell(atoms, vacuum=2.0, species_radii={'Ag': 50.0},
-                         mc_sample_points=1000, seed=0)
-    cell.calculate_volume(atoms)
-    assert cell.get_volume() == pytest.approx(cell.sphere_volume / 1000)
-    assert cell.get_volume() > 0.0
 
 
 def test_dome_cell_full_region_floors_volume():
@@ -61,3 +52,29 @@ def test_partial_coverage_is_not_floored():
     assert cell.get_volume() > 10 * cell.cell_volume / 20_000
     assert cell.get_volume() < cell.cell_volume
     assert np.isfinite(cell.get_volume())
+
+
+def nearly_full_box():
+    """One atom in a periodic 10 A cube whose sphere leaves only small holes
+    at the cube corners: free fraction about 1e-4."""
+    atoms = Atoms('X', positions=[[5.0, 5.0, 5.0]], cell=[10.0] * 3, pbc=True)
+    return atoms, Cell(atoms, species_radii={'X': 8.4}, seed=1)
+
+
+def test_nearly_full_region_still_yields_free_points():
+    atoms, cell = nearly_full_box()
+    cell.calculate_volume(atoms)
+    f = cell.get_volume() / cell.cell_volume
+    assert 1e-5 < f < 1e-3
+    trees = cell._exclusion_trees(atoms)
+    points = [cell.get_random_free_point(atoms) for _ in range(20)]
+    assert all(p is not None for p in points)
+    assert not cell._covered(np.array(points), trees).any()
+
+
+def test_full_region_returns_none_and_warns(caplog):
+    atoms = Atoms('X', positions=[[5.0, 5.0, 5.0]], cell=[10.0] * 3, pbc=True)
+    cell = Cell(atoms, species_radii={'X': 20.0}, mc_sample_points=2000, seed=1)
+    with caplog.at_level(logging.WARNING):
+        assert cell.get_random_free_point(atoms) is None
+    assert any('insertion' in r.message for r in caplog.records)

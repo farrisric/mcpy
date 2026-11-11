@@ -8,7 +8,7 @@ except ImportError:
     MPI = None
 
 from ..utils import RandomNumberGenerator
-from .base_ensemble import write_global_minimum
+from .base_ensemble import sigterm_as_exit, write_global_minimum
 
 logger = logging.getLogger(__name__)
 
@@ -309,13 +309,15 @@ class ReplicaExchange:
             self.logger.debug('Rejected exchange with rank %d', partner_rank)
             return False
 
+    @sigterm_as_exit()
     def run(self):
         """Run the Parallel Tempering GCMC simulation.
 
         An exception on any rank aborts the whole MPI job (``comm.Abort``)
         after closing this rank's files: the other ranks are blocked in a
         collective or a sendrecv with it and would otherwise hang forever.
-        No collective runs on that error path.
+        No collective runs on that error path. SIGTERM takes the same path,
+        so each rank still writes its last row and frame.
         """
         try:
             # Per-rank GCMC initialization (opens its own outfile/traj).
@@ -333,6 +335,9 @@ class ReplicaExchange:
 
                 if step % self.write_out_interval == 0:
                     self.write_outfile(step)
+                    # On disk during the run: the error path and SIGKILL
+                    # run no collective, so they cannot write it.
+                    self._write_global_minimum()
 
                 self._re_step += 1
 

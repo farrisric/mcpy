@@ -1,8 +1,11 @@
+import contextlib
 import functools
 import logging
 import os
 import random
+import signal
 import subprocess
+import threading
 
 from abc import ABC, abstractmethod
 from typing import Optional, List
@@ -284,12 +287,38 @@ class BaseEnsemble(ABC):
 
     def run(self, steps: int) -> None:
         """Standard run loop: initialize_run, loop _run, finalize_run."""
-        self._start()
-        try:
-            for _ in range(steps):
-                self._run()
-        finally:
-            self.finalize_run()
+        with sigterm_as_exit():
+            self._start()
+            try:
+                for _ in range(steps):
+                    self._run()
+            finally:
+                self.finalize_run()
+
+
+@contextlib.contextmanager
+def sigterm_as_exit():
+    """Raise ``SystemExit`` on SIGTERM for the duration of a run.
+
+    ``kill``, ``scancel`` and a wall-time limit send SIGTERM. Its default
+    action ends Python without unwinding, so no ``finally`` block runs and
+    the last row, the last frame and the global minimum are never written.
+    Inside this context the run stops as it does on Ctrl-C. A handler that
+    the application installed is left alone, and so is any thread but the
+    main one, where handlers cannot be set.
+    """
+    def _exit(signum, frame):
+        raise SystemExit(128 + signum)
+
+    if (threading.current_thread() is not threading.main_thread()
+            or signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL):
+        yield
+        return
+    signal.signal(signal.SIGTERM, _exit)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 
 def write_global_minimum(path, bests, per_rung, logger):
@@ -305,7 +334,9 @@ def write_global_minimum(path, bests, per_rung, logger):
     and own-mu score.
 
     Shared by ``ReplicaExchange`` (which gathers over MPI ranks) and
-    ``BatchedReplicaExchange`` (which reads its in-process replicas).
+    ``BatchedReplicaExchange`` (which reads its in-process replicas). Both
+    call it at every write interval, so the frames go to a temporary file
+    that then replaces ``path``: a kill during the write keeps the old file.
     """
     entries = [(rank, best) for rank, best in enumerate(bests) if best is not None]
     if not entries:
@@ -313,9 +344,10 @@ def write_global_minimum(path, bests, per_rung, logger):
     if not per_rung:
         entries = [min(entries, key=lambda kv: kv[1][0])]
     try:
-        with open(path, 'w') as fh:
+        with open(f'{path}.tmp', 'w') as fh:
             for rank, (score, energy, atoms) in entries:
                 write_xyz(atoms, energy, fh, extra={'rank': rank, 'score': round(score, 6)})
+        os.replace(f'{path}.tmp', path)
     except OSError:
         logger.exception('Error writing global minimum to %s', path)
 
@@ -328,14 +360,17 @@ def write_xyz(atoms, energy, file_or_path, extra: dict = None):
 
     ``extra`` adds info keys to the comment line next to ``energy``
     (e.g. ``{'step': 42, 'score': -1.234}``).
+
+    ``parallel=False``: under MPI, ASE writes on rank 0 only by default,
+    but every rank of ``ReplicaExchange`` owns its own files.
     """
     frame = atoms.copy()  # no calculator: its stale results must not be written
     frame.info = {'energy': float(energy), **(extra or {})}
     if isinstance(file_or_path, str):
         with open(file_or_path, 'a') as xyz_file:
-            ase.io.write(xyz_file, frame, format='extxyz')
+            ase.io.write(xyz_file, frame, format='extxyz', parallel=False)
     else:
-        ase.io.write(file_or_path, frame, format='extxyz')
+        ase.io.write(file_or_path, frame, format='extxyz', parallel=False)
         file_or_path.flush()
 
 

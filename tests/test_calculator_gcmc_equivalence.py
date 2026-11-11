@@ -38,6 +38,7 @@ import numpy as np
 import pytest
 from ase.cluster import Octahedron
 
+
 if not os.environ.get('MCPY_GPU_TESTS'):
     pytest.skip('set MCPY_GPU_TESTS=1 to run (needs torch, mace, nvalchemi, GPU)',
                 allow_module_level=True)

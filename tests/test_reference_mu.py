@@ -4,6 +4,8 @@ suite stays free of torch/mace, matching the other tests.
 
 Run with: python -m pytest tests/test_reference_mu.py -v
 """
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -68,3 +70,11 @@ def test_che_h_and_o_shift_with_ph_and_potential():
     # Fixed U_RHE: pH drops out.
     assert mu_o_che(calc, ph=14, u_she=-14 * slope) == pytest.approx(
         mu_o_che(calc, ph=0), abs=1e-5)
+
+
+# Derive_mu_gas only for homonuclear molecules
+
+def test_derive_mu_gas_rejects_heteronuclear():
+    calc = SimpleNamespace(get_potential_energy=lambda a: -10.0)
+    with pytest.raises(ValueError, match='homonuclear'):
+        derive_mu_gas(calc, 'CO')

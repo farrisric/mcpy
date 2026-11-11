@@ -206,8 +206,11 @@ acceptance, so it would suppress every later insertion.
 `GrandCanonicalEnsemble` therefore rejects any trial that changes the number of free exchanged
 atoms outside the ball of a `SphericalCell` or `DomeCell`.
 Both directions are blocked, so the move stays reversible.
-The check applies to atomic species; `MoleculeDisplacementMove` keeps each molecule's center of
-mass inside ``cell.is_point_inside`` itself.
+The check covers molecules too: a molecule is outside when its center of mass is.
+A relaxation can carry an atom or a molecule across the surface in the same way, so the check
+runs after the energy call.
+`MoleculeDisplacementMove` also keeps each molecule's center of mass inside
+``cell.is_point_inside`` before the energy call.
 The top of a `CustomCell` that an insertion move uses is a hard wall for these moves too.
 A trial that carries an exchanged atom across it, in either direction, is rejected before the
 energy call.

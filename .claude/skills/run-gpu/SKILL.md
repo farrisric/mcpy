@@ -25,6 +25,9 @@ Done when: the run starts in the torch env, with the env var set, and the atom c
 ## Model gotchas
 
 - `compile_model=False` for GCMC and replica exchange: the atom count changes every move, so torch.compile recompiles each new size and never pays back.
-- mh-1 checkpoint: run with cuEq off (`enable_cueq=False`).
-  With cuEq on, its energies are wrong and change from load to load (upstream ACEsuit/mace#1298).
+- mh-1 checkpoint: keep cuEq on (`enable_cueq=True`); it is ~3x faster and ~3x lighter than e3nn.
+  mcpy repairs the checkpoint on load (upstream ACEsuit/mace#1298) and turns `compile_model` off for it: cuEq + torch.compile gives wrong mh-1 forces.
+- Under ~200 atoms per force call (`chunk_size` x atoms per replica): set `enable_cueq=False`.
+  cuEq has the higher fixed cost per call, so e3nn wins until the GPU fills.
+  `python benchmark/force_call_scaling.py` measures the floor and the crossover for a model.
 - `max_neighbors` does not change memory in the nvalchemi path; look elsewhere for memory savings.
