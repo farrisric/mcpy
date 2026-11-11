@@ -248,6 +248,10 @@ Either channel can be disabled independently by passing ``None``. The four usefu
 Each minima frame carries ``step=`` and ``score=`` in its comment line, so the improvement
 trace can be reconstructed from the file alone.
 
+A run that Ctrl-C or SIGTERM stops (``kill``, ``scancel``, a wall-time limit) still writes its
+last row, its last frame and the global minimum.
+SIGKILL cannot be caught: the files then hold the output up to the last write.
+
 Score function
 ~~~~~~~~~~~~~~
 
@@ -268,9 +272,10 @@ Global minimum across replicas
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Both :class:`ReplicaExchange` and :class:`BatchedReplicaExchange` accept a
-``global_minimum_file`` argument. After all replicas finalise, each replica's best
-configuration is collected; the MPI variant gathers per-rank bests to rank 0, and the
-batched variant reads its in-process replicas.
+``global_minimum_file`` argument. At every write interval and at the end of the run, each
+replica's best configuration is collected; the MPI variant gathers per-rank bests to rank 0,
+and the batched variant reads its in-process replicas.
+The file is replaced in one step, so a killed run keeps its last complete version.
 
 - If all replicas share one :math:`\mu`, their scores :math:`\Omega` are comparable.
   The lowest-score configuration is written as a single XYZ frame.
@@ -370,7 +375,8 @@ Notes:
   and every cell. Derive each seed from `rank`. If two ranks start any random stream in the same
   state, the constructor raises ``ValueError`` on every rank, because common random numbers
   couple the replicas and bias the swap rule;
-- at the end of the run, rank 0 collects each replica's running best (via ``comm.gather``)
+- at every write interval and at the end of the run, rank 0 collects each replica's running
+  best (via ``comm.gather``)
   and writes it to ``global_minimum_file`` (default ``"global_minimum.xyz"``; pass ``None``
   to disable): one frame on a temperature ladder, one frame per rung on a :math:`\mu`
   ladder. See :ref:`running-minima`;
@@ -440,7 +446,7 @@ Swaps use the same rule as :class:`ReplicaExchange` (see :ref:`replica-exchange-
 
 Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
 ``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
-written after the run completes (see :ref:`running-minima`).
+rewritten at every write interval (see :ref:`running-minima`).
 
 
 Choosing the right ensemble

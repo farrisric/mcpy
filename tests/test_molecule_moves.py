@@ -12,7 +12,7 @@ import pytest
 from ase import Atoms
 from ase.build import molecule as build_molecule
 
-from mcpy.cell import Cell
+from mcpy.cell import Cell, SphericalCell
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove,
@@ -20,7 +20,7 @@ from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove,
                         MoveSelector)
 from mcpy.moves.base_move import PROPOSAL_REJECTED
 from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
-                                       random_rotation_matrix)
+                                       molecule_groups, random_rotation_matrix)
 from mcpy.utils import RandomNumberGenerator
 from mcpy.utils.set_unit_constant import SetUnits
 
@@ -615,3 +615,40 @@ def test_molecule_displacement_mic_rigidity():
     assert result is atoms
     d = atoms.get_distance(0, 1, mic=True)
     np.testing.assert_allclose(d, 0.8, atol=1e-9)
+
+
+class _PushOut:
+    """Zero energy. Like a relaxation that desorbs: each call moves every
+    molecule 0.8 A away from ``center``."""
+
+    def __init__(self, center):
+        self.center = np.asarray(center)
+
+    def get_potential_energy(self, atoms):
+        for members in molecule_groups(atoms).values():
+            away = atoms.positions[members].mean(axis=0) - self.center
+            atoms.positions[members] += 0.8 * away / np.linalg.norm(away)
+        return 0.0
+
+
+def test_relaxation_cannot_carry_a_molecule_out_of_the_ball():
+    """A trial whose energy call pushes a molecule's center of mass out of
+    a SphericalCell is rejected: outside the ball the molecule could not be
+    deleted or counted, so it would stay there for the rest of the run."""
+    host = Atoms('Ag2', positions=[[9, 10, 10], [11, 10, 10]], cell=[20] * 3, pbc=True)
+    sphere = SphericalCell(host, vacuum=3.0, species_radii=None, seed=1)
+    h2 = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
+    moves = [MoleculeInsertionMove(sphere, h2, 'H2', seed=2),
+             MoleculeDeletionMove(sphere, h2, 'H2', seed=3)]
+    g = GrandCanonicalEnsemble(
+        atoms=host, cells=[sphere], units_type='LJ', calculator=_PushOut(sphere.center),
+        mu={'H2': 2.0}, species=[], molecules={'H2': h2}, temperature=1.0,
+        move_selector=MoveSelector([1, 1], moves, seed=4), random_seed=5,
+        traj_file=None, outfile=None)
+    for _ in range(60):
+        g.do_gcmc_step()
+    groups = find_molecules(g.atoms, ['H', 'H'])
+    assert groups, 'no molecule was accepted: the guard rejects every trial'
+    distances = [np.linalg.norm(molecule_com(g.atoms, members) - sphere.center)
+                 for members in groups]
+    assert max(distances) <= sphere.radius

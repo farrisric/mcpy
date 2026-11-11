@@ -34,7 +34,7 @@ from typing import Callable, Dict, List, Optional
 import numpy as np
 
 from ..utils.random_number_generator import RandomNumberGenerator
-from .base_ensemble import BaseEnsemble, write_global_minimum
+from .base_ensemble import BaseEnsemble, sigterm_as_exit, write_global_minimum
 from .replica_exchange import (RE_RULE, check_independent_seeds, mus_differ,
                                re_header, re_row, rng_fingerprint)
 
@@ -141,6 +141,7 @@ class BatchedReplicaExchange:
 
     # ------------------------------------------------------------------ run
 
+    @sigterm_as_exit()
     def run(self) -> None:
         # The replicas' lifecycle logs all go to their base class's module
         # logger; ask the class for it rather than repeating its dotted path,
@@ -170,6 +171,8 @@ class BatchedReplicaExchange:
 
                 if step % self.write_out_interval == 0:
                     self._write_outfile(step)
+                    # On disk during the run: SIGKILL runs no finally block.
+                    self._write_global_minimum()
                     if step > 0:
                         self._log_status(step)
 
@@ -261,25 +264,26 @@ class BatchedReplicaExchange:
         pending proposal when it is scored later in this method.
         """
         pending = {}
-        for i in active:
-            proposal = self.replicas[i]._propose()
-            if proposal is not None:
-                pending[i] = proposal
-
-        if not pending:
-            return
-
-        viable = list(pending)
         try:
+            for i in active:
+                proposal = self.replicas[i]._propose()
+                if proposal is not None:
+                    pending[i] = proposal
+
+            if not pending:
+                return
+
+            viable = list(pending)
             energies = list(self.calculator.get_potential_energies(
                 [self.replicas[i].atoms for i in viable]))
             if len(energies) != len(viable):
                 raise ValueError(f'calculator returned {len(energies)} energies '
                                  f'for {len(viable)} configurations')
         except BaseException:
-            # No replica may keep an unscored trial (Ctrl-C, CUDA OOM).
-            for i in viable:
-                self.replicas[i]._restore(pending[i][0])
+            # No replica may keep an unscored trial (Ctrl-C, CUDA OOM), also
+            # when a later replica fails while it proposes.
+            for i, (snapshot, _) in pending.items():
+                self.replicas[i]._restore(snapshot)
             raise
         for i, E_new in zip(viable, energies, strict=True):
             snapshot, meta = pending[i]

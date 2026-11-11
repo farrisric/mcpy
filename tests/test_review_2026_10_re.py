@@ -179,7 +179,8 @@ def test_mpi_final_collective_error_aborts(monkeypatch, tmp_path):
     re = _mpi(monkeypatch, comm, lambda **_: _gcmc(), gcmc_steps=2,
               outfile=str(tmp_path / 're.log'),
               global_minimum_file=str(tmp_path / 'gm.xyz'))
-    comm.gathers_left = 1  # the step-0 table; the end-of-run ones fail
+    # The step-0 table and global minimum; the end-of-run ones fail.
+    comm.gathers_left = 3
     with pytest.raises(RuntimeError, match='link down'):
         re.run()
     assert comm.aborted == 1

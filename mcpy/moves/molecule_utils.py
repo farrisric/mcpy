@@ -24,10 +24,10 @@ def molecule_com(atoms, members):
     wrapped back into the box so region-cell inside tests see a point in
     the primary cell.
     """
-    return _coms(atoms, [np.asarray(members)])[0]
+    return molecule_coms(atoms, [np.asarray(members)])[0]
 
 
-def _coms(atoms, groups):
+def molecule_coms(atoms, groups):
     """Centers of mass of several index groups in one vectorized pass
     (one ``find_mic`` and one ``wrap_positions`` for all groups)."""
     if not groups:
@@ -79,7 +79,7 @@ def find_molecules(atoms, template_symbols, cell=None, proposal_region=False):
     if cell is None or not groups:
         return groups
     predicate = cell.is_point_inside if proposal_region else cell.is_point_exchangeable
-    return [m for m, com in zip(groups, _coms(atoms, groups)) if predicate(com)]
+    return [m for m, com in zip(groups, molecule_coms(atoms, groups)) if predicate(com)]
 
 
 def quaternion_matrix(w, x, y, z):

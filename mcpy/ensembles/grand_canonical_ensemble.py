@@ -17,7 +17,7 @@ from ..moves.insertion_move import InsertionMove
 from ..moves.molecule_deletion_move import MoleculeDeletionMove
 from ..moves.molecule_insertion_move import MoleculeInsertionMove
 from ..moves.move_selector import MoveSelector
-from ..moves.molecule_utils import find_molecules, molecule_groups
+from ..moves.molecule_utils import find_molecules, molecule_coms, molecule_groups
 from ..cell import Cell, CustomCell, SphericalCell
 
 _RATIO_COL_PER_MOVE = 8  # width per "100.0%, " entry, generous
@@ -30,6 +30,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
     _ball_guards = ()
     # (cell, atomic numbers) per CustomCell top exchanged atoms may not cross.
     _top_guards = ()
+    # (cell, sorted template symbols) per ball surface molecules may not cross.
+    _molecule_ball_guards = ()
 
     def __init__(self,
                  atoms: Atoms,
@@ -91,6 +93,11 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 self._cells.append(move.cell)
         self._ball_guards = self._guards((InsertionMove, DeletionMove), SphericalCell)
         self._top_guards = self._guards((InsertionMove,), CustomCell)
+        self._molecule_ball_guards = list({
+            (id(move.cell), move.name): (move.cell, move._template_symbols)
+            for move in move_selector.move_list
+            if isinstance(move, (MoleculeInsertionMove, MoleculeDeletionMove))
+            and isinstance(move.cell, SphericalCell)}.values())
 
         self.E_old = self.compute_energy(self.atoms)
         self.n_atoms = len(self.atoms)
@@ -384,7 +391,13 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         snapshot = ({k: v.copy() for k, v in atoms.arrays.items()},
                     [c.copy() for c in atoms.constraints])
 
-        atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
+        try:
+            atoms_new, delta_particles, species = self.move_selector.do_trial_move(atoms)
+        except BaseException:
+            # Ctrl-C, SIGTERM, CUDA OOM inside an MD move: never keep a
+            # half-made trial under the energy of the previous state.
+            self._restore(snapshot)
+            raise
 
         if atoms_new is False or atoms_new is None:
             # Move couldn't be proposed (e.g. empty cell). MoveSelector already
@@ -441,7 +454,8 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         return False
 
     def _outside_ball_counts(self, arrays):
-        """Per ball guard: free exchanged atoms outside the ball."""
+        """Per ball guard: free exchanged atoms outside the ball. Then per
+        molecule ball guard: molecules with their center of mass outside."""
         pos = arrays['positions']
         if self._wrap_on_accept:
             pos = wrap_positions(pos, self.atoms.cell, pbc=self.atoms.pbc)
@@ -452,6 +466,14 @@ class GrandCanonicalEnsemble(BaseEnsemble):
             outside = np.einsum('ij,ij->i', d, d) > cell.radius ** 2
             counts.append(int(np.count_nonzero(
                 outside & free & np.isin(arrays['numbers'], numbers))))
+        if self._molecule_ball_guards:
+            # A view of ``arrays`` (the snapshot or the live ones), no copy.
+            frame = Atoms(cell=self.atoms.cell, pbc=self.atoms.pbc)
+            frame.arrays = arrays
+            for cell, template in self._molecule_ball_guards:
+                d = molecule_coms(frame, find_molecules(frame, template)) - cell.center
+                counts.append(int(np.count_nonzero(
+                    np.einsum('ij,ij->i', d, d) > cell.radius ** 2)))
         return counts
 
     def _commit_or_rollback(self, E_new: float, snapshot, meta) -> bool:
@@ -462,8 +484,9 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         SphericalCell or DomeCell is rejected: outside the ball it could not
         be deleted but would still count in the acceptance. Both directions
         are blocked, so the move stays reversible."""
-        if self._ball_guards and (self._outside_ball_counts(snapshot[0])
-                                  != self._outside_ball_counts(self.atoms.arrays)):
+        if (self._ball_guards or self._molecule_ball_guards) and (
+                self._outside_ball_counts(snapshot[0])
+                != self._outside_ball_counts(self.atoms.arrays)):
             self._restore(snapshot)
             return False
         delta_particles, species = meta

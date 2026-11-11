@@ -49,7 +49,7 @@ More skills in `.claude/skills/`: `setup-gcmc-run`, `choose-mu`, `size-gpu-run`,
 - `ReplicaExchange` - parallel-tempering wrapper around GCMC; requires `mpi4py`, one MPI rank per replica. The factory gets T **or** μ, never both, but the swap uses the same general cross-term rule as `BatchedReplicaExchange` (exact for a per-rung μ(T), de Broglie term included). No molecular species (it counts atoms by symbol)
 - `BatchedReplicaExchange` — single-process, single-GPU replica exchange: all replicas live in one process and every replica's trial energy is evaluated in one batched forward pass. Needs a calculator with `get_potential_energies(atoms_list)`. Same general swap rule as `ReplicaExchange`, plus molecular species; warns on a degenerate or dead ladder
 
-Every ensemble can emit a `minima_file` of strictly improving configurations; replica-exchange runs also write a final `global_minimum.xyz` (one frame per rung whenever the rungs' μ differ). GCMC scores minima by the grand potential Ω = E − Σ μᵢNᵢ, not bare energy.
+Every ensemble can emit a `minima_file` of strictly improving configurations; replica-exchange runs also keep a `global_minimum.xyz`, rewritten at every write interval (one frame per rung whenever the rungs' μ differ). GCMC scores minima by the grand potential Ω = E − Σ μᵢNᵢ, not bare energy.
 
 **Moves** (`mcpy/moves/`) — propose trial configurations:
 - `BaseMove` — abstract; each move holds a reference to a `Cell` and a `RandomNumberGenerator`

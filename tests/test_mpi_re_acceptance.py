@@ -9,6 +9,7 @@ import logging
 from collections import defaultdict
 from types import SimpleNamespace
 
+import ase.parallel
 import numpy as np
 import pytest
 from ase import Atoms
@@ -16,6 +17,7 @@ from ase.io import read
 
 from mcpy.cell.null_cell import NullCell
 from mcpy.ensembles import GrandCanonicalEnsemble
+from mcpy.ensembles.base_ensemble import write_xyz
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.ensembles.replica_exchange import ReplicaExchange
 from mcpy.moves import DisplacementMove, MoveSelector
@@ -314,3 +316,16 @@ def test_global_minimum_per_rung_when_t_rungs_have_own_mu(driver, tmp_path):
 def test_global_minimum_single_frame_when_t_rungs_share_mu(driver, tmp_path):
     mu = {'Ag': -2.80, 'O': -4.90}
     assert _write_gm(driver, [mu, dict(mu)], tmp_path) == [0]
+
+
+def test_write_xyz_writes_on_a_non_master_mpi_rank(tmp_path, monkeypatch):
+    """ase.io.write runs on MPI rank 0 only unless told otherwise. Every
+    rank of ReplicaExchange owns its files, so rank 1 must write too."""
+    path = tmp_path / 'rank1.xyz'
+    atoms = Atoms('H', positions=[[1, 1, 1]], cell=[5] * 3, pbc=True)
+    with monkeypatch.context() as m:
+        m.setattr(ase.parallel, 'world', SimpleNamespace(size=2, rank=1))
+        with open(path, 'w') as handle:
+            write_xyz(atoms, -1.0, handle)
+    assert path.stat().st_size > 0
+    assert len(read(path, index=':')) == 1
