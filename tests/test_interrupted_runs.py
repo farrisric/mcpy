@@ -24,6 +24,8 @@ from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.moves import DeletionMove, DisplacementMove, InsertionMove, MoveSelector
 from mcpy.moves.base_move import BaseMove
 
+from helpers import _batched_pair, _gcmc
+
 
 class _Watching:
     """Zero energy; records at each call whether ``path`` exists."""
@@ -39,7 +41,7 @@ class _Watching:
         return np.array([self.get_potential_energy(a) for a in atoms_list])
 
 
-def _gcmc(calc, rank=0, mu=-1.0, T=1.0, atoms=None, moves=None, **files):
+def _box_gcmc(calc, rank=0, mu=-1.0, T=1.0, atoms=None, moves=None, **files):
     atoms = atoms if atoms is not None else Atoms(cell=[6] * 3, pbc=True)
     cell = Cell(atoms, seed=10 + rank)
     if moves is None:
@@ -160,7 +162,7 @@ def test_batched_global_minimum_is_on_disk_during_the_run(tmp_path):
     gm = str(tmp_path / 'gm.xyz')
     calc = _Watching(gm)
     re = BatchedReplicaExchange(
-        lambda mu, rank: _gcmc(calc, rank, mu=mu['H']), calc,
+        lambda mu, rank: _box_gcmc(calc, rank, mu=mu['H']), calc,
         mus=[{'H': -1.0}, {'H': -0.9}], gcmc_steps=6, write_out_interval=2,
         outfile=None, global_minimum_file=gm)
     re.run()
@@ -194,7 +196,7 @@ def test_mpi_global_minimum_is_on_disk_during_the_run(tmp_path, monkeypatch):
     calc = _Watching(gm)
     monkeypatch.setattr(rex, 'MPI', SimpleNamespace(COMM_WORLD=_OneRankComm()))
     re = rex.ReplicaExchange(
-        lambda T, rank: _gcmc(calc, rank, T=T), temperatures=[1.0], gcmc_steps=6,
+        lambda T, rank: _box_gcmc(calc, rank, T=T), temperatures=[1.0], gcmc_steps=6,
         write_out_interval=2, outfile=None, global_minimum_file=gm)
     re.run()
     assert calc.seen[-1]
@@ -235,7 +237,7 @@ class _HalfDone(BaseMove):
 
 def test_interrupted_move_leaves_no_unscored_trial():
     atoms = Atoms('H', positions=[[1, 1, 1]], cell=[6] * 3, pbc=True)
-    g = _gcmc(_Watching(), atoms=atoms, moves=[_HalfDone()])
+    g = _box_gcmc(_Watching(), atoms=atoms, moves=[_HalfDone()])
     with pytest.raises(KeyboardInterrupt):
         g.do_gcmc_step()
     np.testing.assert_array_equal(g.atoms.positions, [[1, 1, 1]])
@@ -246,8 +248,8 @@ def test_batched_interrupted_proposal_restores_the_earlier_replicas():
 
     def factory(mu, rank):
         atoms = Atoms('H2', positions=[[1, 1, 1], [4, 4, 4]], cell=[6] * 3, pbc=True)
-        return _gcmc(calc, rank, mu=mu['H'], atoms=atoms,
-                     moves=[DisplacementMove(['H'], seed=60 + rank, max_displacement=0.5)])
+        return _box_gcmc(calc, rank, mu=mu['H'], atoms=atoms,
+                         moves=[DisplacementMove(['H'], seed=60 + rank, max_displacement=0.5)])
 
     re = BatchedReplicaExchange(factory, calc, mus=[{'H': -1.0}, {'H': -0.9}],
                                 outfile=None, global_minimum_file=None)
@@ -260,3 +262,47 @@ def test_batched_interrupted_proposal_restores_the_earlier_replicas():
     with pytest.raises(KeyboardInterrupt):
         re._batched_single_move([0, 1])
     np.testing.assert_array_equal(re.replicas[0].atoms.positions, before)
+
+
+class _Interrupting:
+    def __init__(self):
+        self.calls = 0
+
+    def get_potential_energy(self, atoms):
+        self.calls += 1
+        if self.calls > 1:
+            raise KeyboardInterrupt
+        return 0.0
+
+
+# An exception in the energy call restores the snapshot
+
+def test_interrupted_energy_call_leaves_no_unscored_trial():
+    atoms = Atoms('H', positions=[[1, 1, 1]], cell=[6] * 3, pbc=True)
+    cell = Cell(atoms, seed=1)
+    g = _gcmc(atoms, [cell], [InsertionMove(cell, ['H'], 2), DeletionMove(cell, ['H'], 3)],
+              calc=_Interrupting())
+    with pytest.raises(KeyboardInterrupt):
+        g.do_gcmc_step()
+    assert len(g.atoms) == 1
+    np.testing.assert_array_equal(g.atoms.positions, [[1, 1, 1]])
+
+
+def _snapshot(pt):
+    return [(r.atoms.get_positions().copy(), r.atoms.get_chemical_symbols())
+            for r in pt.replicas]
+
+
+# An energy error restores every pending replica
+
+
+def test_batched_short_energy_list_raises_and_restores(tmp_path):
+    pt = _batched_pair(tmp_path)
+    before = _snapshot(pt)
+    real = pt.calculator.get_potential_energies
+    pt.calculator.get_potential_energies = lambda al: real(al)[:1]
+    with pytest.raises(ValueError):
+        pt._batched_single_move([0, 1])
+    for (pos, sym), r in zip(before, pt.replicas):
+        assert r.atoms.get_chemical_symbols() == sym
+        np.testing.assert_array_equal(r.atoms.get_positions(), pos)

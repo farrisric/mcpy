@@ -286,7 +286,7 @@ Where this lives in the code and tests
 - ``tests/test_acceptance.py`` - ``test_do_gcmc_step_feeds_total_atom_count``
   guards the convention; ``test_total_vs_perspecies_count_shifts_effective_mu``
   and ``test_perspecies_count_inserts_where_total_rejects`` quantify the gap.
-- ``tests/test_audit_2026_10.py``: the ``test_p1_*`` tests guard the
+- ``tests/test_acceptance.py``: the ``test_p1_*`` tests guard the
   volume rule, including a two-state detailed-balance check of the full
   GCMC loop (``test_p1_two_state_gcmc_obeys_detailed_balance``).
 - ``tests/test_custom_cell_region.py`` -

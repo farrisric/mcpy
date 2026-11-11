@@ -37,6 +37,7 @@ from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
 from mcpy.moves import DeletionMove, InsertionMove
 from mcpy.moves.move_selector import MoveSelector
 
+
 AG_LATTICE = 4.165
 R_O_AG = 2.068          # O-Ag exclusion radius, and the region depth below z_top
 CELL_HEIGHT = 7.0

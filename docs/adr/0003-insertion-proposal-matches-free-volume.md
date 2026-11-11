@@ -20,4 +20,4 @@ It is also exact and needs no estimate, but it changes the volume in the accepta
 
 Limits: `V` carries Monte Carlo noise; the exclusion is a hard core for proposals only, so states reached by displacement or relaxation inside an exclusion sphere can be left by deletion but not entered by insertion.
 Full discussion: `docs/gcmc_acceptance_convention.rst`, section "The volume V".
-Guarded by the `test_p1_*` tests in `tests/test_audit_2026_10.py`.
+Guarded by the `test_p1_*` tests in `tests/test_acceptance.py`.

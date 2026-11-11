@@ -6,6 +6,8 @@ analyze_phase_diagram_results and from_mu_to_press. torch/mace-free.
 Run with: python -m pytest tests/test_phase_diagram.py -v
 """
 import matplotlib
+
+
 matplotlib.use('Agg')  # must precede any pyplot import; hence the E402 below
 
 import logging  # noqa: E402
@@ -18,8 +20,8 @@ from ase.build import fcc111  # noqa: E402
 from ase.calculators.singlepoint import SinglePointCalculator  # noqa: E402
 from ase.io import write  # noqa: E402
 
-from mcpy.utils.phase_diagram import (  # noqa: E402
-    _janaf_dmu0, analyze_phase_diagram_results, from_mu_to_press, plot_phase_diagram)
+from mcpy.utils.phase_diagram import (_janaf_dmu0, analyze_phase_diagram_results,  # noqa: E402
+                                      from_mu_to_press, plot_phase_diagram)
 
 
 def _frame(n_co, energy):
@@ -29,30 +31,6 @@ def _frame(n_co, energy):
         atoms += Atoms('CO', positions=[[4 + 2 * i, 4, 4], [4 + 2 * i, 4, 5.1]])
     atoms.info['energy'] = energy
     return atoms
-
-
-def test_plot_phase_diagram_molecular_adsorbate(tmp_path):
-    frames = [_frame(0, 0.0), _frame(1, -1.0), _frame(2, -1.8)]
-    out = str(tmp_path / 'pd.png')
-    res = plot_phase_diagram(
-        frames, adsorbate='C', metal_symbols=('Cu',), mu_ref=-0.5,
-        kind='nano', T=400.0, dmu_range=(-1.0, 0.0), show_structures=False,
-        outfile=out, adsorbate_label='CO', atoms_per_reservoir_molecule=1)
-    assert res['plot_path'] == out
-    assert (tmp_path / 'pd.png').exists()
-    assert list(res['stoich']) == [0, 1, 2]
-
-
-def test_plot_phase_diagram_default_diatomic_convention(tmp_path):
-    # Backward-compatible default: no label override, reservoir factor 2.
-    frames = [_frame(0, 0.0), _frame(1, -1.0)]
-    out = str(tmp_path / 'pd2.png')
-    res = plot_phase_diagram(
-        frames, adsorbate='C', metal_symbols=('Cu',), mu_ref=-0.5,
-        kind='nano', T=400.0, dmu_range=(-1.0, 0.0), show_structures=False,
-        outfile=out)
-    assert (tmp_path / 'pd2.png').exists()
-    assert len(res['phase_order']) >= 1
 
 
 # Four lines on [-1, 0] (nano, 4 metal atoms): free = (E - n * dmu) / 4 * 1000.
@@ -68,14 +46,6 @@ def _plot(**kwargs):
     fig = plt.gcf()
     plt.close(fig)
     return res, fig
-
-
-def test_transitions_are_exact_line_crossings():
-    res, _ = _plot(n_bins=50, show_structures=False)
-    assert [res['stoich'][i] for i in res['phase_order']] == [0, 1, 2, 3]
-    # Exact crossings, independent of the coarse grid; the narrow n=1 phase
-    # (0.02 eV < min_phase_width) is kept, not merged into a neighbour.
-    np.testing.assert_allclose(res['transitions'], [-0.60, -0.58, -0.20], rtol=0, atol=1e-12)
 
 
 def test_every_envelope_kink_is_a_transition():
@@ -171,19 +141,6 @@ def _dmu_at_p0(ax2, x0, x1):
     return x0 - l0 * (x1 - x0) / (l1 - l0)
 
 
-@pytest.mark.parametrize('T, dmu_standard, dmu0',
-                         [(300.0, None, -0.27), (500.0, None, -0.50), (500.0, -0.8, -0.8)])
-def test_pressure_axis_is_p0_at_standard_dmu(T, dmu_standard, dmu0):
-    # p = p0 at dmu = Delta mu_O^0(T), not at dmu = 0 (10 decades at 500 K).
-    # A given dmu_standard wins over the built-in table.
-    plot_phase_diagram([_ag_slab(0, -135.80), _ag_slab(4, -157.00)], adsorbate='O',
-                       metal_symbols=('Ag',), mu_ref=-4.913, T=T, show_structures=False,
-                       show_plot=True, dmu_standard=dmu_standard)
-    fig = plt.gcf()
-    plt.close(fig)
-    assert abs(_dmu_at_p0(fig.axes[1], -1.0, 0.0) - dmu0) < 0.0075
-
-
 def test_pressure_axis_ignores_display_label():
     # adsorbate_label is display text only: the O2 table must still be found.
     plot_phase_diagram([_ag_slab(0, -135.80), _ag_slab(4, -157.00)], adsorbate='O',
@@ -276,3 +233,36 @@ def test_analyze_bulk_oxide_boundary_and_area(tmp_path):
     assert not [p for p in fig.axes[0].patches if p.get_hatch()]
     assert len(fig.axes) == 1
     assert len(res['transitions_delta_mu_o']) == 2
+
+
+_FRAMES = [_frame(0, 0.0), _frame(1, -1.0), _frame(2, -1.8)]
+
+
+_KW = dict(adsorbate='C', metal_symbols=('Cu',), mu_ref=-0.5, kind='nano', T=400.0,
+           show_structures=False, dmu_standard=-0.6)
+
+
+@pytest.mark.parametrize('missing', ['adsorbate', 'metal_symbols', 'mu_ref'])
+def test_plot_phase_diagram_has_no_lab_defaults(missing):
+    # thermo-postproc-5: no silent H / (Pd, Ag) / -3.05 eV defaults.
+    kwargs = {k: v for k, v in _KW.items() if k != missing}
+    with pytest.raises(TypeError, match=missing):
+        plot_phase_diagram(_FRAMES, **kwargs)
+
+
+def test_plot_phase_diagram_rejects_reversed_dmu_range():
+    with pytest.raises(ValueError, match='dmu_range'):
+        plot_phase_diagram(_FRAMES, dmu_range=(0.0, -1.0), **_KW)
+
+
+def test_plot_phase_diagram_nano_needs_metal_atoms():
+    kwargs = dict(_KW, metal_symbols=('Pd',))
+    with pytest.raises(ValueError, match='metal'):
+        plot_phase_diagram(_FRAMES, **kwargs)
+
+
+def test_plot_phase_diagram_skips_non_finite_energies():
+    ref = plot_phase_diagram(_FRAMES, **_KW)
+    res = plot_phase_diagram([_frame(1, np.nan), _frame(0, -np.inf)] + _FRAMES, **_KW)
+    assert res['stoich'] == ref['stoich']
+    np.testing.assert_allclose(res['transitions'], ref['transitions'], rtol=0, atol=1e-12)

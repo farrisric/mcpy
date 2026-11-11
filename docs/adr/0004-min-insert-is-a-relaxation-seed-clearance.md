@@ -23,4 +23,4 @@ Evidence (`benchmark/insertion_rule_comparison.py`, O on a 6x6x4 Ag(111) slab, m
 The ADR 0003 rule with the same radii accepted 12.3% at 1230.
 The ADR 0003 rule with all radii at 0.5 accepted 21.5% at 898; it uses a larger `V`, which acts as a mu about kT ln(1873/818) = 0.036 eV higher.
 
-Guarded by `test_min_insert_is_a_seed_clearance_adr_0004` in `tests/test_audit_2026_10.py`.
+Guarded by `test_min_insert_is_a_seed_clearance_adr_0004` in `tests/test_acceptance.py`.

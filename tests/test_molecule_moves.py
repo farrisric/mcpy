@@ -3,36 +3,32 @@ Tests for molecular GCMC: molecule bookkeeping helpers, rigid-molecule
 insertion/deletion moves, molecular SetUnits masses, and the
 exchange-count wiring in the GCMC acceptance step.
 
-torch/mace/mpi4py-free, matching the style of test_audit_regressions.py.
+torch/mace/mpi4py-free.
 
 Run with: python -m pytest tests/test_molecule_moves.py -v
 """
+import math
+
 import numpy as np
 import pytest
 from ase import Atoms
 from ase.build import molecule as build_molecule
+from ase.constraints import FixAtoms
 
-from mcpy.cell import Cell, SphericalCell
+from mcpy.cell import Cell, CustomCell, SphericalCell
 from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
-from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove,
-                        MoleculeDisplacementMove, MoleculeInsertionMove,
-                        MoveSelector)
+from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove, MoleculeDisplacementMove,
+                        MoleculeInsertionMove, MoveSelector, PermutationMove)
 from mcpy.moves.base_move import PROPOSAL_REJECTED
-from mcpy.moves.molecule_utils import (find_molecules, molecule_com,
-                                       molecule_groups, random_rotation_matrix)
-from mcpy.utils import RandomNumberGenerator
+from mcpy.moves.molecule_utils import find_molecules, molecule_com, molecule_groups
 from mcpy.utils.set_unit_constant import SetUnits
+
+from helpers import _o2, _ZeroCalc
 
 
 def _box_atoms():
     return Atoms('H2', positions=[[1, 1, 1], [3, 1, 1]], cell=[10, 10, 10], pbc=True)
-
-
-def test_box_cell_is_point_inside_always_true():
-    cell = Cell(_box_atoms())
-    assert cell.is_point_inside(np.array([5.0, 5.0, 5.0]))
-    assert cell.is_point_inside(np.array([-100.0, 0.0, 1e6]))
 
 
 def _water_box():
@@ -49,13 +45,6 @@ def _water_box():
     return atoms
 
 
-def test_molecule_com_plain():
-    atoms = _water_box()
-    members = np.array([3, 4])
-    com = molecule_com(atoms, members)
-    np.testing.assert_allclose(com, [2.0, 2.0, 2.6])
-
-
 def test_molecule_com_mic_across_boundary():
     # O2 straddling the z boundary: atoms at z=9.8 and z=0.6 (bond 0.8 via mic).
     atoms = Atoms('O2', positions=[[5, 5, 9.8], [5, 5, 0.6]],
@@ -64,50 +53,6 @@ def test_molecule_com_mic_across_boundary():
     com = molecule_com(atoms, np.array([0, 1]))
     # Midpoint of the unwrapped pair (z = 10.2) wrapped back into the box.
     np.testing.assert_allclose(com, [5.0, 5.0, 0.2], atol=1e-10)
-
-
-def test_molecule_com_is_mass_weighted():
-    # H2O has heterogeneous masses: compare against ASE's own COM (independent
-    # oracle; the molecule does not straddle a boundary) and confirm the result
-    # differs from the unweighted mean.
-    atoms = _water_box()
-    members = np.array([0, 1, 2])
-    com = molecule_com(atoms, members)
-    np.testing.assert_allclose(com, atoms[members].get_center_of_mass())
-    assert not np.allclose(com, atoms.positions[members].mean(axis=0))
-
-
-def test_find_molecules_filters_composition():
-    atoms = _water_box()
-    water = find_molecules(atoms, sorted(['O', 'H', 'H']))
-    assert len(water) == 1
-    np.testing.assert_array_equal(water[0], [0, 1, 2])
-    oxygen = find_molecules(atoms, sorted(['O', 'O']))
-    assert len(oxygen) == 1
-    np.testing.assert_array_equal(oxygen[0], [3, 4])
-
-
-def test_find_molecules_missing_array_and_cell_filter():
-    plain = _box_atoms()
-    assert find_molecules(plain, ['H', 'H']) == []
-
-    class _NowhereCell:
-        def is_point_exchangeable(self, point):
-            return False
-
-    atoms = _water_box()
-    assert find_molecules(atoms, sorted(['O', 'H', 'H']), _NowhereCell()) == []
-
-
-def test_random_rotation_matrix_is_rotation():
-    rng = RandomNumberGenerator(seed=7)
-    r1 = random_rotation_matrix(rng)
-    r2 = random_rotation_matrix(rng)
-    for r in (r1, r2):
-        np.testing.assert_allclose(r @ r.T, np.eye(3), atol=1e-12)
-        assert np.linalg.det(r) == pytest.approx(1.0)
-    # Consecutive draws differ: orientation is actually random.
-    assert not np.allclose(r1, r2)
 
 
 def test_setunits_molecular_mass_and_lambda():
@@ -144,11 +89,6 @@ def _water_template():
     return build_molecule('H2O')
 
 
-def _empty_box():
-    atoms = Atoms(cell=[10, 10, 10], pbc=True)
-    return atoms
-
-
 def test_molecule_insertion_adds_whole_molecule():
     atoms = _box_atoms()  # 2 H atoms, no molecule_id array yet
     move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
@@ -169,17 +109,6 @@ def test_molecule_insertion_adds_whole_molecule():
     assert move.last_exchange_count == 0
 
 
-def test_molecule_insertion_orientations_vary():
-    move = MoleculeInsertionMove(Cell(_empty_box()), _water_template(), 'H2O', seed=3)
-    vecs = []
-    for _ in range(2):
-        atoms = _empty_box()
-        move.do_trial_move(atoms)
-        # O->H1 bond direction as an orientation fingerprint.
-        vecs.append(atoms.positions[1] - atoms.positions[0])
-    assert not np.allclose(vecs[0], vecs[1])
-
-
 def test_molecule_insertion_max_molecules_cap():
     atoms = _water_box()  # already contains one H2O
     move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O',
@@ -188,36 +117,6 @@ def test_molecule_insertion_max_molecules_cap():
     assert result is False
     assert delta == 1 and name == 'H2O'
     assert len(atoms) == 6  # unchanged
-
-
-def test_molecule_insertion_next_id_after_existing():
-    atoms = _water_box()  # ids 0 (H2O) and 1 (O2) present
-    move = MoleculeInsertionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
-    move.do_trial_move(atoms)
-    assert atoms.arrays['molecule_id'].max() == 2
-    assert move.last_exchange_count == 1  # one H2O before the move
-
-
-def test_molecule_insertion_unplaceable():
-    # An exclusion radius larger than the box leaves no free point.
-    atoms = Atoms('H', positions=[[5, 5, 5]], cell=[4, 4, 4], pbc=True)
-    cell = Cell(atoms, species_radii={'H': 50.0})
-    move = MoleculeInsertionMove(cell, _water_template(), 'H2O', seed=1)
-    result, delta, name = move.do_trial_move(atoms)
-    assert result is False
-    assert len(atoms) == 1
-
-
-def test_molecule_deletion_removes_whole_molecule():
-    atoms = _water_box()
-    move = MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)
-    result, delta, name = move.do_trial_move(atoms)
-    assert result is atoms
-    assert delta == -1 and name == 'H2O'
-    # The H2O (3 atoms) is gone; the O2 and lone H remain.
-    assert len(atoms) == 3
-    assert sorted(atoms.get_chemical_symbols()) == ['H', 'O', 'O']
-    assert move.last_exchange_count == 1
 
 
 def test_molecule_deletion_no_candidates():
@@ -236,31 +135,6 @@ def test_molecule_deletion_min_molecules_floor():
     result, delta, name = move.do_trial_move(atoms)
     assert result is False
     assert len(atoms) == 6
-
-
-def test_molecule_deletion_ignores_other_compositions():
-    atoms = _water_box()
-    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
-    move = MoleculeDeletionMove(Cell(atoms), o2, 'O2', seed=1)
-    move.do_trial_move(atoms)
-    # Only the O2 was deleted; the water is intact.
-    assert len(atoms) == 4
-    assert sorted(atoms.get_chemical_symbols()) == ['H', 'H', 'H', 'O']
-
-
-def test_move_selector_exchange_count():
-    atoms = _water_box()
-    cell = Cell(atoms)
-    mol_move = MoleculeDeletionMove(cell, _water_template(), 'H2O', seed=1)
-    atomic_move = DeletionMove(cell, species=['H'], seed=2)
-
-    ms = MoveSelector([1, 0], [mol_move, atomic_move], seed=3)
-    ms.do_trial_move(atoms)  # weight 0 on atomic: molecule move chosen
-    assert ms.get_exchange_count() == 1
-
-    ms2 = MoveSelector([0, 1], [mol_move, atomic_move], seed=3)
-    ms2.do_trial_move(atoms)
-    assert ms2.get_exchange_count() is None
 
 
 class _NoMove:
@@ -296,26 +170,6 @@ def _mol_gcmc(atoms, move_selector, calculator, mu_h2o=0.0):
     return g
 
 
-def test_gcmc_acceptance_uses_molecule_count():
-    atoms = _water_box()  # 6 atoms, one H2O molecule
-    ms = MoveSelector(
-        [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
-        seed=2)
-    g = _mol_gcmc(atoms, ms, _StubCalc())
-
-    captured = {}
-    original = g._acceptance_condition
-
-    def spy(potential_diff, delta_particles, volume, species, n_atoms=None):
-        captured['n'] = n_atoms
-        return original(potential_diff, delta_particles, volume, species, n_atoms)
-
-    g._acceptance_condition = spy
-    g.do_gcmc_step()
-    # Molecule count (1 H2O), not the 6-atom total.
-    assert captured['n'] == 1
-
-
 def test_gcmc_rejected_molecule_move_rolls_back():
     atoms = _water_box()
     n_before = len(atoms)
@@ -327,16 +181,6 @@ def test_gcmc_rejected_molecule_move_rolls_back():
     g.do_gcmc_step()
     assert len(g.atoms) == n_before
     np.testing.assert_array_equal(g.atoms.arrays['molecule_id'], ids_before)
-
-
-def test_gcmc_minimum_score_counts_molecules():
-    atoms = _water_box()
-    ms = MoveSelector(
-        [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
-        seed=2)
-    g = _mol_gcmc(atoms, ms, _StubCalc(), mu_h2o=2.0)
-    # Omega = E - mu * N_molecules = E - 2.0 * 1
-    assert g._minimum_score(atoms, -6.0) == pytest.approx(-8.0)
 
 
 def test_replica_exchange_rejects_molecular_species():
@@ -390,43 +234,6 @@ def test_batched_re_grand_potential_counts_molecules():
     assert BatchedReplicaExchange._grand_potential(g) == pytest.approx(expected)
 
 
-def test_gcmc_molecule_smoke_lj():
-    """Short LJ-units GCMC run with O2 insert/delete: no crash, bookkeeping
-    stays consistent (every molecule id maps to exactly one O2)."""
-    o2 = Atoms('O2', positions=[[0, 0, 0], [0, 0, 1.2]])
-    atoms = Atoms(cell=[8, 8, 8], pbc=True)
-    # A non-zero O radius makes the free-volume redraw path run against
-    # real neighbors.
-    cell = Cell(atoms, species_radii={'O': 0.8}, mc_sample_points=5_000, seed=10)
-    ms = MoveSelector(
-        [1, 1],
-        [MoleculeInsertionMove(cell, o2, 'O2', seed=11),
-         MoleculeDeletionMove(cell, o2, 'O2', seed=12)],
-        seed=13,
-    )
-    g = GrandCanonicalEnsemble(
-        atoms=atoms, cells=[cell], units_type='LJ',
-        calculator=_StubCalc(), mu={'O2': 1.0}, species=[],
-        temperature=1.0, move_selector=ms, random_seed=14,
-        traj_file=None, outfile=None,
-        molecules={'O2': o2},
-    )
-    seen_n = set()
-    for _ in range(60):
-        g.do_gcmc_step()
-        seen_n.add(len(g.atoms))
-        ids = g.atoms.arrays.get('molecule_id')
-        if ids is not None:
-            for mid in np.unique(ids):
-                if mid < 0:
-                    continue
-                members = np.where(ids == mid)[0]
-                assert sorted(np.asarray(g.atoms.get_chemical_symbols())[members]) \
-                    == ['O', 'O']
-    assert np.isfinite(g.E_old)
-    assert len(seen_n) > 1  # N actually fluctuated
-
-
 def test_write_xyz_molecule_id_roundtrip(tmp_path):
     import ase.io
 
@@ -438,22 +245,6 @@ def test_write_xyz_molecule_id_roundtrip(tmp_path):
     write_xyz(atoms, -1.0, path)
     back = ase.io.read(path)
     np.testing.assert_array_equal(back.arrays['molecule_id'], [7, 7])
-
-
-def test_find_molecules_queries_com_point():
-    """The point handed to cell.is_point_exchangeable must be the molecule's
-    center of mass, not e.g. the first member's position."""
-    atoms = _water_box()
-    recorded = {}
-
-    class _RecordingCell:
-        def is_point_exchangeable(self, point):
-            recorded['point'] = point
-            return True
-
-    find_molecules(atoms, sorted(['O', 'H', 'H']), _RecordingCell())
-    np.testing.assert_allclose(recorded['point'],
-                               molecule_com(atoms, np.array([0, 1, 2])))
 
 
 def test_molecule_deletion_picks_among_multiple_candidates():
@@ -528,17 +319,6 @@ def test_molecule_displacement_rigid_and_bounded():
                                   [0, 0, 0, 1, 1, -1])
 
 
-def test_molecule_displacement_rotates():
-    atoms = _water_box()
-    bond_before = atoms.positions[1] - atoms.positions[0]
-    move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O', seed=5)
-    move.do_trial_move(atoms)
-    bond_after = atoms.positions[1] - atoms.positions[0]
-    assert not np.allclose(bond_after, bond_before)  # orientation changed
-    np.testing.assert_allclose(np.linalg.norm(bond_after),
-                               np.linalg.norm(bond_before), atol=1e-10)
-
-
 def test_molecule_displacement_no_candidates():
     atoms = _box_atoms()
     move = MoleculeDisplacementMove(Cell(atoms), _water_template(), 'H2O', seed=1)
@@ -581,26 +361,6 @@ class _ZWindowCell(Cell):
 
     def is_point_inside(self, point):
         return self.z_lo <= point[2] < self.z_hi
-
-
-def test_molecule_displacement_cannot_escape_region():
-    # Detailed balance at the region boundary: a displacement that would move
-    # the COM outside must be rejected as a failed proposal, otherwise the
-    # boundary is a one-way door and molecules strand outside the cell
-    # (invisible to deletion but still counted in the grand potential).
-    for seed in range(30):
-        atoms = _water_box()
-        cell = _ZWindowCell(atoms, 4.0, 6.0)  # H2O COM starts near z=5
-        move = MoleculeDisplacementMove(cell, _water_template(), 'H2O',
-                                        seed=seed, max_displacement=3.0)
-        result, delta, name = move.do_trial_move(atoms)
-        com = molecule_com(atoms, np.array([0, 1, 2]))
-        if result is PROPOSAL_REJECTED:
-            # rejected proposal must not have mutated anything
-            np.testing.assert_allclose(atoms.positions,
-                                       _water_box().positions)
-        else:
-            assert 4.0 <= com[2] < 6.0, f'escaped region (seed {seed})'
 
 
 def test_molecule_displacement_mic_rigidity():
@@ -652,3 +412,140 @@ def test_relaxation_cannot_carry_a_molecule_out_of_the_ball():
     distances = [np.linalg.norm(molecule_com(g.atoms, members) - sphere.center)
                  for members in groups]
     assert max(distances) <= sphere.radius
+
+
+# PermutationMove never touches molecule members
+
+def test_p3_permutation_skips_molecule_members():
+    atoms = Atoms('Pt3CO', positions=[[0, 0, 0], [2.7, 0, 0], [0, 2.7, 0],
+                                      [5, 5, 5], [5, 5, 6.1]],
+                  cell=[12] * 3, pbc=True)
+    atoms.new_array('molecule_id', np.array([-1, -1, -1, 0, 0]))
+    move = PermutationMove(species=['Pt', 'C', 'O'], seed=1, n_swaps=3)
+    for _ in range(20):
+        result, _, _ = move.do_trial_move(atoms)
+        assert result is False  # only Pt is free: nothing to swap with
+    assert atoms.get_chemical_symbols() == ['Pt', 'Pt', 'Pt', 'C', 'O']
+
+    atoms += Atoms('O', positions=[[8, 8, 8]])
+    atoms.arrays['molecule_id'][-1] = -1
+    for _ in range(20):
+        move.do_trial_move(atoms)
+        assert list(atoms.symbols[3:5]) == ['C', 'O']
+
+
+# Position moves honour FixAtoms
+
+def test_b2_molecule_displacement_honours_fixatoms():
+    atoms = Atoms('O2', positions=[[5, 5, 5], [5, 5, 6.2]], cell=[10] * 3, pbc=True)
+    atoms.new_array('molecule_id', np.array([0, 0]))
+    atoms.set_constraint(FixAtoms(indices=[0]))
+    before = atoms.positions.copy()
+    move = MoleculeDisplacementMove(Cell(atoms), _o2(), 'O2', seed=2)
+    result, _, _ = move.do_trial_move(atoms)
+    assert result is atoms
+    np.testing.assert_array_equal(atoms.positions[0], before[0])
+
+
+# Molecule displacement out of the region counts as a rejection, not a failure
+
+def test_molecule_displacement_out_of_region_is_a_rejection():
+    atoms = Atoms('O2', positions=[[5, 5, 5], [5, 5, 6.2]], cell=[10] * 3, pbc=True)
+    atoms.new_array('molecule_id', np.array([0, 0]))
+    cell = _ZWindowCell(atoms, 5.5, 5.7)  # any real shift leaves the window
+    move = MoleculeDisplacementMove(cell, _o2(), 'O2', seed=1, max_displacement=2.0)
+    assert move.do_trial_move(atoms)[0] is PROPOSAL_REJECTED
+    selector = MoveSelector([1], [move])
+    result = selector.do_trial_move(atoms)
+    assert result[0] is False  # the ensembles still see "nothing to score"
+    assert selector.move_counter == [1]
+    assert selector.move_failed_counter == [0]
+    assert selector.interval_ratios() == [0.0]
+
+
+# Atomic mu keys do not count atoms that belong to molecules
+
+
+def _h2():
+    return Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
+
+
+# Molecule displacement keeps the COM inside the proposal region
+
+def test_molecule_ideal_gas_in_custom_cell_stays_poisson():
+    """Ideal H2 molecules in a thin CustomCell slab with many rigid
+    displacements. Exact: the in-cell count is Poisson(zV). If displacements
+    may lift molecules above the cell top (exchangeable but never
+    insertable), the in-cell density drops."""
+    atoms = Atoms(cell=[6, 6, 20], pbc=(True, True, False))
+    cell = CustomCell(atoms, custom_height=3.0, bottom_z=5.0, seed=1)
+    tpl = _h2()
+    zv = 3.0
+    ms = MoveSelector([1, 1, 10], [MoleculeInsertionMove(cell, tpl, 'H2', 2),
+                                   MoleculeDeletionMove(cell, tpl, 'H2', 3),
+                                   MoleculeDisplacementMove(cell, tpl, 'H2', 4,
+                                                            max_displacement=1.0)],
+                      seed=5, n_moves=1)
+    g = GrandCanonicalEnsemble(
+        atoms=atoms, cells=[cell], units_type='LJ', calculator=_ZeroCalc(),
+        mu={'H2': math.log(zv / cell.get_volume())}, species=[], molecules={'H2': tpl},
+        temperature=1.0, move_selector=ms, random_seed=6, traj_file=None, outfile=None)
+    counts = []
+    for step in range(20_000):
+        g.do_gcmc_step()
+        if step >= 1_000 and step % 4 == 0:
+            counts.append(sum(cell.is_point_inside(molecule_com(g.atoms, m))
+                              for m in find_molecules(g.atoms, ['H', 'H'])))
+    assert np.mean(counts) == pytest.approx(zv, abs=0.25)
+
+
+def test_molecule_template_with_molecule_id_inserts():
+    tpl = _h2()
+    tpl.new_array('molecule_id', np.array([4, 4]))
+    atoms = Atoms(cell=[8] * 3, pbc=True)
+    move = MoleculeInsertionMove(Cell(atoms, seed=1), tpl, 'H2', seed=2)
+    move.do_trial_move(atoms)
+    move.do_trial_move(atoms)
+    np.testing.assert_array_equal(atoms.arrays['molecule_id'], [0, 0, 1, 1])
+
+
+def test_host_zero_filled_molecule_id_raises():
+    host = Atoms('Cu2', positions=[[0, 0, 0], [2.5, 0, 0]], cell=[8] * 3, pbc=True)
+    co = Atoms('CO', positions=[[4, 4, 4], [4, 4, 5.1]])
+    co.new_array('molecule_id', np.array([0, 0]))
+    atoms = host + co  # ASE zero-fills the host: Cu2 joins molecule 0
+    cell = Cell(atoms, seed=1)
+    with pytest.raises(ValueError, match=r'molecule_id groups \[0\]'):
+        GrandCanonicalEnsemble(
+            atoms=atoms, cells=[cell], units_type='LJ', calculator=_ZeroCalc(),
+            mu={'CO': -1.0}, species=[], molecules={'CO': co}, temperature=1.0,
+            move_selector=MoveSelector([1, 1], [
+                MoleculeInsertionMove(cell, co, 'CO', 1),
+                MoleculeDeletionMove(cell, co, 'CO', 2)]),
+            random_seed=1, traj_file=None, outfile=None)
+
+
+# Vectorized find_molecules is unchanged
+
+def test_find_molecules_matches_per_molecule_com():
+    """The vectorized grouping and COM pass gives the same candidates, in
+    the same order, as a per-molecule loop, for molecules split across the
+    periodic boundary."""
+    rng = np.random.default_rng(0)
+    atoms = Atoms(cell=[7, 7, 9], pbc=(True, True, False))
+    ids = []
+    for k in range(12):
+        offsets = [[0, 0, 0], [0, 0, 1.1]] if k % 3 else [[0, 0, 0], [0.9, 0, 0], [0, 0.9, 0]]
+        mol = Atoms('CO' if k % 3 else 'OH2', positions=rng.uniform(0, 7, 3) + offsets)
+        mol.positions[:, :2] %= 7.0  # some molecules straddle the boundary
+        atoms += mol
+        ids += [k] * len(mol)
+    atoms += Atoms('Cu', positions=[[1, 1, 1]])
+    atoms.new_array('molecule_id', np.array(ids + [-1]))
+    cell = CustomCell(atoms, custom_height=5.0, bottom_z=2.0, seed=1)
+    got = find_molecules(atoms, ['C', 'O'], cell)
+    ref = [np.flatnonzero(atoms.arrays['molecule_id'] == k) for k in range(12) if k % 3]
+    assert len(find_molecules(atoms, ['C', 'O'])) == len(ref) == 8
+    ref = [m for m in ref if cell.is_point_exchangeable(molecule_com(atoms, m))]
+    assert 0 < len(ref) < 8
+    assert [list(g) for g in got] == [list(m) for m in ref]

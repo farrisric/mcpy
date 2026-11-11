@@ -13,8 +13,9 @@ import numpy as np
 import pytest
 from ase import Atoms
 
+
 # Skip on nvalchemi first: importing torch can SIGBUS in a torch-less env
-# (see tests/test_audit_2026_10_calculators.py).
+# (see tests/test_alchemi_calculators.py).
 pytest.importorskip('nvalchemi')
 alchemi = pytest.importorskip('mcpy.calculators.alchemi')
 torch = alchemi.torch
