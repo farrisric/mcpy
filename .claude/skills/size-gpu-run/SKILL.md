@@ -21,13 +21,16 @@ Maintainers: the sweep script is `benchmark/internal/re_batched_scaling.py`
 3. Estimate memory per chunk (relax path, medium-mpa-0 class model):
    - `peak ≈ 0.1 GiB + 1.3 MiB x (chunk_size x atoms_per_replica)` for supported oxide;
      ~0.9 MiB/atom for a bare metal NP.
-   - MH-1 class model: ~8.2 MiB/atom; often forces `chunk_size=1`.
+   - MH-1 with cuEq on (nvalchemi 0.3.0): `peak ≈ 0.1 GiB + 2.6 MiB x (chunk_size x atoms_per_replica)`,
+     measured up to 8 x 805 atoms = 16.3 GB. With cuEq off: ~8.2 MiB/atom.
    - Hard ceilings on 32 GB: ~32k atoms bare NP, ~23k supported oxide, ~14k atoms per single
      batched forward.
 4. Pick `chunk_size` = largest chunk whose estimate stays under ~80% of VRAM.
    Measured anchor: 8 replicas x 664 atoms whole-batch = 5.3 GB, 72% utilization, 6.8 s/step.
    `chunk_size=1` is many times slower; going wider is nearly free until utilization
    reaches ~75-80%, then throughput flattens.
+   A heavy model fills the GPU with one replica: MH-1 with cuEq, 8 x 805 atoms, gains
+   1.1-1.2x from `chunk_size` 1 -> 2 and nothing beyond.
 5. Estimate wall time:
    - Single GCMC, ~3.7k-atom supported NP: ~3.7 s/step (2 moves), ~1.8 s per relaxation.
    - Batched RE: s/step grows roughly linearly with total batch atoms once the GPU is
@@ -48,7 +51,7 @@ covers >= 10^4 steps per rung.
 - Trusting `nvidia-smi` during a long run: allocator fragmentation inflates it;
   use the env var and judge by torch allocated memory.
 - Reusing pre-0.2.0 numbers (e.g. "8 x 664 atoms = 29 GB"): stale; 0.2.0 halved batched memory.
-- Estimating MH-1 with the 1.3 MiB/atom rule: it is ~6x hungrier.
+- Estimating MH-1 with the 1.3 MiB/atom rule: it is ~2x hungrier with cuEq on, ~6x with cuEq off.
 - To re-measure on new hardware or a new model: the local-only sweep script named in the
   header, or any short grid of (atoms x replicas) runs with
   `torch.cuda.max_memory_allocated` logged.

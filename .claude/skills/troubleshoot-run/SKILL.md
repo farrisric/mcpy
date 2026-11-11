@@ -16,7 +16,7 @@ Match the symptom; each row is a known cause, not a guess.
 | Replica ladder: isotherm flat, cumulative swap acceptance looks fine | Second-half acceptance per pair | Dead ladder; respace rungs (`replica-exchange-setup`). |
 | Same script, different results | Any seed left `None` | Seed cells, moves, `MoveSelector`, ensemble. |
 | Fixed/support atoms moved | mcpy version | Position write-back and `FixAtoms` bugs fixed on main (2026-05/06); `git pull` + reinstall editable. |
-| Energies differ run-to-run, same structure | Checkpoint + cuEq | mh-1 with cuEq on is broken; `enable_cueq=False` (`run-gpu` skill). |
+| Energies differ run-to-run, same structure | Checkpoint + cuEq + mcpy version | mh-1 with cuEq needs the load-time repair (on main since 2026-10-13); update mcpy. On an older mcpy, set `enable_cueq=False`. |
 | Constraints corrupted after rejected deletions | mcpy version | Rollback bug fixed df95920 (2026-05-20); update. |
 | torch SIGBUS on import | conda env | Wrong env; use `alchemi`, not `base`. |
 | Desorbed atoms float in vacuum and N drifts up | Cell's `is_point_exchangeable` vs where they sit | An atom outside the exchangeable region is invisible to deletion and to the acceptance N, so it accumulates. `CustomCell` drops the z upper bound on purpose so desorbed species stay deletable; for `SphericalCell`/`DomeCell`, enlarge the region or lower mu so desorption stops. |
