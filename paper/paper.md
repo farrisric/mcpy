@@ -16,6 +16,7 @@ authors:
     affiliation: "1, 2"
   - name: Emanuele Telari
     orcid: 0009-0009-3296-959X
+    corresponding: true
     affiliation: 1
   - name: Konstantin M. Neyman
     orcid: 0000-0002-5242-5567
