@@ -12,6 +12,7 @@ tags:
 authors:
   - name: Riccardo Farris
     orcid: 0000-0002-8157-6786
+    corresponding: true
     affiliation: "1, 2"
   - name: Emanuele Telari
     orcid: 0009-0009-3296-959X
