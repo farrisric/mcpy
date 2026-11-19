@@ -12,6 +12,7 @@ tags:
 authors:
   - name: Riccardo Farris
     orcid: 0000-0002-8157-6786
+    corresponding: true
     affiliation: "1, 2"
   - name: Emanuele Telari
     orcid: 0009-0009-3296-959X
@@ -201,7 +202,7 @@ so that the published workflows can be reproduced and extended by other groups.
 the small AGNESI MACE potential [@mace_foundation]. The free energy of formation $\Delta G$ (in eV) is
 shown as a function of the hydrogen chemical potential $\Delta\mu_\mathrm{H}$.
 The top axis converts $\Delta\mu_\mathrm{H}$ into $\log_{10}(p_{\mathrm{H}_2}/p_0)$ at $T = 300$ K with $p = p_0$ at $\Delta\mu_\mathrm{H} = 0$.
-This neglects the standard chemical potential of H$_2$ at 300 K ($-0.16$ eV per H) and the H$_2$ zero-point energy ($+0.14$ eV per H), so the true pressures are about 0.8 decades higher than the axis shows.
+This neglects the standard chemical potential of H$_2$ at 300 K ($-0.159$ eV per H) and the H$_2$ zero-point energy ($+0.135$ eV per H), so the true pressures are about 0.8 decades higher than the axis shows.
 The insets show some of
 the most stable Pd$_{151}$Ag$_{50}$H$_z$ structures sampled for different
 chemical-potential windows, from the bare particle at low $\mu_\mathrm{H}$ to a
@@ -211,13 +212,13 @@ single basin-hopping run; hydrogenated
 structures were then sampled by replica-exchange GCMC at hydrogen chemical
 potentials from $\Delta\mu_\mathrm{H} = -1$ to $-0.35$ eV with six temperatures
 per chemical-potential value, using H insertion, H deletion, and Pd-Ag swap moves.
-(b) Evolution of the number of inserted oxygen atoms during a replica-exchange GCMC simulation of a Pd$_{55}$ fcc nanoparticle supported on a Al$_2$O$_3$ surface. The run consisted of 12 replicas with different temperatures at a fixed $\Delta\mu_\mathrm{O} = -0.5$. The structural insets show representative configurations sampled along the trajectories of the different replicas. \label{fig:phase}](image.pdf)
+(b) Evolution of the number of inserted oxygen atoms during a replica-exchange GCMC simulation of a Pd$_{55}$ fcc nanoparticle supported on an Al$_2$O$_3$ surface. The run consisted of 12 replicas with different temperatures at a fixed $\Delta\mu_\mathrm{O} = -0.5$ eV. The structural insets show representative configurations sampled along the trajectories of the different replicas. \label{fig:phase}](image.pdf)
 
 # Acknowledgements
 
-This work was supported by the Spanish/FEDER Ministerio de Ciencia, Innovacion y Universidades [Grant Nos.
+This work was supported by the Spanish/FEDER Ministerio de Ciencia, Innovación y Universidades [Grant Nos.
 PID2021-128217NB-I00, MDM-2017-0767, CEX2021-001202-M, PID2022-140120OA-I00, and RYC2021-032281-I
-(for A.B.)] as well as by the Generalitat de Catalunya [Grant No. 2021SGR00286]. R. F. thanks the Spanish MICIUN
+(for A.B.)] as well as by the Generalitat de Catalunya [Grant No. 2021SGR00286]. R. F. thanks the Spanish MICIU
 for an FPI PhD grant (MDM-2017-0767-20-2). R. F. further acknowledges his current research group for supporting the continuation and development of this work.
 
 # AI usage disclosure
