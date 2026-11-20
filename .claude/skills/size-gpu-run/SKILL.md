@@ -39,9 +39,9 @@ Maintainers: the sweep script is `benchmark/internal/re_batched_scaling.py`
      saturated; below saturation extra replicas are almost free
      (measured 1 -> 8 replicas at 664 atoms: 1.4 -> 6.8 s/step).
    - Total = gcmc_steps x s/step. Budget >= 10^4 steps per rung for convergence.
-6. Set `exchange_interval` (default 10 GCMC steps).
+6. Keep `exchange_interval=1` (the default).
    A swap attempt reuses the current energies, so it is nearly free; do not raise the
-   interval to save time. 10 is fine; lower it only if rungs decorrelate faster than they swap.
+   interval to save time. Rounds alternate even and odd pairs.
 7. Launch per the `run-gpu` skill (env `alchemi`, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`).
 
 Done when: estimated peak < 80% VRAM, atoms per forward < 14k, and the step-time budget

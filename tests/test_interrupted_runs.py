@@ -24,7 +24,7 @@ from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.moves import DeletionMove, DisplacementMove, InsertionMove, MoveSelector
 from mcpy.moves.base_move import BaseMove
 
-from helpers import _batched_pair, _gcmc
+from helpers import _batched_pair, _gcmc, _lj_gcmc
 
 
 class _Watching:
@@ -184,9 +184,6 @@ class _OneRankComm:
     def gather(self, obj, root=0):
         return [obj]
 
-    def bcast(self, obj, root=0):
-        return obj
-
     def Abort(self, code=0):
         raise AssertionError('the run aborted')
 
@@ -306,3 +303,83 @@ def test_batched_short_energy_list_raises_and_restores(tmp_path):
     for (pos, sym), r in zip(before, pt.replicas):
         assert r.atoms.get_chemical_symbols() == sym
         np.testing.assert_array_equal(r.atoms.get_positions(), pos)
+
+
+# --------------------------------------------------------------------------
+# restart() continues a stopped run from its files
+# --------------------------------------------------------------------------
+
+def _rows(path):
+    return [int(line.split()[0]) for line in open(path) if line[:1].isdigit()]
+
+
+def test_restart_continues_a_killed_run(tmp_path):
+    """A run killed after step 10, whose last frames (step 10) and a torn
+    one never reached the trajectory: restart() goes back to the step-8
+    frame, cuts the torn frame, drops the stale outfile rows, keeps the
+    minimum and draws new random numbers."""
+    def build():
+        return _lj_gcmc(tmp_path=tmp_path, trajectory_write_interval=4,
+                        minima_file=str(tmp_path / 'min.xyz'))
+    first = build()
+    first.run(10)
+    traj = tmp_path / 'g.xyz'
+    frames = read(str(traj), ':')
+    assert [f.info['step'] for f in frames] == [0, 4, 8, 10]
+    text = traj.read_text()
+    traj.write_text(text[:text.rindex(f'{len(frames[-1])}\n')] + '3\nLattice=')
+    n_minima = len(read(str(tmp_path / 'min.xyz'), ':'))
+
+    g = build()
+    fresh = g.rng_acceptance.random.getstate()
+    assert g.restart() == 8
+    assert g.rng_acceptance.random.getstate() != fresh
+    assert g._best_score == pytest.approx(first._best_score)
+    assert len(g.atoms) == len(frames[2])
+    assert _rows(tmp_path / 'g.out') == list(range(9))
+    g.run(12)  # the total, as in the first run's script
+    assert _rows(tmp_path / 'g.out') == list(range(13))
+    assert open(tmp_path / 'g.out').read().count('Grand Canonical') == 1
+    assert [f.info['step'] for f in read(str(traj), ':')] == [0, 4, 8, 12]
+    assert len(read(str(tmp_path / 'min.xyz'), ':')) >= n_minima
+
+
+def test_batched_restart_runs_to_the_total_and_continues_the_log(tmp_path):
+    _batched_pair(tmp_path, gcmc_steps=6).run()
+    pt = _batched_pair(tmp_path, gcmc_steps=10)
+    assert pt.restart() == 6
+    pt.run()
+    assert [r._step for r in pt.replicas] == [10, 10]
+    log = (tmp_path / 're.log').read_text()
+    assert log.count('Batched Replica Exchange') == 1
+    steps = [rex.re_row_step(line) for line in log.splitlines()]
+    steps = [s for s in steps if s is not None]
+    # Rows of the first run end at step 5; the restart goes on from 7.
+    assert steps == sorted(steps) and steps[-1] == 9 and 7 in steps
+
+
+def test_restarted_run_matches_the_straight_run_up_to_the_stop(tmp_path):
+    """Same seeds: a straight 120-step run, and the same run stopped at step
+    60 and continued with restart(). Steps 0-60 are bit-identical. The
+    restart recomputes the step-60 energy to 1e-5 (the trajectory stores
+    positions to 1e-8 A, so not to the last bit). The continuation draws
+    new random numbers: it does not replay the first run."""
+    def build(tag):
+        return _lj_gcmc(mu=-4.0, traj_file=str(tmp_path / f'{tag}.xyz'),
+                        outfile=str(tmp_path / f'{tag}.out'))
+
+    def rows(tag):
+        return [line.split()[:3] for line in open(tmp_path / f'{tag}.out')
+                if line[:1].isdigit()]
+
+    build('straight').run(120)
+    first = build('stopped')
+    first.run(60)
+    g = build('stopped')
+    g.restart()
+    assert g.E_old == pytest.approx(first.E_old, abs=1e-5)
+    g.run(120)
+    straight, restarted = rows('straight'), rows('stopped')
+    assert [int(r[0]) for r in restarted] == list(range(121))
+    assert restarted[:61] == straight[:61]
+    assert restarted[61:] != straight[61:]

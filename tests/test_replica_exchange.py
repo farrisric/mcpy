@@ -24,10 +24,9 @@ from helpers import _batched_pair, _BatchLJ, _frames, _lj_gcmc, _lj_replica
 class _RecordingComm:
     """Stands in for MPI.COMM_WORLD on one simulated rank."""
 
-    def __init__(self, rank=0, size=1, partner_state=None, bcast_value=0.0):
+    def __init__(self, rank=0, size=1, partner_state=None):
         self.rank, self.size = rank, size
         self.partner_state = partner_state
-        self.bcast_value = bcast_value
         self.sent, self.calls = [], []
         self.aborted = None
         self.sendrecv_error = None
@@ -40,10 +39,6 @@ class _RecordingComm:
 
     def Get_size(self):
         return self.size
-
-    def bcast(self, obj, root=0):
-        self.calls.append('bcast')
-        return self.bcast_value
 
     def sendrecv(self, sendobj, dest, source):
         self.calls.append('sendrecv')
@@ -94,13 +89,11 @@ def test_mpi_pairs_draw_independent_uniforms(monkeypatch):
 
 def test_mpi_exchange_attempt_counted_only_with_partner(monkeypatch):
     g = _stub_gcmc()
-    comm = _RecordingComm(rank=0, size=2, partner_state=_stub_gcmc().get_state(),
-                          bcast_value=0.9)  # odd pairing: rank 0 sits out
+    comm = _RecordingComm(rank=0, size=2, partner_state=_stub_gcmc().get_state())
     re = _mpi_re(monkeypatch, comm, g)
-    re.do_exchange()
-    assert g.exchange_attempts == 0
-    comm.bcast_value = 0.0  # even pairing: (0, 1)
-    re.do_exchange()
+    re.do_exchange()  # even round: (0, 1)
+    assert g.exchange_attempts == 1
+    re.do_exchange()  # odd round: rank 0 sits out
     assert g.exchange_attempts == 1
 
 
@@ -189,7 +182,7 @@ def test_dead_interior_pair_is_reported(caplog):
     pt.pair_successes = [0] * 3
     pt._mid_attempts = [0] * 3
     pt._mid_successes = [0] * 3
-    pt.rng = SimpleNamespace(get_uniform=iter([0.1, 0.9] * 50).__next__)
+    pt._exchange_round = 0
     pt._accept_swap = lambda i, j: (i, j) != (1, 2)
     pt._swap_states = lambda i, j: None
     for _ in range(100):
@@ -256,9 +249,6 @@ class _FakeComm:
                 raise RuntimeError('link down')
             self.gathers_left -= 1
         return [obj] * self.size
-
-    def bcast(self, obj, root=0):
-        return 0.0  # even pairing: (0, 1)
 
     def sendrecv(self, sendobj, dest, source):
         return self.partner_state
@@ -422,3 +412,15 @@ def test_mpi_sendrecv_error_propagates(monkeypatch):
     re = _mpi_re(monkeypatch, comm, _stub_gcmc())
     with pytest.raises(RuntimeError, match='link down'):
         re.do_exchange()
+
+
+def test_batched_swap_rounds_alternate_even_and_odd_pairs():
+    pt = BatchedReplicaExchange.__new__(BatchedReplicaExchange)
+    pt.n_replicas, pt._exchange_round = 4, 0
+    pt.exchange_attempts, pt.exchange_successes = [0] * 4, [0] * 4
+    pt.pair_attempts, pt.pair_successes = [0] * 3, [0] * 3
+    pt._accept_swap = lambda i, j: False
+    pt._attempt_exchanges()
+    assert pt.pair_attempts == [1, 0, 1]
+    pt._attempt_exchanges()
+    assert pt.pair_attempts == [1, 1, 1]

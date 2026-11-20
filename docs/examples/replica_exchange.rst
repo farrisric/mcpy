@@ -37,7 +37,6 @@ Several processes: ``ReplicaExchange`` with MPI
 
 The MPI driver needs ``mpi4py`` (``conda install mpi4py``) and exactly one
 MPI rank per replica.
-It cannot exchange molecular species; use the batched driver for those.
 The factory has the same contract as above: it takes ``T=`` (or ``mu=``)
 and ``rank=``, and it must give each rank its own output file names.
 The sketch below reuses the LJ box of ``examples/00_hello_gcmc.py`` on a
@@ -77,7 +76,7 @@ four-rung temperature ladder.
 
    configure_logging()   # without a handler, a rank's error is not shown
    ReplicaExchange(gcmc_factory, temperatures=TEMPERATURES, gcmc_steps=2000,
-                   exchange_interval=50, seed=7).run()
+                   seed=7).run()
 
 Every seed in the factory adds ``rank``, so each rank gets its own random
 streams.

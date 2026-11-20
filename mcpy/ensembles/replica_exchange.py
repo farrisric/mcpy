@@ -1,6 +1,9 @@
-from collections import Counter
-import numpy as np
 import logging
+import os
+import random
+from collections import Counter
+
+import ase.io
 
 try:
     from mpi4py import MPI
@@ -8,7 +11,9 @@ except ImportError:
     MPI = None
 
 from ..utils import RandomNumberGenerator
-from .base_ensemble import sigterm_as_exit, write_global_minimum
+from .base_ensemble import (drop_rows_after, frame_energy, random_streams, reseed,
+                            sigterm_as_exit, write_global_minimum)
+from .swap import swap_probability
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,17 @@ def re_header(label='Rank', width=5):
 
 def re_row(index, *values, width=5):
     return f'{index:<{width}} ' + _RE_TAIL_ROW.format(*values)
+
+
+def re_row_step(line):
+    """The step of a replica-exchange log row (``<index> <step> ...``), or
+    None for a banner or header line."""
+    tokens = line.split()
+    try:
+        int(tokens[0])
+        return int(tokens[1])
+    except (IndexError, ValueError):
+        return None
 
 
 def re_banner(gcmc_steps, exchange_interval, atom_count, temperatures, mus,
@@ -66,21 +82,31 @@ def mus_differ(mus):
 
 def rng_fingerprint(ensemble):
     """The state of every random stream of one replica, keyed by its role
-    (ensemble seed, move selector, each move, each cell). Picklable."""
+    (ensemble seed, acceptance, move selector, each move, each cell).
+    Picklable."""
     fp = {'random_seed': getattr(ensemble, '_random_seed', None)}
-    selector = getattr(ensemble, 'move_selector', None)
-    if selector is not None:
-        fp['move selector'] = selector.rng.random.getstate()
-        for k, move in enumerate(selector.move_list):
-            fp[f'move {k}'] = move.rng.random.getstate()
-            np_rng = getattr(move, '_np_rng', None)
-            if np_rng is not None:
-                fp[f'move {k} numpy'] = repr(np_rng.bit_generator.state)
-    for k, cell in enumerate(getattr(ensemble, 'cells', None) or []):
-        rng = getattr(cell, '_rng', None)
-        if rng is not None:
-            fp[f'cell {k}'] = repr(rng.bit_generator.state)
+    for role, rng in random_streams(ensemble):
+        fp[role] = (rng.getstate() if isinstance(rng, random.Random)
+                    else repr(rng.bit_generator.state))
     return fp
+
+
+def restore_best(replica, rank, path) -> None:
+    """Seed the running minimum of ``replica`` from the frames of an earlier
+    run's global-minimum file that carry its ``rank``. Without this, a
+    replica that has no ``minima_file`` forgets the minimum it found before
+    a restart, and the next write of the global-minimum file loses it."""
+    if path is None or not os.path.exists(path) or os.path.getsize(path) == 0:
+        return
+    for frame in ase.io.read(path, ':', format='extxyz'):
+        if int(frame.info.get('rank', -1)) != rank:
+            continue
+        energy = frame_energy(frame)
+        frame.info, frame.calc = {}, None
+        score = replica._minimum_score(frame, energy)
+        if score < replica._best_score:
+            replica._best_score, replica._best_energy = score, energy
+            replica._best_atoms = frame
 
 
 def check_independent_seeds(fingerprints):
@@ -106,7 +132,7 @@ class ReplicaExchange:
                  temperatures=None,
                  mus=None,
                  gcmc_steps=100,
-                 exchange_interval=10,
+                 exchange_interval=1,
                  outfile='replica_exchange.log',
                  write_out_interval=20,
                  seed=31,
@@ -120,12 +146,18 @@ class ReplicaExchange:
         share a random stream raise ValueError on every rank.
 
         An exception in the factory on any rank aborts the whole job.
+
+        Swap rounds alternate the even pairs (0,1), (2,3), ... and the odd
+        pairs (1,2), (3,4), ... A swap costs one message and no energy call,
+        so the default ``exchange_interval=1`` tries one each step. Molecular
+        species swap as atomic ones do: the rule counts each species the way
+        the replica's own acceptance counts it.
         """
         if temperatures is None and mus is None:
             raise ValueError('Provide either temperatures or mus (one per rank).')
         if temperatures is not None and mus is not None:
             # The factory takes T or mu, not both. The swap rule itself
-            # (_exchange_prob) is right for any mix of per-rank T and mu.
+            # (ensembles.swap) is right for any mix of per-rank T and mu.
             raise ValueError('Pass temperatures OR mus, not both.')
 
         if MPI is None:
@@ -158,27 +190,15 @@ class ReplicaExchange:
             raise
         check_independent_seeds(self.comm.allgather(rng_fingerprint(self.gcmc)))
 
-        # getattr chain: CanonicalEnsemble has no ``units`` attribute (it
-        # stores ``_beta`` directly) and is a supported temperature-ladder
-        # ensemble here, so a units-less ensemble must pass the guard.
-        if getattr(getattr(self.gcmc, 'units', None), 'molecules', None):
-            raise NotImplementedError(
-                'ReplicaExchange (MPI) does not support molecular species: '
-                'its per-species swap bookkeeping (_exchange_prob) counts '
-                'atoms by symbol via '
-                '`atoms.symbols.count(specie)`, which is always 0 for a '
-                "molecular name such as 'H2O'. Use BatchedReplicaExchange "
-                'instead.'
-            )
-
         self.gcmc_steps = gcmc_steps
         self.exchange_interval = exchange_interval
 
         self._re_step = 0
+        self._start_step = 0
+        self._exchange_round = 0
 
         # Per-rank stream: the lower rank of each pair draws the swap's u, so
-        # identical seeds gave every pair in a round the same u. Rank 0's
-        # stream (seed + 0) is the one broadcast for the pairing, unchanged.
+        # identical seeds would give every pair in a round the same u.
         self.rng = RandomNumberGenerator(seed=seed + self.rank)
 
         self._outfile = outfile
@@ -187,73 +207,19 @@ class ReplicaExchange:
         self.write_out_interval = write_out_interval
         self._global_minimum_file = global_minimum_file
 
-    def get_partner_rank(self, global_random):
-        # Two alternating, symmetric pairings so that A->B implies B->A (else
-        # one rank blocks forever on sendrecv). Any rank whose partner falls
-        # outside [0, size) sits the round out - this covers both ends and any
-        # odd-sized ensemble.
-        if global_random > 0.5:
-            # Odd pairing: (1,2), (3,4), ...
+    def get_partner_rank(self, odd):
+        """This rank's partner in an even round ((0,1), (2,3), ...) or an odd
+        round ((1,2), (3,4), ...), or None when it sits the round out. The
+        pairing is symmetric, so A->B implies B->A (else one rank blocks
+        forever on sendrecv). A rank whose partner falls outside [0, size)
+        sits out: this covers both ends and any odd-sized ensemble."""
+        if odd:
             partner = self.rank + 1 if self.rank % 2 else self.rank - 1
         else:
-            # Even pairing: (0,1), (2,3), ...
             partner = self.rank - 1 if self.rank % 2 else self.rank + 1
         if partner < 0 or partner >= self.size:
             return None
         return partner
-
-    def _exchange_prob(self, state1, state2):
-        """Swap acceptance for configuration X (``state1``, slot 1) and Y
-        (``state2``, slot 2), on a temperature or a mu ladder.
-
-        Slot k weights a configuration Z by
-        exp(-beta_k Phi_Z^(k)) prod_s Lambda_s(T_k)^(-3 N_Z,s), with
-        Phi_Z^(k) = E_Z - sum_s mu_s^(k) N_Z,s scored with slot k's own mu.
-        The swap changes the joint weight by
-
-            ln(w'/w) = beta_1 Phi_X^(1) + beta_2 Phi_Y^(2)
-                       - beta_1 Phi_Y^(1) - beta_2 Phi_X^(2)
-                       + 3 sum_s (N_X,s - N_Y,s) ln(Lambda_1,s / Lambda_2,s)
-                     = (beta_2 - beta_1)(E_Y - E_X)
-                       + sum_s (beta_2 mu_2,s - beta_1 mu_1,s)(N_X,s - N_Y,s)
-                       + the same de Broglie term.
-
-        The code uses the second form. Only count differences enter, so
-        substrate atoms cancel, and on a mu ladder (beta_1 == beta_2) the
-        energies drop out exactly. With a shared mu the rule is
-        (beta_2 - beta_1)(Phi_Y - Phi_X) plus the de Broglie term; with a
-        shared T it is beta sum_s (mu_1,s - mu_2,s)(N_Y,s - N_X,s). The cross
-        terms keep it exact when the factory sets a T-dependent mu per rank.
-        A state without mu (CanonicalEnsemble) scores bare E. Same rule as
-        ``BatchedReplicaExchange._accept_swap``.
-        """
-        beta1, beta2 = state1['beta'], state2['beta']
-        mu1, mu2 = state1.get('mu') or {}, state2.get('mu') or {}
-        delta = (beta2 - beta1) * (state2['energy'] - state1['energy'])
-        for specie in {**mu1, **mu2}:
-            dn = (state1['atoms'].symbols.count(specie)
-                  - state2['atoms'].symbols.count(specie))
-            delta += (beta2 * mu2.get(specie, 0.0)
-                      - beta1 * mu1.get(specie, 0.0)) * dn
-            # Lambda depends on T only, so the de Broglie term is zero on a
-            # mu ladder (and in LJ units, where Lambda = 1).
-            if dn and beta1 != beta2 and specie in mu1:
-                delta += 3.0 * dn * np.log(state1['lambda_dbs'][specie]
-                                           / state2['lambda_dbs'][specie])
-        if not np.isfinite(delta):
-            # min(1, exp(nan)) is 1: a diverged energy would always swap.
-            self.logger.warning(
-                'non-finite swap exponent (delta=%r); rejecting. A NaN/inf '
-                'replica energy usually means a diverged relaxation.', delta)
-            return 0.0
-        # exp() overflows to inf for a large positive delta; short-circuit.
-        exchange_prob = 1.0 if delta >= 0.0 else float(np.exp(delta))
-        self.logger.debug(
-            'beta1: %.3f, beta2: %.3f, E1: %.3f, E2: %.3f, mu1: %s, mu2: %s, '
-            'delta: %.3f, p: %.3f, Rank: %d',
-            beta1, beta2, state1['energy'], state2['energy'], mu1, mu2, delta,
-            exchange_prob, self.rank)
-        return exchange_prob
 
     def do_exchange(self):
         """Attempt an exchange with a neighboring replica. Counts the attempt
@@ -262,16 +228,20 @@ class ReplicaExchange:
         Communication errors propagate: swallowing one after a half-done
         exchange leaves the partner blocked forever. ``run`` aborts the job.
         """
-        global_random = self.comm.bcast(self.rng.get_uniform(), root=0)
-        partner_rank = self.get_partner_rank(global_random)
+        # Deterministic even/odd alternation: a replica then walks the
+        # ladder in long runs, where a random pick of the pairing makes it
+        # diffuse. Every rank counts rounds the same way, so no broadcast.
+        odd = self._exchange_round % 2 == 1
+        self._exchange_round += 1
+        partner_rank = self.get_partner_rank(odd)
 
         if partner_rank is None:
-            self.logger.debug('No valid partner for rank %d at step %d (Random: %.3f)',
-                              self.rank, self._re_step, global_random)
+            self.logger.debug('No partner for rank %d at step %d (%s round)',
+                              self.rank, self._re_step, 'odd' if odd else 'even')
             return False
 
-        self.logger.debug('Step %d: Attempting exchange with partner rank %d. '
-                          'Random: %.3f', self._re_step, partner_rank, global_random)
+        self.logger.debug('Step %d: attempting exchange with rank %d',
+                          self._re_step, partner_rank)
         self.gcmc.exchange_attempts += 1
 
         rank_state = self.gcmc.get_state()
@@ -286,12 +256,16 @@ class ReplicaExchange:
         # (lower rank first), which makes the probability bit-identical, and
         # they share one uniform: the lower rank draws it and sends it across.
         # Per-rank RNGs drift out of sync, so independent draws would disagree.
+        label = f'{min(self.rank, partner_rank)}<->{max(self.rank, partner_rank)}'
         if self.rank < partner_rank:
-            exchange_prob = self._exchange_prob(rank_state, partner_state)
+            # get_state() carries the swap_view() keys of each replica.
+            exchange_prob = swap_probability(rank_state, partner_state,
+                                             self.logger, label)
             u = self.rng.get_uniform()
             self.comm.send(u, dest=partner_rank)
         else:
-            exchange_prob = self._exchange_prob(partner_state, rank_state)
+            exchange_prob = swap_probability(partner_state, rank_state,
+                                             self.logger, label)
             u = self.comm.recv(source=partner_rank)
 
         if u < exchange_prob:
@@ -308,6 +282,36 @@ class ReplicaExchange:
         else:
             self.logger.debug('Rejected exchange with rank %d', partner_rank)
             return False
+
+    def restart(self) -> int:
+        """Continue a stopped run from its files. Returns the step it
+        continues from; ``run()`` then goes on to ``gcmc_steps`` in total.
+
+        Build the driver with the same factory and file names as the first
+        run, then call ``restart()`` and ``run()``. Each rank restarts its
+        replica (``GrandCanonicalEnsemble.restart``) and continues from the
+        lowest step of all ranks. Rank 0 continues the log and removes its
+        rows past that step. The running minima continue from the
+        global-minimum file. The swap stream is reseeded, and the swap
+        tallies start again from zero.
+
+        A failure on one rank (a missing trajectory) aborts the whole job:
+        the other ranks wait in a collective.
+        """
+        try:
+            step = self.gcmc.restart()
+        except BaseException:
+            self.logger.exception('rank %d: restart failed; aborting all ranks',
+                                  self.rank)
+            self.comm.Abort(1)
+            raise
+        self._start_step = min(self.comm.allgather(step))
+        restore_best(self.gcmc, self.rank, self._global_minimum_file)
+        reseed(self.rng.random, self._start_step)
+        if self.rank == 0:
+            self._log_started = True
+            drop_rows_after(self._outfile, self._start_step, re_row_step)
+        return self._start_step
 
     @sigterm_as_exit()
     def run(self):
@@ -326,7 +330,7 @@ class ReplicaExchange:
                 self.initialize_outfile()
             self.initialize_run()
 
-            for step in range(self.gcmc_steps):
+            for step in range(self._start_step, self.gcmc_steps):
                 self.gcmc._run()
 
                 if step > 0 and step % self.exchange_interval == 0:

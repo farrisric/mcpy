@@ -35,7 +35,7 @@ from mcpy.utils.logging import configure as configure_logging
 # A temperature ladder OR a mu ladder, never both. Neighbouring rungs must
 # overlap in energy or no swap is ever accepted.
 TEMPERATURES = [300, 400, 500, 600, 700, 800]
-EXCHANGE_INTERVAL = 10   # GCMC steps between swap attempts
+EXCHANGE_INTERVAL = 1    # GCMC steps between swap attempts (a swap is free)
 GCMC_STEPS = 200         # GCMC steps per replica, in total
 
 # --- potential -------------------------------------------------------------

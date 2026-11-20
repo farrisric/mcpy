@@ -194,18 +194,27 @@ class GrandCanonicalEnsemble(BaseEnsemble):
                 'Set molecule_id to -1 on the host atoms before you add molecules '
                 '(ASE fills the array with 0 for atoms that lack it).')
 
+    def swap_view(self) -> Dict[str, Any]:
+        """What the replica-exchange swap rule reads (``ensembles.swap``):
+        this slot's beta, mu and Lambda, and the energy and per-species
+        particle counts of the configuration it holds. No atoms copy."""
+        return {
+            'energy': self.E_old,
+            'mu': self._mu,
+            'beta': self.units.beta,
+            'lambda_dbs': self.units.lambda_dbs,
+            'counts': {s: self._species_count(self.atoms, s) for s in self._mu},
+        }
+
     def get_state(self) -> Dict[str, Any]:
         # A copy: the dict is pickled across MPI ranks (the live atoms carry
         # the calculator, which may not pickle or may ship a whole model) and
         # must not alias the configuration the sampler keeps mutating.
         return {
+            **self.swap_view(),
             'atoms': self.atoms.copy(),
             'n_atoms': self.n_atoms,
-            'energy': self.E_old,
-            'mu': self._mu,
             'temperature': self._temperature,
-            'beta': self.units.beta,
-            'lambda_dbs': self.units.lambda_dbs,
             'step': self._step,
             'exchange_attempts': self.exchange_attempts,
             'exchange_successes': self.exchange_successes,
@@ -232,6 +241,23 @@ class GrandCanonicalEnsemble(BaseEnsemble):
         # accepted moves).
         self.calculate_cells_volume(self.atoms)
         self._record_minimum(self.atoms, self.E_old)
+
+    def _load_configuration(self, atoms: Atoms) -> None:
+        """Make ``atoms`` the current configuration (``restart``): check its
+        molecules, compute its energy and refresh the free volumes."""
+        self.atoms = atoms
+        self._check_molecule_ids()
+        self.E_old = self.compute_energy(self.atoms)
+        self.n_atoms = len(self.atoms)
+        self.calculate_cells_volume(self.atoms)
+
+    @staticmethod
+    def _row_step(line: str) -> Optional[int]:
+        """The step of an outfile row (its first column), or None."""
+        try:
+            return int(line.split()[0])
+        except (IndexError, ValueError):
+            return None
 
     def get_outfile_header(self) -> str:
         return (

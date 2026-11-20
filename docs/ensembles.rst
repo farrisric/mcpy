@@ -142,9 +142,9 @@ the configured cell -- see :ref:`free-volume`.
 Outputs
 ~~~~~~~
 
-- The current configuration is appended to `traj_file` (extended XYZ, with `energy=` and
-  `Lattice=` on the comment line) every `trajectory_write_interval` steps, whether or not
-  the last trial was accepted.
+- The current configuration is appended to `traj_file` (extended XYZ, with `energy=`,
+  `step=` and `Lattice=` on the comment line) every `trajectory_write_interval` steps,
+  whether or not the last trial was accepted.
 - The header of `outfile` lists the run parameters, including the mcpy version (plus the
   ``git describe`` output when mcpy runs from a git checkout).
 - A human-readable log is written to `outfile` every `outfile_write_interval` steps,
@@ -356,8 +356,10 @@ temperatures *or* different chemical potentials, one per MPI rank, and periodica
 attempting to swap their configurations. It requires `mpi4py` and a user-supplied factory
 that constructs the rank-local `GrandCanonicalEnsemble`.
 
-At each exchange attempt, rank 0 draws one random number.
-It selects the even pairing (0-1, 2-3, ...) or the odd pairing (1-2, 3-4, ...), so every replica mixes with both neighbours.
+Exchange rounds alternate the even pairing (0-1, 2-3, ...) and the odd pairing (1-2, 3-4, ...).
+A replica then walks the ladder in long runs, where a random choice of the pairing makes it diffuse.
+On a 14-rung ideal-gas test ladder, alternation at every step gave 240 end-to-end trips in 4000 steps; a random pairing every 10 steps gave 15.
+A swap reuses the current energies, so the default ``exchange_interval=1`` tries one each step.
 Each pair accepts or rejects its swap with the rule in :ref:`replica-exchange-swap`.
 After an accepted swap, the two ranks exchange configurations and energies.
 Each rank keeps its own temperature and chemical potentials.
@@ -423,6 +425,9 @@ The same rule applies to every ladder:
 
 A non-finite :math:`\Delta`, for example from a NaN replica energy, rejects the swap and logs a warning.
 
+:math:`N_{Z,s}` counts particles as the replica's own acceptance counts them: whole molecules for a molecular species, free atoms otherwise.
+Both drivers call the same function (``mcpy.ensembles.swap``), so both support molecular species.
+
 
 `BatchedReplicaExchange`
 ------------------------
@@ -447,6 +452,40 @@ Swaps use the same rule as :class:`ReplicaExchange` (see :ref:`replica-exchange-
 Output layout mirrors :class:`ReplicaExchange`: per-replica ``outfile``/``traj_file``/
 ``minima_file`` (typically tagged with ``rank``) plus a single ``global_minimum_file``
 rewritten at every write interval (see :ref:`running-minima`).
+
+
+.. _continue-a-run:
+
+Continuing a stopped run
+------------------------
+
+A run that stopped (a wall-time limit, a crash, ``kill``) continues from its own files with ``restart()``.
+Run the same script with the same file names and seeds, and call ``restart()`` before ``run()``:
+
+.. code-block:: python
+
+   gcmc = build()          # the same code as the first run
+   gcmc.restart()
+   gcmc.run(STEPS)         # runs only the steps that the first run did not do
+
+``restart()`` does these things:
+
+- It loads the last complete frame of ``traj_file`` and its ``step``. A torn last frame is cut off the file.
+- It computes the energy of that frame again.
+- It removes the ``outfile`` rows past that step, because the run does those steps again. New rows and frames are appended.
+- It continues the running minimum from the last frame of ``minima_file``.
+- It reseeds every random stream from its seed and the step, so the continuation does not replay the random numbers of the first run.
+
+The cells and moves come from the script, not from the last frame.
+A cell built from the last frame can have a different size, which changes the sampled region.
+
+After ``restart()``, the step count of ``run(steps)`` and of ``gcmc_steps`` is the total from step 0 of the first run.
+``ReplicaExchange.restart()`` and ``BatchedReplicaExchange.restart()`` restart every replica.
+They continue from the lowest replica step, continue the replica-exchange log, and keep the global minimum.
+The swap acceptance tallies start again from zero.
+
+A run can lose at most ``trajectory_write_interval`` steps, because it continues from the last frame.
+SIGTERM and Ctrl-C write a final frame, so they lose nothing.
 
 
 Choosing the right ensemble
