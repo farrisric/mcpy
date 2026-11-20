@@ -5,7 +5,8 @@ description: Use when sizing a GPU GCMC or batched replica-exchange run - choosi
 
 # Size a GPU run (atoms, replicas, memory, time)
 
-Reference card: RTX 5090, 32 GB, nvalchemi 0.2.0, fp32, cuEq on, compile off.
+Reference card: RTX 5090, 32 GB, fp32, cuEq on, compile off. Measured on nvalchemi 0.2.0
+(MH-1 rows on 0.3.0); the project now requires nvalchemi 0.3.x.
 On other hardware or after an nvalchemi upgrade, re-measure a small (atoms x replicas)
 sweep and trust the measured peaks over this card.
 Maintainers: the sweep script is `benchmark/internal/re_batched_scaling.py`
@@ -32,7 +33,8 @@ Maintainers: the sweep script is `benchmark/internal/re_batched_scaling.py`
    A heavy model fills the GPU with one replica: MH-1 with cuEq, 8 x 805 atoms, gains
    1.1-1.2x from `chunk_size` 1 -> 2 and nothing beyond.
 5. Estimate wall time:
-   - Single GCMC, ~3.7k-atom supported NP: ~3.7 s/step (2 moves), ~1.8 s per relaxation.
+   - Single GCMC, ~3.7k-atom supported NP: ~3.7 s/step (2 moves), ~1.8 s per relaxation
+     (measured with FIRE; the L-BFGS default relaxes faster, so treat this as an upper bound).
    - Batched RE: s/step grows roughly linearly with total batch atoms once the GPU is
      saturated; below saturation extra replicas are almost free
      (measured 1 -> 8 replicas at 664 atoms: 1.4 -> 6.8 s/step).
