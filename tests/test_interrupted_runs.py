@@ -356,3 +356,30 @@ def test_batched_restart_runs_to_the_total_and_continues_the_log(tmp_path):
     steps = [s for s in steps if s is not None]
     # Rows of the first run end at step 5; the restart goes on from 7.
     assert steps == sorted(steps) and steps[-1] == 9 and 7 in steps
+
+
+def test_restarted_run_matches_the_straight_run_up_to_the_stop(tmp_path):
+    """Same seeds: a straight 120-step run, and the same run stopped at step
+    60 and continued with restart(). Steps 0-60 are bit-identical. The
+    restart recomputes the step-60 energy to 1e-5 (the trajectory stores
+    positions to 1e-8 A, so not to the last bit). The continuation draws
+    new random numbers: it does not replay the first run."""
+    def build(tag):
+        return _lj_gcmc(mu=-4.0, traj_file=str(tmp_path / f'{tag}.xyz'),
+                        outfile=str(tmp_path / f'{tag}.out'))
+
+    def rows(tag):
+        return [line.split()[:3] for line in open(tmp_path / f'{tag}.out')
+                if line[:1].isdigit()]
+
+    build('straight').run(120)
+    first = build('stopped')
+    first.run(60)
+    g = build('stopped')
+    g.restart()
+    assert g.E_old == pytest.approx(first.E_old, abs=1e-5)
+    g.run(120)
+    straight, restarted = rows('straight'), rows('stopped')
+    assert [int(r[0]) for r in restarted] == list(range(121))
+    assert restarted[:61] == straight[:61]
+    assert restarted[61:] != straight[61:]
