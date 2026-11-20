@@ -10,7 +10,8 @@ The full method lives in `docs/replica_exchange_ladder_spacing.rst`. Read it bef
 ## Steps
 
 1. Pick the class:
-   one GPU, or molecular species, means `BatchedReplicaExchange`; one MPI rank per replica means `ReplicaExchange` (atoms only, no molecules).
+   one GPU means `BatchedReplicaExchange`; one MPI rank per replica means `ReplicaExchange`.
+   Both support molecular species.
 2. Space a mu ladder from a measured isotherm with `dmu = 1/sqrt(beta * dN/dmu)` (the doc has `acceptance_equalized_mu_ladder`).
    Uniform spacing fails: the swap exponent is `beta * dmu * dN`, and dN grows with coverage, so the high-coverage pairs stop swapping.
    Example: CO on Cu375Pd30 at 400 K over -1.8..-1.0 eV needed 29 rungs (0.064 eV at the bare end, 0.020 eV at high coverage), not 5.

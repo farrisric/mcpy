@@ -365,9 +365,7 @@ molecule-aware: they can drag a member atom individually, which is
 thermodynamically valid with a relaxing calculator but departs from the
 rigid-molecule picture.
 
-The MPI :class:`mcpy.ensembles.ReplicaExchange` does not support molecular
-species either: its per-species swap bookkeeping counts atoms by symbol
-(``atoms.symbols.count(specie)``), which is always 0 for a molecular name, so
-its constructor raises ``NotImplementedError`` when the wrapped GCMC ensemble
-has molecular species configured; :class:`mcpy.ensembles.BatchedReplicaExchange`
-is the supported replica-exchange path for molecular GCMC.
+Both replica-exchange drivers support molecular species. Their shared swap
+rule (``mcpy.ensembles.swap``) counts each species the way the replica's own
+acceptance counts it: whole molecules for a molecular species, free atoms
+otherwise.

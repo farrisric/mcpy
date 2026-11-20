@@ -7,6 +7,7 @@ torch/mace/mpi4py-free.
 
 Run with: python -m pytest tests/test_molecule_moves.py -v
 """
+import logging
 import math
 
 import numpy as np
@@ -16,8 +17,8 @@ from ase.build import molecule as build_molecule
 from ase.constraints import FixAtoms
 
 from mcpy.cell import Cell, CustomCell, SphericalCell
-from mcpy.ensembles.batched_replica_exchange import BatchedReplicaExchange
 from mcpy.ensembles.grand_canonical_ensemble import GrandCanonicalEnsemble
+from mcpy.ensembles.swap import swap_probability
 from mcpy.moves import (DeletionMove, InsertionMove, MoleculeDeletionMove, MoleculeDisplacementMove,
                         MoleculeInsertionMove, MoveSelector, PermutationMove)
 from mcpy.moves.base_move import PROPOSAL_REJECTED
@@ -183,25 +184,34 @@ def test_gcmc_rejected_molecule_move_rolls_back():
     np.testing.assert_array_equal(g.atoms.arrays['molecule_id'], ids_before)
 
 
-def test_replica_exchange_rejects_molecular_species():
-    """MPI ReplicaExchange's per-species swap bookkeeping counts atoms by
-    symbol (docs/gcmc_acceptance_convention.rst), which is always 0 for a
-    molecular name; the constructor must refuse rather than silently drop
-    the mu*N correction (or accept-always on a mu-ladder)."""
-    pytest.importorskip('mpi4py')
-    from mcpy.ensembles.replica_exchange import ReplicaExchange
+def test_mpi_replica_exchange_swaps_molecular_species():
+    """The MPI driver uses the shared swap rule, which counts molecules. On a
+    mu ladder with mu_H2O = 1 and 0 (beta = 1), swapping one H2O against
+    none gives p = exp(-1). Counting by symbol would see 0 H2O on both sides
+    and give p = 1."""
+    from types import SimpleNamespace
 
-    class _FakeUnits:
-        molecules = {'H2O': object()}
+    from mcpy.ensembles import replica_exchange as rex
 
-    class _FakeGCMC:
-        units = _FakeUnits()
+    def replica(atoms, mu):
+        return _mol_gcmc(atoms, MoveSelector([1], [_NoMove()]), _StubCalc(), mu_h2o=mu)
 
-    def factory(mu=None, rank=None):
-        return _FakeGCMC()
-
-    with pytest.raises(NotImplementedError, match='molecular species'):
-        ReplicaExchange(factory, mus=[{'H2O': 1.0}])
+    gi, gj = replica(_water_box(), 1.0), replica(_box_atoms(), 0.0)
+    re = object.__new__(rex.ReplicaExchange)
+    re.logger, re.rank, re.size = logging.getLogger('test'), 0, 2
+    re._re_step, re._exchange_round, re.gcmc = 0, 0, gi
+    re.rng = SimpleNamespace(get_uniform=lambda: 0.3)  # < exp(-1) = 0.37
+    sent = []
+    re.comm = SimpleNamespace(
+        sendrecv=lambda sendobj, dest, source: gj.get_state(),
+        send=lambda obj, dest: sent.append(obj))
+    with pytest.MonkeyPatch.context() as mp:
+        seen = []
+        mp.setattr(rex, 'swap_probability',
+                   lambda *a: seen.append(swap_probability(*a)) or seen[-1])
+        assert re.do_exchange()
+    assert seen == [pytest.approx(math.exp(-1.0))]
+    assert gi.swap_view()['counts'] == {'H2O': 0}  # it now holds gj's config
 
 
 def test_replica_exchange_accepts_units_less_ensemble():
@@ -221,17 +231,16 @@ def test_replica_exchange_accepts_units_less_ensemble():
     assert isinstance(re.gcmc, _FakeCanonical)
 
 
-def test_batched_re_grand_potential_counts_molecules():
-    """BatchedReplicaExchange._grand_potential delegates to _minimum_score,
-    which counts whole molecules via find_molecules; Counter(get_chemical_
-    symbols()) would count 'H2O' 0 times and silently drop the mu*N term."""
+def test_swap_view_counts_molecules():
+    """The swap rule of both replica-exchange drivers reads the counts of
+    swap_view, which counts whole molecules via find_molecules; counting by
+    symbol would give 'H2O' 0 times and silently drop the mu*N term."""
     atoms = _water_box()  # one H2O, one O2, one lone H
     ms = MoveSelector(
         [1], [MoleculeDeletionMove(Cell(atoms), _water_template(), 'H2O', seed=1)],
         seed=2)
     g = _mol_gcmc(atoms, ms, _StubCalc(), mu_h2o=2.0)
-    expected = g.E_old - 2.0 * 1  # one H2O molecule, not zero
-    assert BatchedReplicaExchange._grand_potential(g) == pytest.approx(expected)
+    assert g.swap_view()['counts'] == {'H2O': 1}  # one H2O molecule, not zero
 
 
 def test_write_xyz_molecule_id_roundtrip(tmp_path):

@@ -47,7 +47,7 @@ from mcpy.utils.logging import configure as configure_logging
 U_SHE_LADDER = [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00]
 PH = 0.0
 TEMPERATURE = 300.0
-EXCHANGE_INTERVAL = 10   # GCMC steps between swap attempts
+EXCHANGE_INTERVAL = 1    # GCMC steps between swap attempts (a swap is free)
 GCMC_STEPS = 500         # GCMC steps per replica, in total
 
 # --- potential -------------------------------------------------------------

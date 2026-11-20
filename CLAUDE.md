@@ -53,7 +53,8 @@ GPU runs (examples 03-05, MACE and Alchemi calculators) need the `run-gpu` skill
 `mpi4py` is the optional `mpi` extra; a conda-installed `mpi4py` is often better, because it links a matching MPI (`conda install mpi4py`).
 Launch with `mpirun -n N python -m mpi4py my_run.py`.
 Every rank must be seeded independently (`ValueError` otherwise).
-MPI `ReplicaExchange` supports no molecular species; `BatchedReplicaExchange` needs no MPI and is the better choice on a single GPU.
+`BatchedReplicaExchange` needs no MPI and is the better choice on a single GPU.
+Both drivers share one swap rule (`mcpy/ensembles/swap.py`); change it there only.
 
 ## Issues and pull requests
 

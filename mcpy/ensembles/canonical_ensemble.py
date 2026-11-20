@@ -80,12 +80,16 @@ class CanonicalEnsemble(BaseEnsemble):
         self._step = 0
         self._accepted_trials = 0
 
+    def swap_view(self):
+        """What the replica-exchange swap rule reads: beta and the energy
+        (no mu: a canonical replica scores bare E)."""
+        return {'energy': self._current_energy, 'beta': self._beta}
+
     def get_state(self):
         return {
+            **self.swap_view(),
             'atoms': self.atoms.copy(),  # detached: no calculator, no aliasing
-            'energy': self._current_energy,
             'temperature': self._temperature,
-            'beta': self._beta,
             'step': self._step,
             'exchange_attempts': self.exchange_attempts,
             'exchange_successes': self.exchange_successes,
@@ -110,6 +114,11 @@ class CanonicalEnsemble(BaseEnsemble):
         self.exchange_successes = state.get(
             'exchange_successes', self.exchange_successes)
         self._record_minimum(self.atoms, self._current_energy)
+
+    def _load_configuration(self, atoms) -> None:
+        """Make ``atoms`` the current configuration (``restart``). Its
+        energy is the relaxed one that ``initialize_run`` computes."""
+        self.atoms = atoms
 
     def _acceptance_condition(self, potential_diff: float) -> bool:
         if potential_diff <= 0:

@@ -51,6 +51,13 @@ class _FakeReplica:
         """Mirrors GrandCanonicalEnsemble._species_count (atomic only)."""
         return atoms.get_chemical_symbols().count(specie)
 
+    def swap_view(self):
+        """Mirrors GrandCanonicalEnsemble.swap_view."""
+        return {'energy': self.E_old, 'mu': self._mu, 'beta': self.units.beta,
+                'lambda_dbs': self.units.lambda_dbs,
+                'counts': {s: self._species_count(self.atoms, s)
+                           for s in self._mu or {}}}
+
 
 class _FakeRng:
     def __init__(self, u):

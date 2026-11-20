@@ -25,8 +25,7 @@ This card holds only the parts people get wrong.
 5. `MoleculeDisplacementMove(max_displacement=..., max_angle=...)`: cap `max_angle` for
    anchored adsorbates. Rigid CO displacement converged ~2x faster than atomic shakes even
    at ~5 % acceptance; tune the caps toward 20-40 %.
-6. Replica exchange with molecules: `BatchedReplicaExchange` only; MPI `ReplicaExchange`
-   counts atoms by symbol and supports no molecular species.
+6. Replica exchange with molecules: both drivers work; the swap rule counts molecules.
 
 Done when: `trajectory.xyz` carries a `molecule_id` column and molecule counts in
 `outfile.out` respond to mu.

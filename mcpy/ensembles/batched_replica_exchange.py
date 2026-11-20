@@ -31,12 +31,13 @@ import logging
 from collections import Counter
 from typing import Callable, Dict, List, Optional
 
-import numpy as np
-
 from ..utils.random_number_generator import RandomNumberGenerator
 from .base_ensemble import BaseEnsemble, sigterm_as_exit, write_global_minimum
+from .base_ensemble import drop_rows_after, reseed
 from .replica_exchange import (RE_RULE, check_independent_seeds, mus_differ,
-                               re_header, re_row, rng_fingerprint)
+                               re_header, re_row, re_row_step, restore_best,
+                               rng_fingerprint)
+from .swap import swap_probability
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class BatchedReplicaExchange:
         temperatures: Optional[List[float]] = None,
         mus: Optional[List[Dict[str, float]]] = None,
         gcmc_steps: int = 100,
-        exchange_interval: int = 10,
+        exchange_interval: int = 1,
         outfile: str = 'replica_exchange.log',
         write_out_interval: int = 20,
         seed: int = 31,
@@ -112,6 +113,8 @@ class BatchedReplicaExchange:
         self.write_out_interval = write_out_interval
 
         self._re_step = 0
+        self._start_step = 0
+        self._exchange_round = 0
         self.rng = RandomNumberGenerator(seed=seed)
         self.logger = logger
 
@@ -141,6 +144,27 @@ class BatchedReplicaExchange:
 
     # ------------------------------------------------------------------ run
 
+    def restart(self) -> int:
+        """Continue a stopped run from its files. Returns the step it
+        continues from; ``run()`` then goes on to ``gcmc_steps`` in total.
+
+        Build the driver with the same factory and file names as the first
+        run, then call ``restart()`` and ``run()``. Each replica restarts
+        from its own trajectory (``GrandCanonicalEnsemble.restart``), and the
+        driver continues from the lowest replica step. The log continues and
+        loses its rows past that step. The running minima continue from the
+        global-minimum file. The swap stream is reseeded, and the swap
+        tallies start again from zero.
+        """
+        steps = [r.restart() for r in self.replicas]
+        self._start_step = min(steps)
+        for i, r in enumerate(self.replicas):
+            restore_best(r, i, self._global_minimum_file)
+        reseed(self.rng.random, self._start_step)
+        self._log_started = True
+        drop_rows_after(self._outfile, self._start_step, re_row_step)
+        return self._start_step
+
     @sigterm_as_exit()
     def run(self) -> None:
         # The replicas' lifecycle logs all go to their base class's module
@@ -160,8 +184,11 @@ class BatchedReplicaExchange:
             self._initialize_outfile()
             self._log_status(0)
 
-            for step in range(self.gcmc_steps):
-                if step == self.gcmc_steps // 2:
+            # After a restart past the midpoint, the tallies (which start
+            # again from zero) are all second-half data.
+            midpoint = max(self.gcmc_steps // 2, self._start_step)
+            for step in range(self._start_step, self.gcmc_steps):
+                if step == midpoint:
                     self._mid_attempts = list(self.pair_attempts)
                     self._mid_successes = list(self.pair_successes)
                 self._batched_gcmc_step()
@@ -296,7 +323,11 @@ class BatchedReplicaExchange:
         return [(i, i + 1) for i in range(offset, self.n_replicas - 1, 2)]
 
     def _attempt_exchanges(self) -> None:
-        offset = 0 if self.rng.get_uniform() < 0.5 else 1
+        """One swap round. Rounds alternate the even pairs (0,1), (2,3), ...
+        and the odd pairs (1,2), (3,4), ...: a replica then walks the ladder
+        in long runs, where a random pick of the pairing makes it diffuse."""
+        offset = self._exchange_round % 2
+        self._exchange_round += 1
         for i, j in self._exchange_pairs(offset):
             self.exchange_attempts[i] += 1
             self.exchange_attempts[j] += 1
@@ -308,86 +339,12 @@ class BatchedReplicaExchange:
                 self.pair_successes[i] += 1
 
     def _accept_swap(self, i: int, j: int) -> bool:
-        """Replica-exchange Metropolis for a temperature *or* a μ ladder.
-
-        Replicas here are grand-canonical (fixed μ, fluctuating N), so configs
-        must be compared through the grand potential Φ = E - Σ_s μ_s N_s rather
-        than bare energy. Exchanging config X (slot i) with config Y (slot j)
-        changes the joint weight by
-
-            ln(w'/w) = β_i Φ_X^(i) + β_j Φ_Y^(j) - β_i Φ_Y^(i) - β_j Φ_X^(j)
-
-        where Φ_Z^(k) is configuration Z scored with slot k's chemical
-        potentials. The cross terms are what makes this work on both ladders:
-        with a shared μ it collapses to the familiar (β_j - β_i)(Φ_j - Φ_i),
-        but on a μ ladder (one shared temperature) that shortened form is
-        identically zero and would accept every swap, destroying the ladder.
-        With shared β it reduces to β Σ_s (μ_i,s - μ_j,s)(N_Y,s - N_X,s).
-        ``ReplicaExchange._exchange_prob`` implements the same general rule
-        for MPI.
-
-        At unequal temperatures the grand-canonical weight also carries the
-        de Broglie factors Λ_s^(-3 N_s), and Λ depends on T, so swapping
-        configurations with different particle counts shifts the joint weight
-        by a further 3 Σ_s (N_X,s - N_Y,s) ln(Λ_i,s / Λ_j,s). The term
-        vanishes on a μ ladder (shared T) and in LJ units (Λ = 1).
-        """
-        ri, rj = self.replicas[i], self.replicas[j]
-        beta_i, beta_j = ri.units.beta, rj.units.beta
-        phi_ii = self._grand_potential(ri)                 # config X, μ of i
-        phi_jj = self._grand_potential(rj)                 # config Y, μ of j
-        phi_ji = ri._minimum_score(rj.atoms, rj.E_old)     # config Y, μ of i
-        phi_ij = rj._minimum_score(ri.atoms, ri.E_old)     # config X, μ of j
-        delta = (beta_i * phi_ii + beta_j * phi_jj
-                 - beta_i * phi_ji - beta_j * phi_ij)
-        if beta_i != beta_j:
-            delta += self._de_broglie_cross_term(ri, rj)
-        if not np.isfinite(delta):
-            # A NaN would silently reject every draw from here on (the old
-            # min(1, exp(delta)) form silently *accepted*); a dead rung must
-            # not be quieter than a diverged relaxation.
-            self.logger.warning(
-                'swap %d<->%d: non-finite acceptance exponent (delta=%r); '
-                'rejecting. A NaN/inf replica energy usually means a '
-                'diverged relaxation.', i, j, delta)
-            return False
-        # exp() overflows to inf for a large positive delta; short-circuit.
-        p = 1.0 if delta >= 0.0 else float(np.exp(delta))
-        self.logger.debug(
-            'swap %d<->%d: beta_i=%.3e beta_j=%.3e Phi_ii=%.3f Phi_jj=%.3f '
-            'Phi_ji=%.3f Phi_ij=%.3f delta=%.3f p=%.3f',
-            i, j, beta_i, beta_j, phi_ii, phi_jj, phi_ji, phi_ij, delta, p,
-        )
+        """Metropolis test for swapping the configurations of slots i and j,
+        with the rule in ``ensembles.swap`` that the MPI driver also uses."""
+        p = swap_probability(self.replicas[i].swap_view(),
+                             self.replicas[j].swap_view(),
+                             self.logger, f'{i}<->{j}')
         return self.rng.get_uniform() < p
-
-    @staticmethod
-    def _de_broglie_cross_term(ri, rj) -> float:
-        """3 Σ_s (N_X,s - N_Y,s) ln(Λ_i,s / Λ_j,s) for configs X (slot i) and
-        Y (slot j). Species are counted exactly as the replicas' own
-        acceptance counts them (molecules for molecular μ keys, atoms
-        otherwise), via ``GrandCanonicalEnsemble._species_count``. A replica
-        without μ (e.g. canonical) exchanges nothing with a reservoir and
-        contributes no Λ factors."""
-        term = 0.0
-        for specie in getattr(ri, '_mu', None) or {}:
-            dn = (ri._species_count(ri.atoms, specie)
-                  - rj._species_count(rj.atoms, specie))
-            if dn:
-                term += 3.0 * dn * np.log(
-                    ri.units.lambda_dbs[specie] / rj.units.lambda_dbs[specie])
-        return term
-
-    @staticmethod
-    def _grand_potential(r) -> float:
-        """Φ = E - Σ_s μ_s N_s for a grand-canonical replica; bare E without μ.
-
-        Delegates to the replica's own ``_minimum_score``, which is exactly
-        this same grand-potential definition and already counts molecules
-        correctly for molecular mu keys (via ``find_molecules``) instead of
-        ``atoms.get_chemical_symbols()``, which is always 0 for a molecular
-        name such as ``'H2O'``.
-        """
-        return r._minimum_score(r.atoms, r.E_old)
 
     def _swap_states(self, i: int, j: int) -> None:
         """Swap atoms + energy + n_atoms; temperatures (and β) stay pinned to
